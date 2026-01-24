@@ -1,0 +1,14 @@
+version: "3.8"
+services:
+  db:
+    image: postgres:17.6 # 추후 MSA로 전환 시 bitnamilegacy의 postgres와 호환을 위해 버전 고정
+    container_name: gsc-postgres
+    restart: always
+    environment:
+      POSTGRES_USER: postgres
+      POSTGRES_PASSWORD: postgres
+      POSTGRES_DB: gsc_slack_app
+    ports:
+      - "5432:5432"
+    volumes:
+      - ./postgres_data:/var/lib/postgresql/data

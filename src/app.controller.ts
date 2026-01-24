@@ -49,6 +49,9 @@ export class AppController {
       });
       logger.info(result);
       logger.info(event);
+
+      const user = await client.users.info({ user: event.user });
+      logger.info(user.user?.profile?.email);
     } catch (error) {}
   }
 }
