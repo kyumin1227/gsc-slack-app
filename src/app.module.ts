@@ -4,6 +4,8 @@ import { AppService } from './app.service';
 import { SlackModule } from 'nestjs-slack-bolt';
 import { ConfigModule } from '@nestjs/config';
 import { TypeOrmModule } from '@nestjs/typeorm';
+import { SlackHomeModule } from './slack-home/slack-home.module';
+import { UserModule } from './user/user.module';
 
 @Module({
   imports: [
@@ -23,6 +25,8 @@ import { TypeOrmModule } from '@nestjs/typeorm';
       socketMode: true,
       appToken: process.env.SLACK_APP_TOKEN,
     }),
+    SlackHomeModule,
+    UserModule,
   ],
   controllers: [AppController],
   providers: [AppService],
