@@ -118,7 +118,8 @@ export class UserController {
   }
 
   // 회원가입 폼 제출
-  // 학생: 바로 ACTIVE / 키지기 이상: PENDING_APPROVAL
+  // 바로 승인: 학생 OR 워크스페이스 소유자
+  // 승인 대기: 키지기 이상 (소유자 제외)
   @View('user:modal:submit_register')
   async submitRegister({
     ack,
@@ -139,8 +140,14 @@ export class UserController {
       const studentClassId =
         classValue && classValue !== 'none' ? Number(classValue) : undefined;
 
-      // 학생은 바로 승인, 키지기 이상은 승인 대기
-      const needsApproval = role !== UserRole.STUDENT;
+      // 워크스페이스 소유자 여부 확인
+      const userInfo = await this.slackService.client.users.info({
+        user: slackUserId,
+      });
+      const isOwner = userInfo.user?.is_owner ?? false;
+
+      // 학생이거나 워크스페이스 소유자면 바로 승인
+      const needsApproval = role !== UserRole.STUDENT && !isOwner;
 
       const registrationData = {
         code,
@@ -155,7 +162,7 @@ export class UserController {
           registrationData,
         );
       } else {
-        // 학생은 바로 ACTIVE
+        // 학생 또는 워크스페이스 소유자는 바로 ACTIVE
         await this.userService.activateWithRole(slackUserId, registrationData);
       }
 
