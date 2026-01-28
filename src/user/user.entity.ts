@@ -5,7 +5,9 @@ import {
   CreateDateColumn,
   UpdateDateColumn,
   DeleteDateColumn,
+  ManyToOne,
 } from 'typeorm';
+import { StudentClass } from '../student-class/student-class.entity';
 
 export enum UserStatus {
   REGISTERED = 'registered', // Google 로그인만 완료
@@ -45,6 +47,13 @@ export class User {
     nullable: true,
   })
   role: UserRole;
+
+  // 학생, 키지기, 반대표만 해당 (휴학 시 null 가능)
+  @ManyToOne(() => StudentClass, (cls) => cls.users, { nullable: true })
+  studentClass: StudentClass;
+
+  @Column({ nullable: true })
+  studentClassId: number;
 
   @Column({ nullable: true })
   refreshToken: string;

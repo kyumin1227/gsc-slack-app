@@ -14,6 +14,7 @@ export interface SubmitRegistrationDto {
   code: string; // 학번 / 사번
   role: UserRole;
   name?: string;
+  studentClassId?: number; // 반 ID (학생/키지기/반대표만)
 }
 
 @Injectable()

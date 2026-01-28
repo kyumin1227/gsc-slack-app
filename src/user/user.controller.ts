@@ -11,6 +11,7 @@ import type {
 import { UserView } from './user.view';
 import { OAuthUtil } from './google-oauth.util';
 import { UserRole } from './user.entity';
+import { StudentClassService } from '../student-class/student-class.service';
 
 @Controller()
 export class UserController {
@@ -19,6 +20,7 @@ export class UserController {
   constructor(
     private readonly userService: UserService,
     private readonly slackService: SlackService,
+    private readonly studentClassService: StudentClassService,
   ) {}
 
   // 회원가입 모달 열기
@@ -82,7 +84,10 @@ export class UserController {
         this.logger.log(`New user created: ${slackUserId}`);
       }
 
-      // 5. 저장된 view_id로 모달 업데이트
+      // 5. 활성 반 목록 조회
+      const activeClasses = await this.studentClassService.findActiveClasses();
+
+      // 6. 저장된 view_id로 모달 업데이트
       const viewId = await this.userService.getViewId(slackUserId);
       if (viewId) {
         await this.slackService.client.views.update({
@@ -91,6 +96,7 @@ export class UserController {
             name: googleUser.name,
             email: googleUser.email,
             refreshToken,
+            classes: activeClasses.map((c) => ({ id: c.id, name: c.name })),
           }),
         });
         await this.userService.deleteViewId(slackUserId);
@@ -129,23 +135,28 @@ export class UserController {
       const code = values.code_block.code_input.value ?? '';
       const role = values.role_block.role_input.selected_option
         ?.value as UserRole;
+      const classValue = values.class_block.class_input.selected_option?.value;
+      const studentClassId =
+        classValue && classValue !== 'none' ? Number(classValue) : undefined;
 
       // 학생은 바로 승인, 키지기 이상은 승인 대기
       const needsApproval = role !== UserRole.STUDENT;
 
+      const registrationData = {
+        code,
+        role,
+        name: name || undefined,
+        studentClassId,
+      };
+
       if (needsApproval) {
-        await this.userService.submitRegistration(slackUserId, {
-          code,
-          role,
-          name: name || undefined,
-        });
+        await this.userService.submitRegistration(
+          slackUserId,
+          registrationData,
+        );
       } else {
         // 학생은 바로 ACTIVE
-        await this.userService.activateWithRole(slackUserId, {
-          code,
-          role,
-          name: name || undefined,
-        });
+        await this.userService.activateWithRole(slackUserId, registrationData);
       }
 
       await ack();

@@ -1,10 +1,16 @@
 import type { View } from '@slack/types';
 import { UserRole } from './user.entity';
 
+export interface ClassOption {
+  id: number;
+  name: string;
+}
+
 export interface RegisterFormPrefill {
   name: string;
   email: string;
   refreshToken: string;
+  classes: ClassOption[];
 }
 
 const ROLE_LABELS: Record<UserRole, string> = {
@@ -58,7 +64,6 @@ export class UserView {
   }
 
   // 2단계: 구글 로그인 후 정보 입력
-  // TODO 학반 입력 추가
   static registerFormModal(prefill: RegisterFormPrefill): View {
     return {
       type: 'modal',
@@ -151,6 +156,46 @@ export class UserView {
           label: {
             type: 'plain_text',
             text: '역할',
+          },
+          hint: {
+            type: 'plain_text',
+            text: '학생/키지기/반대표는 반 선택이 필요합니다.',
+          },
+        },
+        {
+          type: 'input',
+          block_id: 'class_block',
+          optional: true,
+          element: {
+            type: 'static_select',
+            action_id: 'class_input',
+            placeholder: {
+              type: 'plain_text',
+              text: '반을 선택하세요',
+            },
+            options:
+              prefill.classes.length > 0
+                ? prefill.classes.map((cls) => ({
+                    text: {
+                      type: 'plain_text' as const,
+                      text: cls.name,
+                    },
+                    value: String(cls.id),
+                  }))
+                : [
+                    {
+                      text: { type: 'plain_text' as const, text: '등록된 반 없음' },
+                      value: 'none',
+                    },
+                  ],
+          },
+          label: {
+            type: 'plain_text',
+            text: '반',
+          },
+          hint: {
+            type: 'plain_text',
+            text: '학생/키지기/반대표만 선택 (휴학 시 선택 안 함)',
           },
         },
       ],
