@@ -23,7 +23,7 @@ export class HomeView {
                 emoji: true,
               },
               style: 'primary',
-              action_id: 'register_button',
+              action_id: 'user:home:open_register_modal',
             },
           ],
         },
