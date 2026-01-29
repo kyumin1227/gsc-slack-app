@@ -1,11 +1,12 @@
 import { Controller, Get, Logger, Query, Res } from '@nestjs/common';
 import { UserService } from './user.service';
-import { Action, SlackService, View } from 'nestjs-slack-bolt';
+import { Action, Command, SlackService, View } from 'nestjs-slack-bolt';
 import type { Response } from 'express';
 import type {
   AllMiddlewareArgs,
   SlackActionMiddlewareArgs,
   SlackViewMiddlewareArgs,
+  SlackCommandMiddlewareArgs,
   BlockAction,
 } from '@slack/bolt';
 import { UserView } from './user.view';
@@ -189,6 +190,110 @@ export class UserController {
           code_block: '가입 처리 중 오류가 발생했습니다.',
         },
       });
+    }
+  }
+
+  // 관리자: /승인 명령어 - 승인 대기 목록 모달
+  // 조교(TA) 이상 권한 필요
+  @Command('/승인')
+  async openApprovalModal({
+    ack,
+    client,
+    body,
+    logger,
+  }: SlackCommandMiddlewareArgs & AllMiddlewareArgs) {
+    try {
+      await ack();
+
+      // 조교 이상 권한 확인
+      const currentUser = await this.userService.findBySlackId(body.user_id);
+      const allowedRoles = [UserRole.PROFESSOR, UserRole.TA];
+      const hasPermission =
+        currentUser && allowedRoles.includes(currentUser.role);
+
+      if (!hasPermission) {
+        await client.chat.postEphemeral({
+          channel: body.channel_id,
+          user: body.user_id,
+          text: '이 명령어는 조교 이상 권한이 필요합니다.',
+        });
+        return;
+      }
+
+      // 승인 대기 유저 목록 조회
+      const pendingUsers = await this.userService.findPendingApproval();
+
+      await client.views.open({
+        trigger_id: body.trigger_id,
+        view: UserView.pendingApprovalModal(
+          pendingUsers.map((u) => ({
+            slackId: u.slackId,
+            name: u.name,
+            code: u.code,
+            role: u.role,
+            className: u.studentClass?.name,
+          })),
+        ),
+      });
+    } catch (error) {
+      logger.error('Open approval modal error:', error);
+    }
+  }
+
+  // 관리자: 승인/거절 액션 처리
+  @Action(/^user:admin:overflow:/)
+  async handleApprovalAction({
+    ack,
+    body,
+    client,
+    logger,
+  }: SlackActionMiddlewareArgs<BlockAction> & AllMiddlewareArgs) {
+    try {
+      await ack();
+
+      const action = body.actions[0] as { selected_option: { value: string } };
+      const [actionType, targetSlackId] = action.selected_option.value.split(':');
+
+      if (actionType === 'approve') {
+        await this.userService.approveUser(targetSlackId);
+
+        // 승인된 유저에게 알림
+        await client.chat.postMessage({
+          channel: targetSlackId,
+          text: '가입이 승인되었습니다! 이제 서비스를 이용할 수 있습니다.',
+        });
+
+        logger.info(`User approved: ${targetSlackId}`);
+      } else if (actionType === 'reject') {
+        await this.userService.rejectUser(targetSlackId);
+
+        // 거절된 유저에게 알림
+        await client.chat.postMessage({
+          channel: targetSlackId,
+          text: '가입 신청이 거절되었습니다. 문의사항이 있으면 관리자에게 연락해주세요.',
+        });
+
+        logger.info(`User rejected: ${targetSlackId}`);
+      }
+
+      // 모달 업데이트 (목록 새로고침)
+      if (body.view?.id) {
+        const pendingUsers = await this.userService.findPendingApproval();
+        await client.views.update({
+          view_id: body.view.id,
+          view: UserView.pendingApprovalModal(
+            pendingUsers.map((u) => ({
+              slackId: u.slackId,
+              name: u.name,
+              code: u.code,
+              role: u.role,
+              className: u.studentClass?.name,
+            })),
+          ),
+        });
+      }
+    } catch (error) {
+      logger.error('Approval action error:', error);
     }
   }
 }

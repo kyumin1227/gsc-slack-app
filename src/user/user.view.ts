@@ -13,13 +13,21 @@ export interface RegisterFormPrefill {
   classes: ClassOption[];
 }
 
-const ROLE_LABELS: Record<UserRole, string> = {
+export const ROLE_LABELS: Record<UserRole, string> = {
   [UserRole.PROFESSOR]: '교수',
   [UserRole.TA]: '조교',
   [UserRole.CLASS_REP]: '반대표',
   [UserRole.KEY_KEEPER]: '키지기',
   [UserRole.STUDENT]: '학생',
 };
+
+export interface PendingUser {
+  slackId: string;
+  name: string;
+  code: string;
+  role: UserRole;
+  className?: string;
+}
 
 export class UserView {
   // 1단계: 구글 로그인
@@ -199,6 +207,70 @@ export class UserView {
           },
         },
       ],
+    };
+  }
+
+  // 관리자: 승인 대기 목록 모달
+  static pendingApprovalModal(pendingUsers: PendingUser[]): View {
+    const blocks: View['blocks'] = [];
+
+    if (pendingUsers.length === 0) {
+      blocks.push({
+        type: 'section',
+        text: {
+          type: 'mrkdwn',
+          text: '승인 대기 중인 사용자가 없습니다.',
+        },
+      });
+    } else {
+      blocks.push({
+        type: 'section',
+        text: {
+          type: 'mrkdwn',
+          text: `*승인 대기 중인 사용자: ${pendingUsers.length}명*`,
+        },
+      });
+
+      blocks.push({ type: 'divider' });
+
+      for (const user of pendingUsers) {
+        const classInfo = user.className ? ` | ${user.className}` : '';
+        blocks.push({
+          type: 'section',
+          text: {
+            type: 'mrkdwn',
+            text: `*${user.name}*\n${user.code} | ${ROLE_LABELS[user.role]}${classInfo}`,
+          },
+          accessory: {
+            type: 'overflow',
+            action_id: `user:admin:overflow:${user.slackId}`,
+            options: [
+              {
+                text: { type: 'plain_text', text: '승인' },
+                value: `approve:${user.slackId}`,
+              },
+              {
+                text: { type: 'plain_text', text: '거절' },
+                value: `reject:${user.slackId}`,
+              },
+            ],
+          },
+        });
+      }
+    }
+
+    return {
+      type: 'modal',
+      callback_id: 'user:modal:admin_approval',
+      title: {
+        type: 'plain_text',
+        text: '가입 승인 관리',
+      },
+      close: {
+        type: 'plain_text',
+        text: '닫기',
+      },
+      blocks,
     };
   }
 }

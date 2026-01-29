@@ -74,6 +74,15 @@ export class UserService {
     return this.findBySlackId(slackId);
   }
 
+  // 승인 대기 유저 목록 조회
+  async findPendingApproval(): Promise<User[]> {
+    return this.userRepository.find({
+      where: { status: UserStatus.PENDING_APPROVAL },
+      relations: ['studentClass'],
+      order: { createdAt: 'ASC' },
+    });
+  }
+
   // 3단계: 관리자 승인 → ACTIVE
   async approveUser(slackId: string): Promise<User | null> {
     await this.userRepository.update(
@@ -81,6 +90,11 @@ export class UserService {
       { status: UserStatus.ACTIVE },
     );
     return this.findBySlackId(slackId);
+  }
+
+  // 가입 거절 (soft delete)
+  async rejectUser(slackId: string): Promise<void> {
+    await this.userRepository.softDelete({ slackId });
   }
 
   // 비활성화
