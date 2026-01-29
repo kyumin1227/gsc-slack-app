@@ -39,8 +39,31 @@ export class StudentClassService {
     });
   }
 
+  // 모든 반 목록 조회 (관리용)
+  async findAllClasses(): Promise<StudentClass[]> {
+    return this.studentClassRepository.find({
+      order: { status: 'ASC', name: 'ASC' },
+    });
+  }
+
   async findById(id: number): Promise<StudentClass | null> {
     return this.studentClassRepository.findOne({ where: { id } });
+  }
+
+  // 반 활성화 (졸업 취소)
+  async activateClass(id: number): Promise<StudentClass | null> {
+    await this.studentClassRepository.update(
+      { id },
+      { status: StudentClassStatus.ACTIVE },
+    );
+
+    // 연결된 태그도 활성화
+    const tag = await this.tagService.findByStudentClassId(id);
+    if (tag) {
+      await this.tagService.activateTag(tag.id);
+    }
+
+    return this.findById(id);
   }
 
   // 반 졸업 처리
