@@ -7,6 +7,7 @@ import { TypeOrmModule } from '@nestjs/typeorm';
 import { SlackHomeModule } from './slack-home/slack-home.module';
 import { UserModule } from './user/user.module';
 import { StudentClassModule } from './student-class/student-class.module';
+import { TagModule } from './tag/tag.module';
 
 @Module({
   imports: [
@@ -29,6 +30,7 @@ import { StudentClassModule } from './student-class/student-class.module';
     SlackHomeModule,
     UserModule,
     StudentClassModule,
+    TagModule,
   ],
   controllers: [AppController],
   providers: [AppService],
