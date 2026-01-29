@@ -57,6 +57,13 @@ export class TagService {
     });
   }
 
+  // 모든 태그 목록 조회 (관리용)
+  async findAllTags(): Promise<Tag[]> {
+    return this.tagRepository.find({
+      order: { status: 'ASC', name: 'ASC' },
+    });
+  }
+
   // 태그 비활성화
   async deactivateTag(id: number): Promise<Tag | null> {
     await this.tagRepository.update({ id }, { status: TagStatus.INACTIVE });
