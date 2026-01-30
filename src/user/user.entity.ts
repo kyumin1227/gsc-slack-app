@@ -55,6 +55,7 @@ export class User {
   @Column({ nullable: true })
   studentClassId: number;
 
+  // AES-256-GCM으로 암호화
   @Column({ nullable: true })
   refreshToken: string;
 
