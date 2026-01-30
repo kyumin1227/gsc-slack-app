@@ -388,12 +388,30 @@ export class ScheduleController {
         return;
       }
 
+      // refresh token 확인
+      if (!user.refreshToken) {
+        logger.error('User has no refresh token for subscribe toggle');
+        await client.chat.postMessage({
+          channel: body.user.id,
+          text: '구독 기능을 사용하려면 Google 계정 재연동이 필요합니다. 회원정보를 다시 등록해주세요.',
+        });
+        return;
+      }
+
       // 구독/구독해제 실행
       if (toggleAction === 'subscribe') {
-        await this.scheduleService.subscribe(scheduleId, user.email);
+        await this.scheduleService.subscribe(
+          scheduleId,
+          user.email,
+          user.refreshToken,
+        );
         logger.info(`User ${user.name} subscribed to schedule ${scheduleId}`);
       } else {
-        await this.scheduleService.unsubscribe(scheduleId, user.email);
+        await this.scheduleService.unsubscribe(
+          scheduleId,
+          user.email,
+          user.refreshToken,
+        );
         logger.info(
           `User ${user.name} unsubscribed from schedule ${scheduleId}`,
         );

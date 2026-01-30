@@ -234,14 +234,42 @@ export class ScheduleService {
     await GoogleCalendarUtil.unshareCalendar(schedule.calendarId, email);
   }
 
-  // 구독 (reader 권한 부여)
-  async subscribe(id: number, email: string): Promise<void> {
+  // 구독 (reader 권한 부여 + 사용자 캘린더 목록에 추가)
+  async subscribe(
+    id: number,
+    email: string,
+    userRefreshToken: string,
+  ): Promise<void> {
+    const schedule = await this.findById(id);
+    if (!schedule) throw new Error('Schedule not found');
+
+    // 1. reader 권한 부여
     await this.shareCalendar(id, email, 'reader');
+
+    // 2. 사용자 캘린더 목록에 추가
+    await GoogleCalendarUtil.addCalendarToUserList(
+      schedule.calendarId,
+      userRefreshToken,
+    );
   }
 
-  // 구독 해제
-  async unsubscribe(id: number, email: string): Promise<void> {
+  // 구독 해제 (권한 제거 + 사용자 캘린더 목록에서 제거)
+  async unsubscribe(
+    id: number,
+    email: string,
+    userRefreshToken: string,
+  ): Promise<void> {
+    const schedule = await this.findById(id);
+    if (!schedule) throw new Error('Schedule not found');
+
+    // 1. 권한 제거
     await this.unshareCalendar(id, email);
+
+    // 2. 사용자 캘린더 목록에서 제거
+    await GoogleCalendarUtil.removeCalendarFromUserList(
+      schedule.calendarId,
+      userRefreshToken,
+    );
   }
 
   // 사용자가 구독 중인지 확인

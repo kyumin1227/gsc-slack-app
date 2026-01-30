@@ -19,7 +19,8 @@ export interface CalendarAclEntry {
 }
 
 export class GoogleCalendarUtil {
-  private static getAuth() {
+  // Service Account 인증 (캘린더 생성/관리용)
+  private static getServiceAccountAuth() {
     const email = process.env.GOOGLE_SERVICE_ACCOUNT_EMAIL;
     const privateKey = process.env.GOOGLE_SERVICE_ACCOUNT_PRIVATE_KEY?.replace(
       /\\n/g,
@@ -40,8 +41,33 @@ export class GoogleCalendarUtil {
     });
   }
 
+  // 사용자 OAuth 인증 (사용자 캘린더 목록 관리용)
+  private static getUserAuth(refreshToken: string) {
+    const clientId = process.env.GOOGLE_CLIENT_ID;
+    const clientSecret = process.env.GOOGLE_CLIENT_SECRET;
+
+    if (!clientId || !clientSecret) {
+      throw new Error(
+        'Google OAuth credentials not configured. ' +
+          'Set GOOGLE_CLIENT_ID and GOOGLE_CLIENT_SECRET.',
+      );
+    }
+
+    const oauth2Client = new google.auth.OAuth2(clientId, clientSecret);
+    oauth2Client.setCredentials({ refresh_token: refreshToken });
+
+    return oauth2Client;
+  }
+
   private static getCalendarClient(): calendar_v3.Calendar {
-    const auth = this.getAuth();
+    const auth = this.getServiceAccountAuth();
+    return google.calendar({ version: 'v3', auth });
+  }
+
+  private static getUserCalendarClient(
+    refreshToken: string,
+  ): calendar_v3.Calendar {
+    const auth = this.getUserAuth(refreshToken);
     return google.calendar({ version: 'v3', auth });
   }
 
@@ -183,5 +209,49 @@ export class GoogleCalendarUtil {
         email: item.scope!.value!,
         role: item.role as 'reader' | 'writer' | 'owner',
       }));
+  }
+
+  // ========== 사용자 캘린더 목록 관리 (OAuth 토큰 사용) ==========
+
+  // 사용자 캘린더 목록에 캘린더 추가
+  static async addCalendarToUserList(
+    calendarId: string,
+    userRefreshToken: string,
+  ): Promise<void> {
+    const calendar = this.getUserCalendarClient(userRefreshToken);
+
+    try {
+      await calendar.calendarList.insert({
+        requestBody: {
+          id: calendarId,
+        },
+      });
+    } catch (error: unknown) {
+      const err = error as { code?: number };
+      // 이미 추가된 경우 (409 Conflict) 무시
+      if (err.code === 409) {
+        return;
+      }
+      throw error;
+    }
+  }
+
+  // 사용자 캘린더 목록에서 캘린더 제거
+  static async removeCalendarFromUserList(
+    calendarId: string,
+    userRefreshToken: string,
+  ): Promise<void> {
+    const calendar = this.getUserCalendarClient(userRefreshToken);
+
+    try {
+      await calendar.calendarList.delete({ calendarId });
+    } catch (error: unknown) {
+      const err = error as { code?: number };
+      // 이미 제거된 경우 (404) 무시
+      if (err.code === 404) {
+        return;
+      }
+      throw error;
+    }
   }
 }
