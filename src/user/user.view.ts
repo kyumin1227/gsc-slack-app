@@ -192,7 +192,10 @@ export class UserView {
                   }))
                 : [
                     {
-                      text: { type: 'plain_text' as const, text: '등록된 반 없음' },
+                      text: {
+                        type: 'plain_text' as const,
+                        text: '등록된 반 없음',
+                      },
                       value: 'none',
                     },
                   ],

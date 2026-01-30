@@ -13,6 +13,11 @@ export interface ShareCalendarOptions {
   role: 'reader' | 'writer' | 'owner';
 }
 
+export interface CalendarAclEntry {
+  email: string;
+  role: 'reader' | 'writer' | 'owner';
+}
+
 export class GoogleCalendarUtil {
   private static getAuth() {
     const email = process.env.GOOGLE_SERVICE_ACCOUNT_EMAIL;
@@ -157,5 +162,26 @@ export class GoogleCalendarUtil {
         description,
       },
     });
+  }
+
+  // 캘린더 ACL 조회 (권한 목록)
+  static async getCalendarAcl(calendarId: string): Promise<CalendarAclEntry[]> {
+    const calendar = this.getCalendarClient();
+
+    const response = await calendar.acl.list({ calendarId });
+    const items = response.data.items ?? [];
+
+    return items
+      .filter(
+        (item) =>
+          item.scope?.type === 'user' &&
+          item.scope?.value &&
+          item.role &&
+          ['reader', 'writer', 'owner'].includes(item.role),
+      )
+      .map((item) => ({
+        email: item.scope!.value!,
+        role: item.role as 'reader' | 'writer' | 'owner',
+      }));
   }
 }
