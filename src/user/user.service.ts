@@ -2,6 +2,7 @@ import { Injectable } from '@nestjs/common';
 import { InjectRepository } from '@nestjs/typeorm';
 import { Repository } from 'typeorm';
 import { User, UserStatus, UserRole } from './user.entity';
+import { CryptoUtil } from '../utils/crypto.util';
 
 export interface CreateUserDto {
   slackId: string;
@@ -39,9 +40,32 @@ export class UserService {
   async createUser(dto: CreateUserDto): Promise<User> {
     const user = this.userRepository.create({
       ...dto,
+      refreshToken: CryptoUtil.encrypt(dto.refreshToken),
       status: UserStatus.REGISTERED,
     });
     return this.userRepository.save(user);
+  }
+
+  // refresh token 업데이트 (재인증 시)
+  async updateRefreshToken(
+    slackId: string,
+    refreshToken: string,
+  ): Promise<void> {
+    await this.userRepository.update(
+      { slackId },
+      { refreshToken: CryptoUtil.encrypt(refreshToken) },
+    );
+  }
+
+  // 복호화된 refresh token 조회
+  getDecryptedRefreshToken(user: User): string | null {
+    if (!user.refreshToken) return null;
+    try {
+      return CryptoUtil.decrypt(user.refreshToken);
+    } catch {
+      // 복호화 실패 시 (암호화되지 않은 이전 데이터일 수 있음)
+      return null;
+    }
   }
 
   // 2단계: 정보 입력 완료 → PENDING_APPROVAL

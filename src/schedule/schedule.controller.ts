@@ -388,9 +388,10 @@ export class ScheduleController {
         return;
       }
 
-      // refresh token 확인
-      if (!user.refreshToken) {
-        logger.error('User has no refresh token for subscribe toggle');
+      // refresh token 확인 및 복호화
+      const refreshToken = this.userService.getDecryptedRefreshToken(user);
+      if (!refreshToken) {
+        logger.error('User has no valid refresh token for subscribe toggle');
         await client.chat.postMessage({
           channel: body.user.id,
           text: '구독 기능을 사용하려면 Google 계정 재연동이 필요합니다. 회원정보를 다시 등록해주세요.',
@@ -403,14 +404,14 @@ export class ScheduleController {
         await this.scheduleService.subscribe(
           scheduleId,
           user.email,
-          user.refreshToken,
+          refreshToken,
         );
         logger.info(`User ${user.name} subscribed to schedule ${scheduleId}`);
       } else {
         await this.scheduleService.unsubscribe(
           scheduleId,
           user.email,
-          user.refreshToken,
+          refreshToken,
         );
         logger.info(
           `User ${user.name} unsubscribed from schedule ${scheduleId}`,
