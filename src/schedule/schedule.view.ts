@@ -11,6 +11,15 @@ export interface ScheduleListItem {
   createdBy: { name: string };
 }
 
+export interface SubscribeScheduleItem {
+  id: number;
+  name: string;
+  description?: string;
+  tags: { id: number; name: string }[];
+  createdBy: { name: string };
+  isSubscribed: boolean;
+}
+
 export interface TagOption {
   id: number;
   name: string;
@@ -261,6 +270,167 @@ export class ScheduleView {
         type: 'plain_text',
         text: '시간표 상세',
       },
+      close: {
+        type: 'plain_text',
+        text: '닫기',
+      },
+      blocks,
+    };
+  }
+
+  // 구독 검색 모달 (태그 선택 + 결과)
+  static subscribeSearchModal(
+    tags: TagOption[],
+    schedules?: SubscribeScheduleItem[],
+    selectedTagIds?: number[],
+  ): View {
+    const activeTagOptions = tags
+      .filter((t) => t.status === TagStatus.ACTIVE)
+      .map((t) => ({
+        text: { type: 'plain_text' as const, text: `🏷️ ${t.name}` },
+        value: t.id.toString(),
+      }));
+
+    const blocks: View['blocks'] = [
+      {
+        type: 'header',
+        text: {
+          type: 'plain_text',
+          text: '🔍 시간표 통합 검색',
+          emoji: true,
+        },
+      },
+      { type: 'divider' },
+      {
+        type: 'section',
+        text: {
+          type: 'mrkdwn',
+          text: '*조회하고 싶은 태그를 모두 선택해 주세요.* (반, 과목 등)',
+        },
+      },
+    ];
+
+    if (activeTagOptions.length === 0) {
+      blocks.push({
+        type: 'section',
+        text: {
+          type: 'mrkdwn',
+          text: '등록된 태그가 없습니다.',
+        },
+      });
+    } else {
+      // 선택된 태그가 있으면 initial_options 설정
+      const initialOptions = selectedTagIds
+        ? activeTagOptions.filter((opt) =>
+            selectedTagIds.includes(parseInt(opt.value, 10)),
+          )
+        : undefined;
+
+      blocks.push({
+        type: 'input',
+        block_id: 'tags_block',
+        element: {
+          type: 'multi_static_select',
+          action_id: 'tags_select',
+          placeholder: {
+            type: 'plain_text',
+            text: '태그를 선택하세요',
+            emoji: true,
+          },
+          options: activeTagOptions,
+          ...(initialOptions && initialOptions.length > 0
+            ? { initial_options: initialOptions }
+            : {}),
+        },
+        label: {
+          type: 'plain_text',
+          text: '태그 선택',
+          emoji: true,
+        },
+      });
+    }
+
+    // 검색 결과가 있으면 표시
+    if (schedules !== undefined) {
+      blocks.push({ type: 'divider' });
+
+      if (schedules.length === 0) {
+        blocks.push({
+          type: 'section',
+          text: {
+            type: 'mrkdwn',
+            text: '*검색 결과가 없습니다.*',
+          },
+        });
+      } else {
+        blocks.push({
+          type: 'section',
+          text: {
+            type: 'mrkdwn',
+            text: `*검색 결과 (${schedules.length}건)*`,
+          },
+        });
+
+        for (const schedule of schedules) {
+          const buttonText = schedule.isSubscribed ? '구독 해제' : '구독하기';
+          const buttonStyle = schedule.isSubscribed ? undefined : 'primary';
+          const buttonValue = schedule.isSubscribed
+            ? 'unsubscribe'
+            : 'subscribe';
+          const tagLabels = schedule.tags.map((t) => t.name).join(', ');
+
+          blocks.push({
+            type: 'section',
+            text: {
+              type: 'mrkdwn',
+              text: `📅 *[${tagLabels}] ${schedule.name}*\n생성자: ${schedule.createdBy.name}`,
+            },
+            accessory: {
+              type: 'button',
+              text: {
+                type: 'plain_text',
+                text: buttonText,
+                emoji: true,
+              },
+              style: buttonStyle,
+              action_id: `schedule:subscribe:toggle:${schedule.id}`,
+              value: JSON.stringify({
+                action: buttonValue,
+                tagIds: selectedTagIds,
+              }),
+            },
+          });
+        }
+      }
+
+      blocks.push({
+        type: 'context',
+        elements: [
+          {
+            type: 'mrkdwn',
+            text: '💡 찾으시는 과목이 없나요? 조교에게 문의해 주세요.',
+          },
+        ],
+      });
+    }
+
+    return {
+      type: 'modal',
+      callback_id: 'schedule:modal:subscribe:search',
+      private_metadata: JSON.stringify({
+        selectedTagIds: selectedTagIds ?? [],
+      }),
+      title: {
+        type: 'plain_text',
+        text: '시간표 구독',
+      },
+      submit:
+        activeTagOptions.length > 0
+          ? {
+              type: 'plain_text',
+              text: '검색',
+            }
+          : undefined,
       close: {
         type: 'plain_text',
         text: '닫기',
