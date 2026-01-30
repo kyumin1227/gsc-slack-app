@@ -8,6 +8,7 @@ import { SlackHomeModule } from './slack-home/slack-home.module';
 import { UserModule } from './user/user.module';
 import { StudentClassModule } from './student-class/student-class.module';
 import { TagModule } from './tag/tag.module';
+import { ScheduleModule } from './schedule/schedule.module';
 
 @Module({
   imports: [
@@ -31,6 +32,7 @@ import { TagModule } from './tag/tag.module';
     UserModule,
     StudentClassModule,
     TagModule,
+    ScheduleModule,
   ],
   controllers: [AppController],
   providers: [AppService],

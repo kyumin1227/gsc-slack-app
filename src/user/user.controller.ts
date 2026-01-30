@@ -252,7 +252,8 @@ export class UserController {
       await ack();
 
       const action = body.actions[0] as { selected_option: { value: string } };
-      const [actionType, targetSlackId] = action.selected_option.value.split(':');
+      const [actionType, targetSlackId] =
+        action.selected_option.value.split(':');
 
       if (actionType === 'approve') {
         await this.userService.approveUser(targetSlackId);
