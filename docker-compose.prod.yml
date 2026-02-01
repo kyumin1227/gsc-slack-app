@@ -1,0 +1,15 @@
+services:
+  db:
+    env_file:
+      - .env.prod
+
+  app:
+    image: ${DOCKER_IMAGE:-gsc-slack-app:latest}
+    restart: always
+    env_file:
+      - .env.prod
+    logging:
+      driver: "json-file"
+      options:
+        max-size: "10m"
+        max-file: "3"

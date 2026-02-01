@@ -1,0 +1,29 @@
+# Git version control files
+.git
+.gitignore
+
+# Docker specific files
+Dockerfile
+.dockerignore
+docker-compose.yml
+
+# Node.js dependencies and logs
+node_modules
+npm-debug.log
+yarn-error.log
+
+# Build output directory
+dist
+
+# Environment variables files
+.env
+.env*
+
+# Local database data
+postgres_data/
+
+# OS / IDE generated files
+.DS_Store
+.vscode
+.idea
+*.log
