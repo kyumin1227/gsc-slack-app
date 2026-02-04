@@ -379,11 +379,15 @@ export class ScheduleView {
             : 'subscribe';
           const tagLabels = schedule.tags.map((t) => t.name).join(', ');
 
+          const descriptionText = schedule.description
+            ? `\n${schedule.description}`
+            : '';
+
           blocks.push({
             type: 'section',
             text: {
               type: 'mrkdwn',
-              text: `📅 *[${tagLabels}] ${schedule.name}*\n생성자: ${schedule.createdBy.name}`,
+              text: `📅 *[${tagLabels}] ${schedule.name}*${descriptionText}\n생성자: ${schedule.createdBy.name}`,
             },
             accessory: {
               type: 'button',

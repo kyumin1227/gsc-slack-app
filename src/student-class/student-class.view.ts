@@ -121,7 +121,7 @@ export class StudentClassView {
           element: {
             type: 'plain_text_input',
             action_id: 'graduation_year_input',
-            initial_value: String(currentYear + 2),
+            initial_value: String(currentYear + 3),
             placeholder: {
               type: 'plain_text',
               text: '졸업 예정 연도',
