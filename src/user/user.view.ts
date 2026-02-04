@@ -24,6 +24,7 @@ export const ROLE_LABELS: Record<UserRole, string> = {
 export interface PendingUser {
   slackId: string;
   name: string;
+  email: string;
   code: string;
   role: UserRole;
   className?: string;
@@ -167,7 +168,7 @@ export class UserView {
           },
           hint: {
             type: 'plain_text',
-            text: '학생/키지기/반대표는 반 선택이 필요합니다.',
+            text: '학생 이외의 역할은 가입 신청 후 관리자(교수|조교)의 승인이 필요합니다.',
           },
         },
         {
@@ -206,7 +207,7 @@ export class UserView {
           },
           hint: {
             type: 'plain_text',
-            text: '학생/키지기/반대표만 선택 (휴학 시 선택 안 함)',
+            text: "학생/키지기/반대표만 선택 (예: 2024년 입학의 경우 '2024-A반' 선택)",
           },
         },
       ],
@@ -242,7 +243,7 @@ export class UserView {
           type: 'section',
           text: {
             type: 'mrkdwn',
-            text: `*${user.name}*\n${user.code} | ${ROLE_LABELS[user.role]}${classInfo}`,
+            text: `*${user.name}* (${user.email})\n${user.code} | ${ROLE_LABELS[user.role]}${classInfo}`,
           },
           accessory: {
             type: 'overflow',

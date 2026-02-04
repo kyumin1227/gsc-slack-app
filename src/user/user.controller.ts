@@ -229,6 +229,7 @@ export class UserController {
           pendingUsers.map((u) => ({
             slackId: u.slackId,
             name: u.name,
+            email: u.email,
             code: u.code,
             role: u.role,
             className: u.studentClass?.name,
@@ -286,6 +287,7 @@ export class UserController {
             pendingUsers.map((u) => ({
               slackId: u.slackId,
               name: u.name,
+              email: u.email,
               code: u.code,
               role: u.role,
               className: u.studentClass?.name,
