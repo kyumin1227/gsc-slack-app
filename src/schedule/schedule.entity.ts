@@ -22,7 +22,7 @@ export class Schedule {
   @PrimaryGeneratedColumn()
   id: number;
 
-  @Column({ unique: true })
+  @Column()
   name: string; // 과목명
 
   @Column({ unique: true })
