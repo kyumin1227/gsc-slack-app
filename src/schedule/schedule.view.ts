@@ -9,6 +9,20 @@ export interface ScheduleListItem {
   status: ScheduleStatus;
   tags: { id: number; name: string }[];
   createdBy: { name: string };
+  createdAt: Date;
+}
+
+export interface EditScheduleItem {
+  id: number;
+  name: string;
+  description?: string;
+  tags: { id: number; name: string }[];
+}
+
+export interface WriterItem {
+  email: string;
+  role: string;
+  name?: string; // DB에서 조회된 슬랙 이름
 }
 
 export interface SubscribeScheduleItem {
@@ -70,22 +84,31 @@ export class ScheduleView {
           ? `\n${schedule.description}`
           : '';
 
-        blocks.push({
-          type: 'section',
-          text: {
-            type: 'mrkdwn',
-            text: `${statusEmoji} *${schedule.name}*${description}\n태그: ${tagNames}\n상태: ${STATUS_LABELS[schedule.status]} | 생성자: ${schedule.createdBy.name}`,
-          },
-          accessory: {
-            type: 'button',
+        blocks.push(
+          {
+            type: 'section',
             text: {
-              type: 'plain_text',
-              text: toggleText,
+              type: 'mrkdwn',
+              text: `${statusEmoji} *${schedule.name}*${description}\n태그: ${tagNames}\n상태: ${STATUS_LABELS[schedule.status]} | 생성자: ${schedule.createdBy.name} | 생성일: ${schedule.createdAt.toLocaleString('ko-KR', { timeZone: 'Asia/Seoul' })}`,
             },
-            action_id: `schedule:list:toggle:${schedule.id}`,
-            value: toggleValue,
           },
-        });
+          {
+            type: 'actions',
+            elements: [
+              {
+                type: 'button',
+                text: { type: 'plain_text', text: '수정/관리' },
+                action_id: `schedule:list:edit:${schedule.id}`,
+              },
+              {
+                type: 'button',
+                text: { type: 'plain_text', text: toggleText },
+                action_id: `schedule:list:toggle:${schedule.id}`,
+                value: toggleValue,
+              },
+            ],
+          },
+        );
       }
     }
 
@@ -101,6 +124,155 @@ export class ScheduleView {
         text: '닫기',
       },
       blocks,
+    };
+  }
+
+  // 시간표 수정 모달 (정보 수정 + 편집자 관리)
+  static editModal(
+    schedule: EditScheduleItem,
+    tags: TagOption[],
+    writers: WriterItem[],
+  ): View {
+    const activeTagOptions = tags
+      .filter((t) => t.status === TagStatus.ACTIVE)
+      .map((t) => ({
+        text: { type: 'plain_text' as const, text: t.name },
+        value: t.id.toString(),
+      }));
+
+    const initialTagOptions = activeTagOptions.filter((opt) =>
+      schedule.tags.some((t) => t.id.toString() === opt.value),
+    );
+
+    const blocks: View['blocks'] = [
+      {
+        type: 'input',
+        block_id: 'name_block',
+        element: {
+          type: 'plain_text_input',
+          action_id: 'name_input',
+          initial_value: schedule.name,
+        },
+        label: { type: 'plain_text', text: '과목명' },
+      },
+      {
+        type: 'input',
+        block_id: 'description_block',
+        optional: true,
+        element: {
+          type: 'plain_text_input',
+          action_id: 'description_input',
+          multiline: true,
+          ...(schedule.description
+            ? { initial_value: schedule.description }
+            : {}),
+        },
+        label: { type: 'plain_text', text: '설명' },
+      },
+    ];
+
+    if (activeTagOptions.length > 0) {
+      blocks.push({
+        type: 'input',
+        block_id: 'tags_block',
+        optional: true,
+        element: {
+          type: 'multi_static_select',
+          action_id: 'tags_input',
+          placeholder: { type: 'plain_text', text: '태그 선택' },
+          options: activeTagOptions,
+          ...(initialTagOptions.length > 0
+            ? { initial_options: initialTagOptions }
+            : {}),
+        },
+        label: { type: 'plain_text', text: '태그' },
+      });
+    }
+
+    // 편집자 관리 섹션
+    blocks.push(
+      { type: 'divider' },
+      {
+        type: 'section',
+        text: { type: 'mrkdwn', text: '*수정 권한 관리*' },
+        accessory: {
+          type: 'button',
+          text: { type: 'plain_text', text: '편집자 추가' },
+          action_id: 'schedule:manage:writer:open:add',
+          value: schedule.id.toString(),
+        },
+      },
+    );
+
+    const editorList = writers.filter((w) => w.role === 'writer');
+    if (editorList.length === 0) {
+      blocks.push({
+        type: 'section',
+        text: { type: 'mrkdwn', text: '편집자가 없습니다.' },
+      });
+    } else {
+      for (const writer of editorList) {
+        const displayName = writer.name
+          ? `${writer.name} (${writer.email})`
+          : writer.email;
+        blocks.push({
+          type: 'section',
+          text: { type: 'mrkdwn', text: `✏️ ${displayName}` },
+          accessory: {
+            type: 'button',
+            text: { type: 'plain_text', text: '제거' },
+            action_id: `schedule:manage:writer:remove:${schedule.id}`,
+            value: writer.email,
+            style: 'danger',
+            confirm: {
+              title: { type: 'plain_text', text: '편집자 제거' },
+              text: {
+                type: 'mrkdwn',
+                text: `*${displayName}*의 수정 권한을 제거하시겠습니까?`,
+              },
+              confirm: { type: 'plain_text', text: '제거' },
+              deny: { type: 'plain_text', text: '취소' },
+            },
+          },
+        });
+      }
+    }
+
+    return {
+      type: 'modal',
+      callback_id: 'schedule:modal:edit',
+      private_metadata: schedule.id.toString(),
+      title: { type: 'plain_text', text: '시간표 수정' },
+      submit: { type: 'plain_text', text: '저장' },
+      close: { type: 'plain_text', text: '취소' },
+      blocks,
+    };
+  }
+
+  // 편집자 추가 모달 (슬랙 사용자 선택)
+  static addWriterModal(scheduleId: number, editViewId: string): View {
+    return {
+      type: 'modal',
+      callback_id: 'schedule:modal:add:writer',
+      private_metadata: JSON.stringify({ scheduleId, editViewId }),
+      title: { type: 'plain_text', text: '편집자 추가' },
+      submit: { type: 'plain_text', text: '추가' },
+      close: { type: 'plain_text', text: '취소' },
+      blocks: [
+        {
+          type: 'input',
+          block_id: 'user_block',
+          element: {
+            type: 'users_select',
+            action_id: 'user_input',
+            placeholder: {
+              type: 'plain_text',
+              text: '이름으로 검색하세요',
+            },
+          },
+          label: { type: 'plain_text', text: '편집자 선택' },
+        },
+      ],
     };
   }
 

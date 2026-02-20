@@ -8,7 +8,7 @@ import type {
   BlockAction,
 } from '@slack/bolt';
 import { ScheduleService } from './schedule.service';
-import { ScheduleView } from './schedule.view';
+import { ScheduleView, WriterItem } from './schedule.view';
 import { UserService } from '../user/user.service';
 import { TagService } from '../tag/tag.service';
 import { UserRole, UserStatus, User } from '../user/user.entity';
@@ -86,6 +86,7 @@ export class ScheduleController {
           status: s.status,
           tags: s.tags.map((t) => ({ id: t.id, name: t.name })),
           createdBy: { name: s.createdBy?.name ?? '알 수 없음' },
+          createdAt: s.createdAt,
         })),
       ),
     });
@@ -231,6 +232,7 @@ export class ScheduleController {
               status: s.status,
               tags: s.tags.map((t) => ({ id: t.id, name: t.name })),
               createdBy: { name: s.createdBy?.name ?? '알 수 없음' },
+          createdAt: s.createdAt,
             })),
           ),
         });
@@ -321,6 +323,7 @@ export class ScheduleController {
           description: s.description,
           tags: s.tags.map((t) => ({ id: t.id, name: t.name })),
           createdBy: { name: s.createdBy?.name ?? '알 수 없음' },
+          createdAt: s.createdAt,
           isSubscribed: await this.scheduleService.isSubscribed(
             s.id,
             user.email,
@@ -352,6 +355,318 @@ export class ScheduleController {
       await ack({
         response_action: 'errors',
         errors: { tags_block: '검색 중 오류가 발생했습니다.' },
+      });
+    }
+  }
+
+  // 수정/관리 버튼 → 수정 모달 열기
+  @Action(/^schedule:list:edit:/)
+  async handleOpenEdit({
+    ack,
+    body,
+    client,
+    logger,
+  }: SlackActionMiddlewareArgs<BlockAction> & AllMiddlewareArgs) {
+    await ack();
+
+    try {
+      const action = body.actions[0] as { action_id: string };
+      const scheduleId = parseInt(action.action_id.split(':').pop()!, 10);
+
+      const [schedule, allTags, permissions] = await Promise.all([
+        this.scheduleService.findById(scheduleId),
+        this.tagService.findAllTags(),
+        this.scheduleService.getCalendarPermissions(scheduleId),
+      ]);
+
+      if (!schedule) return;
+
+      // 편집자 목록에 슬랙 이름 보강
+      const writers: WriterItem[] = await Promise.all(
+        (permissions ?? []).map(async (p) => {
+          const user = await this.userService.findByEmail(p.email);
+          return { email: p.email, role: p.role, name: user?.name };
+        }),
+      );
+
+      await client.views.push({
+        trigger_id: body.trigger_id,
+        view: ScheduleView.editModal(
+          {
+            id: schedule.id,
+            name: schedule.name,
+            description: schedule.description,
+            tags: schedule.tags,
+          },
+          allTags,
+          writers,
+        ),
+      });
+    } catch (error) {
+      logger.error('Open edit modal error:', error);
+    }
+  }
+
+  // 수정 모달 제출 → 시간표 정보 업데이트
+  @View('schedule:modal:edit')
+  async handleEdit({
+    ack,
+    body,
+    view,
+    client,
+    logger,
+  }: SlackViewMiddlewareArgs & AllMiddlewareArgs) {
+    const values = view.state.values;
+    const name = values.name_block.name_input.value ?? '';
+    const description =
+      values.description_block?.description_input?.value ?? undefined;
+    const selectedTags = values.tags_block?.tags_input?.selected_options ?? [];
+    const scheduleId = parseInt(view.private_metadata, 10);
+
+    if (!name.trim()) {
+      await ack({
+        response_action: 'errors',
+        errors: { name_block: '과목명을 입력해주세요.' },
+      });
+      return;
+    }
+
+    await ack();
+
+    try {
+      const tagIds = selectedTags.map((opt: { value: string }) =>
+        parseInt(opt.value, 10),
+      );
+
+      await this.scheduleService.updateSchedule(scheduleId, {
+        name: name.trim(),
+        description: description?.trim(),
+        tagIds,
+      });
+
+      await client.chat.postMessage({
+        channel: body.user.id,
+        text: `시간표 "${name}"이(가) 수정되었습니다.`,
+      });
+
+      logger.info(`Schedule ${scheduleId} updated by ${body.user.id}`);
+    } catch (error) {
+      logger.error('Update schedule error:', error);
+      const err = error as { message?: string };
+      await client.chat.postMessage({
+        channel: body.user.id,
+        text: `시간표 수정 중 오류가 발생했습니다: ${err.message ?? '알 수 없는 오류'}`,
+      });
+    }
+  }
+
+  // 편집자 제거 버튼
+  @Action(/^schedule:manage:writer:remove:/)
+  async handleRemoveWriter({
+    ack,
+    body,
+    client,
+    logger,
+  }: SlackActionMiddlewareArgs<BlockAction> & AllMiddlewareArgs) {
+    await ack();
+
+    try {
+      const action = body.actions[0] as { action_id: string; value: string };
+      const scheduleId = parseInt(action.action_id.split(':').pop()!, 10);
+      const email = action.value;
+
+      await this.scheduleService.unshareCalendar(scheduleId, email);
+
+      // 현재 입력값 보존 후 모달 갱신
+      const currentValues =
+        (
+          body as BlockAction & {
+            view?: {
+              state?: {
+                values?: Record<
+                  string,
+                  Record<
+                    string,
+                    {
+                      value?: string;
+                      selected_options?: {
+                        value: string;
+                        text: { text: string };
+                      }[];
+                    }
+                  >
+                >;
+              };
+            };
+          }
+        ).view?.state?.values ?? {};
+      const currentName = currentValues['name_block']?.['name_input']?.value;
+      const currentDescription =
+        currentValues['description_block']?.['description_input']?.value;
+      const currentTagOptions =
+        currentValues['tags_block']?.['tags_input']?.selected_options;
+
+      const [schedule, allTags, permissions] = await Promise.all([
+        this.scheduleService.findById(scheduleId),
+        this.tagService.findAllTags(),
+        this.scheduleService.getCalendarPermissions(scheduleId),
+      ]);
+
+      if (!body.view?.id || !schedule) return;
+
+      const writers: WriterItem[] = await Promise.all(
+        (permissions ?? []).map(async (p) => {
+          const user = await this.userService.findByEmail(p.email);
+          return { email: p.email, role: p.role, name: user?.name };
+        }),
+      );
+
+      await client.views.update({
+        view_id: body.view.id,
+        view: ScheduleView.editModal(
+          {
+            id: schedule.id,
+            name: currentName ?? schedule.name,
+            description: currentDescription ?? schedule.description,
+            tags: currentTagOptions
+              ? currentTagOptions.map((opt) => ({
+                  id: parseInt(opt.value, 10),
+                  name: opt.text.text,
+                }))
+              : schedule.tags,
+          },
+          allTags,
+          writers,
+        ),
+      });
+
+      logger.info(`Writer ${email} removed from schedule ${scheduleId}`);
+    } catch (error) {
+      logger.error('Remove writer error:', error);
+    }
+  }
+
+  // 편집자 추가 모달 열기
+  @Action('schedule:manage:writer:open:add')
+  async handleOpenAddWriter({
+    ack,
+    body,
+    client,
+    logger,
+  }: SlackActionMiddlewareArgs<BlockAction> & AllMiddlewareArgs) {
+    await ack();
+
+    try {
+      const action = body.actions[0] as { value: string };
+      const scheduleId = parseInt(action.value, 10);
+      const editViewId = body.view?.id ?? '';
+
+      await client.views.push({
+        trigger_id: body.trigger_id,
+        view: ScheduleView.addWriterModal(scheduleId, editViewId),
+      });
+    } catch (error) {
+      logger.error('Open add writer modal error:', error);
+    }
+  }
+
+  // 편집자 추가 모달 제출
+  @View('schedule:modal:add:writer')
+  async handleAddWriter({
+    ack,
+    body,
+    view,
+    client,
+    logger,
+  }: SlackViewMiddlewareArgs & AllMiddlewareArgs) {
+    const { scheduleId, editViewId } = JSON.parse(view.private_metadata) as {
+      scheduleId: number;
+      editViewId: string;
+    };
+
+    const selectedUserId =
+      view.state.values.user_block?.user_input?.selected_user;
+
+    if (!selectedUserId) {
+      await ack({
+        response_action: 'errors',
+        errors: { user_block: '편집자를 선택해주세요.' },
+      });
+      return;
+    }
+
+    // 슬랙 user ID → 이메일 조회 (DB 우선, fallback: Slack API)
+    let email: string | undefined;
+    let displayName: string | undefined;
+
+    const dbUser = await this.userService.findBySlackId(selectedUserId);
+    if (dbUser) {
+      email = dbUser.email;
+      displayName = dbUser.name;
+    } else {
+      const result = await client.users.info({ user: selectedUserId });
+      email = result.user?.profile?.email ?? undefined;
+      displayName =
+        result.user?.profile?.display_name ??
+        result.user?.real_name ??
+        undefined;
+    }
+
+    if (!email) {
+      await ack({
+        response_action: 'errors',
+        errors: {
+          user_block:
+            '해당 사용자의 이메일을 가져올 수 없습니다. 먼저 회원가입을 완료해주세요.',
+        },
+      });
+      return;
+    }
+
+    await ack();
+
+    try {
+      await this.scheduleService.shareCalendar(scheduleId, email, 'writer');
+
+      // 편집자 추가 후 수정 모달 갱신
+      const [schedule, allTags, permissions] = await Promise.all([
+        this.scheduleService.findById(scheduleId),
+        this.tagService.findAllTags(),
+        this.scheduleService.getCalendarPermissions(scheduleId),
+      ]);
+
+      if (editViewId && schedule) {
+        const writers: WriterItem[] = await Promise.all(
+          (permissions ?? []).map(async (p) => {
+            const user = await this.userService.findByEmail(p.email);
+            return { email: p.email, role: p.role, name: user?.name };
+          }),
+        );
+
+        await client.views.update({
+          view_id: editViewId,
+          view: ScheduleView.editModal(
+            {
+              id: schedule.id,
+              name: schedule.name,
+              description: schedule.description,
+              tags: schedule.tags,
+            },
+            allTags,
+            writers,
+          ),
+        });
+      }
+
+      logger.info(
+        `Writer ${displayName ?? email} added to schedule ${scheduleId}`,
+      );
+    } catch (error) {
+      logger.error('Add writer error:', error);
+      const err = error as { message?: string };
+      await client.chat.postMessage({
+        channel: body.user.id,
+        text: `편집자 추가 중 오류가 발생했습니다: ${err.message ?? '알 수 없는 오류'}`,
       });
     }
   }
@@ -422,6 +737,7 @@ export class ScheduleController {
           description: s.description,
           tags: s.tags.map((t) => ({ id: t.id, name: t.name })),
           createdBy: { name: s.createdBy?.name ?? '알 수 없음' },
+          createdAt: s.createdAt,
           isSubscribed: await this.scheduleService.isSubscribed(
             s.id,
             user.email,
