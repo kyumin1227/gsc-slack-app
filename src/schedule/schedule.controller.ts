@@ -135,47 +135,50 @@ export class ScheduleController {
     client,
     logger,
   }: SlackViewMiddlewareArgs & AllMiddlewareArgs) {
+    const values = view.state.values;
+    const name = values.name_block.name_input.value ?? '';
+    const description =
+      values.description_block?.description_input?.value ?? undefined;
+    const selectedTags = values.tags_block?.tags_input?.selected_options ?? [];
+
+    // 빠른 유효성 검사 (ack 전)
+    if (!name.trim()) {
+      await ack({
+        response_action: 'errors',
+        errors: { name_block: '과목명을 입력해주세요.' },
+      });
+      return;
+    }
+
+    const user = await this.userService.findBySlackId(body.user.id);
+    if (!user) {
+      await ack({
+        response_action: 'errors',
+        errors: { name_block: '사용자 정보를 찾을 수 없습니다.' },
+      });
+      return;
+    }
+
+    // 3초 제한 내에 ack 처리 — 이후 작업은 DM으로 결과 전달
+    await ack();
+
     try {
-      const values = view.state.values;
-      const name = values.name_block.name_input.value ?? '';
-      const description =
-        values.description_block?.description_input?.value ?? undefined;
-      const selectedTags =
-        values.tags_block?.tags_input?.selected_options ?? [];
-
-      // 유효성 검사
-      if (!name.trim()) {
-        await ack({
-          response_action: 'errors',
-          errors: { name_block: '과목명을 입력해주세요.' },
-        });
-        return;
-      }
-
-      // 사용자 조회
-      const user = await this.userService.findBySlackId(body.user.id);
-      if (!user) {
-        await ack({
-          response_action: 'errors',
-          errors: { name_block: '사용자 정보를 찾을 수 없습니다.' },
-        });
-        return;
-      }
-
       const tagIds = selectedTags.map((opt: { value: string }) =>
         parseInt(opt.value, 10),
       );
+
+      const creatorRefreshToken =
+        this.userService.getDecryptedRefreshToken(user);
 
       await this.scheduleService.createSchedule({
         name: name.trim(),
         description: description?.trim(),
         tagIds,
         createdById: user.id,
+        creatorEmail: user.email,
+        creatorRefreshToken: creatorRefreshToken ?? undefined,
       });
 
-      await ack();
-
-      // 생성 완료 메시지
       await client.chat.postMessage({
         channel: body.user.id,
         text: `시간표 "${name}"이(가) 생성되었습니다. Google Calendar가 함께 생성되었습니다.`,
@@ -185,21 +188,11 @@ export class ScheduleController {
     } catch (error) {
       logger.error('Create schedule error:', error);
 
-      const err = error as { code?: string; message?: string };
-      if (err.code === '23505') {
-        // unique violation
-        await ack({
-          response_action: 'errors',
-          errors: { name_block: '이미 존재하는 과목명입니다.' },
-        });
-      } else {
-        await ack({
-          response_action: 'errors',
-          errors: {
-            name_block: `시간표 생성 중 오류가 발생했습니다: ${err.message ?? '알 수 없는 오류'}`,
-          },
-        });
-      }
+      const err = error as { message?: string };
+      await client.chat.postMessage({
+        channel: body.user.id,
+        text: `시간표 생성 중 오류가 발생했습니다: ${err.message ?? '알 수 없는 오류'}`,
+      });
     }
   }
 

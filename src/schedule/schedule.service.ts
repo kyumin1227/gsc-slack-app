@@ -10,6 +10,8 @@ export interface CreateScheduleDto {
   description?: string;
   tagIds?: number[];
   createdById: number;
+  creatorEmail?: string;
+  creatorRefreshToken?: string;
 }
 
 export interface UpdateScheduleDto {
@@ -53,7 +55,22 @@ export class ScheduleService {
       createdById: dto.createdById,
     });
 
-    return this.scheduleRepository.save(schedule);
+    const saved = await this.scheduleRepository.save(schedule);
+
+    // 4. 생성자에게 writer 권한 부여 및 자동 구독
+    if (dto.creatorEmail && dto.creatorRefreshToken) {
+      await GoogleCalendarUtil.shareCalendar({
+        calendarId,
+        email: dto.creatorEmail,
+        role: 'writer',
+      });
+      await GoogleCalendarUtil.addCalendarToUserList(
+        calendarId,
+        dto.creatorRefreshToken,
+      );
+    }
+
+    return saved;
   }
 
   async findById(id: number): Promise<Schedule | null> {
