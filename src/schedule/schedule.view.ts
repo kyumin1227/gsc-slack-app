@@ -65,19 +65,20 @@ export class ScheduleView {
   ): View {
     const { page, totalPages, total, selectedStatus, selectedTagIds } = meta;
 
-    const activeTagOptions = tags
-      .filter((t) => t.status === TagStatus.ACTIVE)
-      .map((t) => ({
-        text: { type: 'plain_text' as const, text: t.name },
-        value: t.id.toString(),
-      }));
+    const tagOptions = tags.map((t) => ({
+      text: {
+        type: 'plain_text' as const,
+        text: t.status === TagStatus.ACTIVE ? t.name : `⚪️ ${t.name}`,
+      },
+      value: t.id.toString(),
+    }));
 
     const initialStatusOption = STATUS_OPTIONS.find(
       (o) => o.value === (selectedStatus ?? 'all'),
     );
 
     const initialTagOptions = selectedTagIds
-      ? activeTagOptions.filter((opt) =>
+      ? tagOptions.filter((opt) =>
           selectedTagIds.includes(parseInt(opt.value, 10)),
         )
       : [];
@@ -99,7 +100,7 @@ export class ScheduleView {
     ];
 
     // 태그 필터 (태그 있을 때만)
-    if (activeTagOptions.length > 0) {
+    if (tagOptions.length > 0) {
       blocks.push({
         type: 'input',
         block_id: 'tags_block',
@@ -108,7 +109,7 @@ export class ScheduleView {
           type: 'multi_static_select',
           action_id: 'tags_select',
           placeholder: { type: 'plain_text', text: '태그 선택 (AND 조건)' },
-          options: activeTagOptions,
+          options: tagOptions,
           ...(initialTagOptions.length > 0
             ? { initial_options: initialTagOptions }
             : {}),

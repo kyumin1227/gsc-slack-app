@@ -56,11 +56,7 @@ export class ScheduleController {
   private readonly SCHEDULE_PAGE_SIZE = 10;
 
   // 목록 모달 빌드 헬퍼
-  private async buildListModal(
-    page: number,
-    status: string,
-    tagIds: number[],
-  ) {
+  private async buildListModal(page: number, status: string, tagIds: number[]) {
     const statusFilter =
       status === 'all' ? undefined : (status as 'active' | 'inactive');
     const tagFilter = tagIds.length > 0 ? tagIds : undefined;
