@@ -542,11 +542,12 @@ export class ScheduleView {
     };
   }
 
-  // 구독 검색 모달 (태그 선택 + 결과)
+  // 구독 검색 모달 (태그 선택 + 결과 + 페이지네이션)
   static subscribeSearchModal(
     tags: TagOption[],
     schedules?: SubscribeScheduleItem[],
     selectedTagIds?: number[],
+    pagination?: { page: number; totalPages: number; total: number },
   ): View {
     const activeTagOptions = tags
       .filter((t) => t.status === TagStatus.ACTIVE)
@@ -565,13 +566,6 @@ export class ScheduleView {
         },
       },
       { type: 'divider' },
-      {
-        type: 'section',
-        text: {
-          type: 'mrkdwn',
-          text: '*조회하고 싶은 태그를 모두 선택해 주세요.* (반, 과목 등)',
-        },
-      },
     ];
 
     if (activeTagOptions.length === 0) {
@@ -583,7 +577,6 @@ export class ScheduleView {
         },
       });
     } else {
-      // 선택된 태그가 있으면 initial_options 설정
       const initialOptions = selectedTagIds
         ? activeTagOptions.filter((opt) =>
             selectedTagIds.includes(parseInt(opt.value, 10)),
@@ -593,12 +586,13 @@ export class ScheduleView {
       blocks.push({
         type: 'input',
         block_id: 'tags_block',
+        optional: true,
         element: {
           type: 'multi_static_select',
           action_id: 'tags_select',
           placeholder: {
             type: 'plain_text',
-            text: '태그를 선택하세요',
+            text: '원하는 태그를 모두 선택하세요 (미선택 시 전체 조회)',
             emoji: true,
           },
           options: activeTagOptions,
@@ -627,11 +621,17 @@ export class ScheduleView {
           },
         });
       } else {
+        const {
+          page = 0,
+          totalPages = 1,
+          total = schedules.length,
+        } = pagination ?? {};
+
         blocks.push({
           type: 'section',
           text: {
             type: 'mrkdwn',
-            text: `*검색 결과 (${schedules.length}건)*`,
+            text: `*검색 결과 (총 ${total}개, ${page + 1}/${totalPages}페이지)*`,
           },
         });
 
@@ -664,10 +664,38 @@ export class ScheduleView {
               action_id: `schedule:subscribe:toggle:${schedule.id}`,
               value: JSON.stringify({
                 action: buttonValue,
-                tagIds: selectedTagIds,
+                tagIds: selectedTagIds ?? [],
               }),
             },
           });
+        }
+
+        // 페이지 네비게이션
+        const navBlock: View['blocks'][number] = {
+          type: 'actions',
+          elements: [],
+        };
+        const navElements = (navBlock as { type: string; elements: object[] })
+          .elements;
+        if (page > 0) {
+          navElements.push({
+            type: 'button',
+            text: { type: 'plain_text', text: '← 이전' },
+            action_id: 'schedule:subscribe:page:prev',
+            value: (page - 1).toString(),
+          });
+        }
+        if (page < totalPages - 1) {
+          navElements.push({
+            type: 'button',
+            text: { type: 'plain_text', text: '다음 →' },
+            action_id: 'schedule:subscribe:page:next',
+            value: (page + 1).toString(),
+          });
+        }
+        if (navElements.length > 0) {
+          blocks.push({ type: 'divider' });
+          blocks.push(navBlock);
         }
       }
 
@@ -687,6 +715,7 @@ export class ScheduleView {
       callback_id: 'schedule:modal:subscribe:search',
       private_metadata: JSON.stringify({
         selectedTagIds: selectedTagIds ?? [],
+        page: pagination?.page ?? 0,
       }),
       title: {
         type: 'plain_text',
@@ -694,10 +723,7 @@ export class ScheduleView {
       },
       submit:
         activeTagOptions.length > 0
-          ? {
-              type: 'plain_text',
-              text: '검색',
-            }
+          ? { type: 'plain_text', text: '검색' }
           : undefined,
       close: {
         type: 'plain_text',

@@ -367,6 +367,47 @@ export class ScheduleController {
     });
   }
 
+  // 구독 모달 빌드 헬퍼 (활성 태그만, 구독 여부 포함)
+  private async buildSubscribeModal(
+    page: number,
+    tagIds: number[],
+    userEmail: string,
+  ) {
+    const tagFilter = tagIds.length > 0 ? tagIds : undefined;
+
+    const [{ schedules, total }, activeTags] = await Promise.all([
+      this.scheduleService.findSchedulesPaginated({
+        page,
+        pageSize: this.SCHEDULE_PAGE_SIZE,
+        status: 'active',
+        tagIds: tagFilter,
+      }),
+      this.tagService.findActiveTags(),
+    ]);
+
+    const totalPages = Math.max(1, Math.ceil(total / this.SCHEDULE_PAGE_SIZE));
+    const safePage = Math.min(page, totalPages - 1);
+
+    const schedulesWithSubscription = await Promise.all(
+      schedules.map(async (s) => ({
+        id: s.id,
+        name: s.name,
+        description: s.description,
+        tags: s.tags.map((t) => ({ id: t.id, name: t.name })),
+        createdBy: { name: s.createdBy?.name ?? '알 수 없음' },
+        createdAt: s.createdAt,
+        isSubscribed: await this.scheduleService.isSubscribed(s.id, userEmail),
+      })),
+    );
+
+    return ScheduleView.subscribeSearchModal(
+      activeTags.map((t) => ({ id: t.id, name: t.name, status: t.status })),
+      schedulesWithSubscription,
+      tagIds,
+      { page: safePage, totalPages, total },
+    );
+  }
+
   // 구독 태그 검색
   @View('schedule:modal:subscribe:search')
   async handleTagSearch({
@@ -377,21 +418,12 @@ export class ScheduleController {
   }: SlackViewMiddlewareArgs & AllMiddlewareArgs) {
     try {
       const values = view.state.values;
-      const selectedTags = values.tags_block?.tags_select?.selected_options;
-
-      if (!selectedTags || selectedTags.length === 0) {
-        await ack({
-          response_action: 'errors',
-          errors: { tags_block: '태그를 하나 이상 선택해주세요.' },
-        });
-        return;
-      }
-
+      const selectedTags =
+        values.tags_block?.tags_select?.selected_options ?? [];
       const tagIds = selectedTags.map((opt: { value: string }) =>
         parseInt(opt.value, 10),
       );
 
-      // 사용자 정보 조회
       const user = await this.userService.findBySlackId(body.user.id);
       if (!user) {
         await ack({
@@ -401,44 +433,13 @@ export class ScheduleController {
         return;
       }
 
-      // 선택한 태그들의 활성 스케줄 조회
-      const schedules =
-        await this.scheduleService.findActiveSchedulesByTagIds(tagIds);
-
-      // 각 스케줄에 대해 구독 여부 확인
-      const schedulesWithSubscription = await Promise.all(
-        schedules.map(async (s) => ({
-          id: s.id,
-          name: s.name,
-          description: s.description,
-          tags: s.tags.map((t) => ({ id: t.id, name: t.name })),
-          createdBy: { name: s.createdBy?.name ?? '알 수 없음' },
-          createdAt: s.createdAt,
-          isSubscribed: await this.scheduleService.isSubscribed(
-            s.id,
-            user.email,
-          ),
-        })),
-      );
-
-      // 태그 목록 다시 조회
-      const tags = await this.tagService.findAllTags();
-
       await ack({
         response_action: 'update',
-        view: ScheduleView.subscribeSearchModal(
-          tags.map((t) => ({
-            id: t.id,
-            name: t.name,
-            status: t.status,
-          })),
-          schedulesWithSubscription,
-          tagIds,
-        ),
+        view: await this.buildSubscribeModal(0, tagIds, user.email),
       });
 
       logger.info(
-        `User ${user.name} searched schedules for tags: ${tagIds.join(', ')}`,
+        `User ${user.name} searched schedules for tags: ${tagIds.join(', ') || '전체'}`,
       );
     } catch (error) {
       logger.error('Tag search error:', error);
@@ -446,6 +447,39 @@ export class ScheduleController {
         response_action: 'errors',
         errors: { tags_block: '검색 중 오류가 발생했습니다.' },
       });
+    }
+  }
+
+  // 구독 페이지 이동 버튼
+  @Action(/^schedule:subscribe:page:/)
+  async handleSubscribePage({
+    ack,
+    body,
+    client,
+    logger,
+  }: SlackActionMiddlewareArgs<BlockAction> & AllMiddlewareArgs) {
+    await ack();
+
+    try {
+      const action = body.actions[0] as { value: string };
+      const page = parseInt(action.value, 10);
+      const meta = JSON.parse(body.view?.private_metadata || '{}') as {
+        selectedTagIds?: number[];
+      };
+
+      const user = await this.userService.findBySlackId(body.user.id);
+      if (!user || !body.view?.id) return;
+
+      await client.views.update({
+        view_id: body.view.id,
+        view: await this.buildSubscribeModal(
+          page,
+          meta.selectedTagIds ?? [],
+          user.email,
+        ),
+      });
+    } catch (error) {
+      logger.error('Subscribe page change error:', error);
     }
   }
 
@@ -816,39 +850,19 @@ export class ScheduleController {
         );
       }
 
-      // 목록 새로고침
-      const schedules =
-        await this.scheduleService.findActiveSchedulesByTagIds(tagIds);
-
-      const schedulesWithSubscription = await Promise.all(
-        schedules.map(async (s) => ({
-          id: s.id,
-          name: s.name,
-          description: s.description,
-          tags: s.tags.map((t) => ({ id: t.id, name: t.name })),
-          createdBy: { name: s.createdBy?.name ?? '알 수 없음' },
-          createdAt: s.createdAt,
-          isSubscribed: await this.scheduleService.isSubscribed(
-            s.id,
-            user.email,
-          ),
-        })),
-      );
-
-      // 태그 목록 조회
-      const tags = await this.tagService.findAllTags();
+      // 현재 페이지/태그 필터 유지하며 목록 새로고침
+      const meta = JSON.parse(body.view?.private_metadata || '{}') as {
+        selectedTagIds?: number[];
+        page?: number;
+      };
 
       if (body.view?.id) {
         await client.views.update({
           view_id: body.view.id,
-          view: ScheduleView.subscribeSearchModal(
-            tags.map((t) => ({
-              id: t.id,
-              name: t.name,
-              status: t.status,
-            })),
-            schedulesWithSubscription,
-            tagIds,
+          view: await this.buildSubscribeModal(
+            meta.page ?? 0,
+            meta.selectedTagIds ?? tagIds,
+            user.email,
           ),
         });
       }

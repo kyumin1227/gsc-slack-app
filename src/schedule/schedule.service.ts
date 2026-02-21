@@ -178,49 +178,6 @@ export class ScheduleService {
     return { schedules, total };
   }
 
-  // 태그별 활성 스케줄 조회 (단일 태그)
-  async findActiveSchedulesByTagId(tagId: number): Promise<Schedule[]> {
-    return this.scheduleRepository
-      .createQueryBuilder('schedule')
-      .leftJoinAndSelect('schedule.tags', 'tag')
-      .leftJoinAndSelect('schedule.createdBy', 'createdBy')
-      .where('tag.id = :tagId', { tagId })
-      .andWhere('schedule.status = :status', { status: ScheduleStatus.ACTIVE })
-      .andWhere('schedule.deletedAt IS NULL')
-      .orderBy('schedule.name', 'ASC')
-      .getMany();
-  }
-
-  // 태그별 활성 스케줄 조회 (다중 태그 - AND 조건)
-  async findActiveSchedulesByTagIds(tagIds: number[]): Promise<Schedule[]> {
-    if (tagIds.length === 0) return [];
-
-    // 모든 선택된 태그를 가진 schedule id 조회
-    const scheduleIdsResult = await this.scheduleRepository
-      .createQueryBuilder('schedule')
-      .innerJoin('schedule.tags', 'tag')
-      .where('tag.id IN (:...tagIds)', { tagIds })
-      .andWhere('schedule.status = :status', { status: ScheduleStatus.ACTIVE })
-      .andWhere('schedule.deletedAt IS NULL')
-      .groupBy('schedule.id')
-      .having('COUNT(DISTINCT tag.id) = :tagCount', { tagCount: tagIds.length })
-      .select('schedule.id')
-      .getRawMany();
-
-    if (scheduleIdsResult.length === 0) return [];
-
-    const ids = scheduleIdsResult.map(
-      (s: { schedule_id: number }) => s.schedule_id,
-    );
-
-    // 전체 데이터 조회
-    return this.scheduleRepository.find({
-      where: { id: In(ids) },
-      relations: ['tags', 'createdBy'],
-      order: { name: 'ASC' },
-    });
-  }
-
   // 스케줄 업데이트 (Google Calendar도 함께 업데이트)
   async updateSchedule(
     id: number,
