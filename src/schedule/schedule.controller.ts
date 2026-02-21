@@ -53,6 +53,52 @@ export class ScheduleController {
     return { isActive: true, user };
   }
 
+  private readonly SCHEDULE_PAGE_SIZE = 10;
+
+  // 목록 모달 빌드 헬퍼
+  private async buildListModal(
+    page: number,
+    status: string,
+    tagIds: number[],
+  ) {
+    const statusFilter =
+      status === 'all' ? undefined : (status as 'active' | 'inactive');
+    const tagFilter = tagIds.length > 0 ? tagIds : undefined;
+
+    const [{ schedules, total }, allTags] = await Promise.all([
+      this.scheduleService.findSchedulesPaginated({
+        page,
+        pageSize: this.SCHEDULE_PAGE_SIZE,
+        status: statusFilter,
+        tagIds: tagFilter,
+      }),
+      this.tagService.findAllTags(),
+    ]);
+
+    const totalPages = Math.max(1, Math.ceil(total / this.SCHEDULE_PAGE_SIZE));
+    const safePage = Math.min(page, totalPages - 1);
+
+    return ScheduleView.listModal(
+      schedules.map((s) => ({
+        id: s.id,
+        name: s.name,
+        description: s.description,
+        status: s.status,
+        tags: s.tags.map((t) => ({ id: t.id, name: t.name })),
+        createdBy: { name: s.createdBy?.name ?? '알 수 없음' },
+        createdAt: s.createdAt,
+      })),
+      allTags.map((t) => ({ id: t.id, name: t.name, status: t.status })),
+      {
+        page: safePage,
+        totalPages,
+        total,
+        selectedStatus: status,
+        selectedTagIds: tagIds,
+      },
+    );
+  }
+
   // /시간표 - 시간표 목록 조회
   @Command('/시간표')
   async listSchedules({
@@ -74,21 +120,9 @@ export class ScheduleController {
       return;
     }
 
-    const schedules = await this.scheduleService.findAllSchedules();
-
     await client.views.open({
       trigger_id: body.trigger_id,
-      view: ScheduleView.listModal(
-        schedules.map((s) => ({
-          id: s.id,
-          name: s.name,
-          description: s.description,
-          status: s.status,
-          tags: s.tags.map((t) => ({ id: t.id, name: t.name })),
-          createdBy: { name: s.createdBy?.name ?? '알 수 없음' },
-          createdAt: s.createdAt,
-        })),
-      ),
+      view: await this.buildListModal(0, 'all', []),
     });
   }
 
@@ -218,22 +252,19 @@ export class ScheduleController {
         await this.scheduleService.activateSchedule(scheduleId);
       }
 
-      // 목록 새로고침
-      const schedules = await this.scheduleService.findAllSchedules();
-
+      // 현재 필터/페이지 유지하며 목록 새로고침
       if (body.view?.id) {
+        const meta = JSON.parse(body.view.private_metadata || '{}') as {
+          page?: number;
+          status?: string;
+          tagIds?: number[];
+        };
         await client.views.update({
           view_id: body.view.id,
-          view: ScheduleView.listModal(
-            schedules.map((s) => ({
-              id: s.id,
-              name: s.name,
-              description: s.description,
-              status: s.status,
-              tags: s.tags.map((t) => ({ id: t.id, name: t.name })),
-              createdBy: { name: s.createdBy?.name ?? '알 수 없음' },
-          createdAt: s.createdAt,
-            })),
+          view: await this.buildListModal(
+            meta.page ?? 0,
+            meta.status ?? 'all',
+            meta.tagIds ?? [],
           ),
         });
       }
@@ -241,6 +272,65 @@ export class ScheduleController {
       logger.info(`Schedule ${scheduleId} toggled to ${toggleAction}`);
     } catch (error) {
       logger.error('Toggle schedule error:', error);
+    }
+  }
+
+  // 조회 버튼(submit) → 필터 적용, 모달 유지
+  @View('schedule:modal:list')
+  async handleSearch({
+    ack,
+    view,
+    logger,
+  }: SlackViewMiddlewareArgs & AllMiddlewareArgs) {
+    try {
+      const values = view.state.values;
+      const status =
+        values['status_block']?.['status_select']?.selected_option?.value ??
+        'all';
+      const tagIds = (
+        values['tags_block']?.['tags_select']?.selected_options ?? []
+      ).map((opt: { value: string }) => parseInt(opt.value, 10));
+
+      await ack({
+        response_action: 'update',
+        view: await this.buildListModal(0, status, tagIds),
+      });
+    } catch (error) {
+      logger.error('Search schedule error:', error);
+      await ack();
+    }
+  }
+
+  // 페이지 이동 버튼
+  @Action(/^schedule:list:page:/)
+  async handlePageChange({
+    ack,
+    body,
+    client,
+    logger,
+  }: SlackActionMiddlewareArgs<BlockAction> & AllMiddlewareArgs) {
+    await ack();
+
+    try {
+      const action = body.actions[0] as { value: string };
+      const page = parseInt(action.value, 10);
+      const meta = JSON.parse(body.view?.private_metadata || '{}') as {
+        status?: string;
+        tagIds?: number[];
+      };
+
+      if (body.view?.id) {
+        await client.views.update({
+          view_id: body.view.id,
+          view: await this.buildListModal(
+            page,
+            meta.status ?? 'all',
+            meta.tagIds ?? [],
+          ),
+        });
+      }
+    } catch (error) {
+      logger.error('Page change error:', error);
     }
   }
 

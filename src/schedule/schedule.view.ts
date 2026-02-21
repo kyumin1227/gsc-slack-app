@@ -45,84 +45,176 @@ const STATUS_LABELS: Record<ScheduleStatus, string> = {
   [ScheduleStatus.INACTIVE]: '비활성',
 };
 
+const STATUS_OPTIONS = [
+  { text: { type: 'plain_text' as const, text: '활성' }, value: 'active' },
+  { text: { type: 'plain_text' as const, text: '비활성' }, value: 'inactive' },
+];
+
 export class ScheduleView {
-  // 시간표 목록 모달
-  static listModal(schedules: ScheduleListItem[]): View {
-    const blocks: View['blocks'] = [];
+  // 시간표 목록 모달 (페이지네이션 + 필터)
+  static listModal(
+    schedules: ScheduleListItem[],
+    tags: TagOption[],
+    meta: {
+      page: number;
+      totalPages: number;
+      total: number;
+      selectedStatus?: string;
+      selectedTagIds?: number[];
+    },
+  ): View {
+    const { page, totalPages, total, selectedStatus, selectedTagIds } = meta;
 
-    if (schedules.length === 0) {
-      blocks.push({
-        type: 'section',
-        text: {
-          type: 'mrkdwn',
-          text: '등록된 시간표가 없습니다.',
+    const activeTagOptions = tags
+      .filter((t) => t.status === TagStatus.ACTIVE)
+      .map((t) => ({
+        text: { type: 'plain_text' as const, text: t.name },
+        value: t.id.toString(),
+      }));
+
+    const initialStatusOption = STATUS_OPTIONS.find(
+      (o) => o.value === (selectedStatus ?? 'all'),
+    );
+
+    const initialTagOptions = selectedTagIds
+      ? activeTagOptions.filter((opt) =>
+          selectedTagIds.includes(parseInt(opt.value, 10)),
+        )
+      : [];
+
+    const blocks: View['blocks'] = [
+      // 상태 필터
+      {
+        type: 'input',
+        block_id: 'status_block',
+        optional: true,
+        element: {
+          type: 'static_select',
+          action_id: 'status_select',
+          options: STATUS_OPTIONS,
+          initial_option: initialStatusOption,
         },
-      });
-    } else {
+        label: { type: 'plain_text', text: '상태' },
+      },
+    ];
+
+    // 태그 필터 (태그 있을 때만)
+    if (activeTagOptions.length > 0) {
       blocks.push({
-        type: 'section',
-        text: {
-          type: 'mrkdwn',
-          text: `*등록된 시간표: ${schedules.length}개*`,
+        type: 'input',
+        block_id: 'tags_block',
+        optional: true,
+        element: {
+          type: 'multi_static_select',
+          action_id: 'tags_select',
+          placeholder: { type: 'plain_text', text: '태그 선택 (AND 조건)' },
+          options: activeTagOptions,
+          ...(initialTagOptions.length > 0
+            ? { initial_options: initialTagOptions }
+            : {}),
         },
+        label: { type: 'plain_text', text: '태그' },
       });
+    }
 
-      blocks.push({ type: 'divider' });
+    blocks.push({ type: 'divider' });
 
-      for (const schedule of schedules) {
-        const statusEmoji =
-          schedule.status === ScheduleStatus.ACTIVE ? '🟢' : '⚪';
-        const toggleText =
-          schedule.status === ScheduleStatus.ACTIVE ? '비활성화' : '활성화';
-        const toggleValue =
-          schedule.status === ScheduleStatus.ACTIVE ? 'deactivate' : 'activate';
-        const tagNames =
-          schedule.tags.length > 0
-            ? schedule.tags.map((t) => `\`${t.name}\``).join(' ')
-            : '없음';
-        const description = schedule.description
-          ? `\n${schedule.description}`
-          : '';
+    // 결과 요약
+    blocks.push({
+      type: 'section',
+      text: {
+        type: 'mrkdwn',
+        text:
+          total === 0
+            ? '조건에 맞는 시간표가 없습니다.'
+            : `*총 ${total}개 (${page + 1}/${totalPages}페이지)*`,
+      },
+    });
 
-        blocks.push(
-          {
-            type: 'section',
-            text: {
-              type: 'mrkdwn',
-              text: `${statusEmoji} *${schedule.name}*${description}\n태그: ${tagNames}\n상태: ${STATUS_LABELS[schedule.status]} | 생성자: ${schedule.createdBy.name} | 생성일: ${schedule.createdAt.toLocaleString('ko-KR', { timeZone: 'Asia/Seoul' })}`,
+    // 시간표 목록
+    for (const schedule of schedules) {
+      const statusEmoji =
+        schedule.status === ScheduleStatus.ACTIVE ? '🟢' : '⚪';
+      const toggleText =
+        schedule.status === ScheduleStatus.ACTIVE ? '비활성화' : '활성화';
+      const toggleValue =
+        schedule.status === ScheduleStatus.ACTIVE ? 'deactivate' : 'activate';
+      const tagNames =
+        schedule.tags.length > 0
+          ? schedule.tags.map((t) => `\`${t.name}\``).join(' ')
+          : '없음';
+      const description = schedule.description
+        ? `\n${schedule.description}`
+        : '';
+
+      blocks.push(
+        {
+          type: 'section',
+          text: {
+            type: 'mrkdwn',
+            text: `${statusEmoji} *${schedule.name}*${description}\n태그: ${tagNames}\n상태: ${STATUS_LABELS[schedule.status]} | 생성자: ${schedule.createdBy.name} | 생성일: ${schedule.createdAt.toLocaleString('ko-KR', { timeZone: 'Asia/Seoul' })}`,
+          },
+        },
+        {
+          type: 'actions',
+          elements: [
+            {
+              type: 'button',
+              text: { type: 'plain_text', text: '수정/관리' },
+              action_id: `schedule:list:edit:${schedule.id}`,
             },
-          },
-          {
-            type: 'actions',
-            elements: [
-              {
-                type: 'button',
-                text: { type: 'plain_text', text: '수정/관리' },
-                action_id: `schedule:list:edit:${schedule.id}`,
-              },
-              {
-                type: 'button',
-                text: { type: 'plain_text', text: toggleText },
-                action_id: `schedule:list:toggle:${schedule.id}`,
-                value: toggleValue,
-              },
-            ],
-          },
-        );
-      }
+            {
+              type: 'button',
+              text: { type: 'plain_text', text: toggleText },
+              action_id: `schedule:list:toggle:${schedule.id}`,
+              value: toggleValue,
+            },
+          ],
+        },
+      );
+    }
+
+    // 페이지 네비게이션
+    const navElements: View['blocks'][number] = {
+      type: 'actions',
+      elements: [],
+    };
+    const elements = (navElements as { type: string; elements: object[] })
+      .elements;
+
+    if (page > 0) {
+      elements.push({
+        type: 'button',
+        text: { type: 'plain_text', text: '← 이전' },
+        action_id: 'schedule:list:page:prev',
+        value: (page - 1).toString(),
+      });
+    }
+    if (page < totalPages - 1) {
+      elements.push({
+        type: 'button',
+        text: { type: 'plain_text', text: '다음 →' },
+        action_id: 'schedule:list:page:next',
+        value: (page + 1).toString(),
+      });
+    }
+
+    if (elements.length > 0) {
+      blocks.push({ type: 'divider' });
+      blocks.push(navElements);
     }
 
     return {
       type: 'modal',
       callback_id: 'schedule:modal:list',
-      title: {
-        type: 'plain_text',
-        text: '시간표 관리',
-      },
-      close: {
-        type: 'plain_text',
-        text: '닫기',
-      },
+      private_metadata: JSON.stringify({
+        page,
+        status: selectedStatus ?? 'all',
+        tagIds: selectedTagIds ?? [],
+      }),
+      title: { type: 'plain_text', text: '시간표 관리' },
+      submit: { type: 'plain_text', text: '조회' },
+      close: { type: 'plain_text', text: '닫기' },
       blocks,
     };
   }

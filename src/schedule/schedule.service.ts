@@ -111,6 +111,73 @@ export class ScheduleService {
     });
   }
 
+  // 페이지네이션 + 필터 조회 (관리용)
+  async findSchedulesPaginated(opts: {
+    page: number;
+    pageSize: number;
+    status?: 'active' | 'inactive';
+    tagIds?: number[];
+  }): Promise<{ schedules: Schedule[]; total: number }> {
+    const { page, pageSize, status, tagIds } = opts;
+
+    if (tagIds && tagIds.length > 0) {
+      // 태그 필터: 선택한 태그를 모두 포함하는 스케줄 (AND 조건)
+      const idQb = this.scheduleRepository
+        .createQueryBuilder('schedule')
+        .innerJoin('schedule.tags', 'tag')
+        .where('tag.id IN (:...tagIds)', { tagIds })
+        .andWhere('schedule.deletedAt IS NULL');
+
+      if (status) {
+        idQb.andWhere('schedule.status = :status', {
+          status:
+            status === 'active'
+              ? ScheduleStatus.ACTIVE
+              : ScheduleStatus.INACTIVE,
+        });
+      }
+
+      const ids = (
+        await idQb
+          .groupBy('schedule.id')
+          .having('COUNT(DISTINCT tag.id) = :tagCount', {
+            tagCount: tagIds.length,
+          })
+          .select('schedule.id')
+          .getRawMany()
+      ).map((r: { schedule_id: number }) => r.schedule_id);
+
+      if (ids.length === 0) return { schedules: [], total: 0 };
+
+      const [schedules, total] = await this.scheduleRepository.findAndCount({
+        where: { id: In(ids) },
+        relations: ['tags', 'createdBy'],
+        order: { status: 'ASC', name: 'ASC' },
+        skip: page * pageSize,
+        take: pageSize,
+      });
+
+      return { schedules, total };
+    }
+
+    // 태그 필터 없음 → 기본 find
+    const where: Record<string, unknown> = {};
+    if (status) {
+      where['status'] =
+        status === 'active' ? ScheduleStatus.ACTIVE : ScheduleStatus.INACTIVE;
+    }
+
+    const [schedules, total] = await this.scheduleRepository.findAndCount({
+      where,
+      relations: ['tags', 'createdBy'],
+      order: { status: 'ASC', name: 'ASC' },
+      skip: page * pageSize,
+      take: pageSize,
+    });
+
+    return { schedules, total };
+  }
+
   // 태그별 활성 스케줄 조회 (단일 태그)
   async findActiveSchedulesByTagId(tagId: number): Promise<Schedule[]> {
     return this.scheduleRepository
