@@ -10,6 +10,8 @@ export interface CreateScheduleDto {
   description?: string;
   tagIds?: number[];
   createdById: number;
+  creatorEmail?: string;
+  creatorRefreshToken?: string;
 }
 
 export interface UpdateScheduleDto {
@@ -53,7 +55,22 @@ export class ScheduleService {
       createdById: dto.createdById,
     });
 
-    return this.scheduleRepository.save(schedule);
+    const saved = await this.scheduleRepository.save(schedule);
+
+    // 4. 생성자에게 writer 권한 부여 및 자동 구독
+    if (dto.creatorEmail && dto.creatorRefreshToken) {
+      await GoogleCalendarUtil.shareCalendar({
+        calendarId,
+        email: dto.creatorEmail,
+        role: 'writer',
+      });
+      await GoogleCalendarUtil.addCalendarToUserList(
+        calendarId,
+        dto.creatorRefreshToken,
+      );
+    }
+
+    return saved;
   }
 
   async findById(id: number): Promise<Schedule | null> {
@@ -94,47 +111,71 @@ export class ScheduleService {
     });
   }
 
-  // 태그별 활성 스케줄 조회 (단일 태그)
-  async findActiveSchedulesByTagId(tagId: number): Promise<Schedule[]> {
-    return this.scheduleRepository
-      .createQueryBuilder('schedule')
-      .leftJoinAndSelect('schedule.tags', 'tag')
-      .leftJoinAndSelect('schedule.createdBy', 'createdBy')
-      .where('tag.id = :tagId', { tagId })
-      .andWhere('schedule.status = :status', { status: ScheduleStatus.ACTIVE })
-      .andWhere('schedule.deletedAt IS NULL')
-      .orderBy('schedule.name', 'ASC')
-      .getMany();
-  }
+  // 페이지네이션 + 필터 조회 (관리용)
+  async findSchedulesPaginated(opts: {
+    page: number;
+    pageSize: number;
+    status?: 'active' | 'inactive';
+    tagIds?: number[];
+  }): Promise<{ schedules: Schedule[]; total: number }> {
+    const { page, pageSize, status, tagIds } = opts;
 
-  // 태그별 활성 스케줄 조회 (다중 태그 - AND 조건)
-  async findActiveSchedulesByTagIds(tagIds: number[]): Promise<Schedule[]> {
-    if (tagIds.length === 0) return [];
+    if (tagIds && tagIds.length > 0) {
+      // 태그 필터: 선택한 태그를 모두 포함하는 스케줄 (AND 조건)
+      const idQb = this.scheduleRepository
+        .createQueryBuilder('schedule')
+        .innerJoin('schedule.tags', 'tag')
+        .where('tag.id IN (:...tagIds)', { tagIds })
+        .andWhere('schedule.deletedAt IS NULL');
 
-    // 모든 선택된 태그를 가진 schedule id 조회
-    const scheduleIdsResult = await this.scheduleRepository
-      .createQueryBuilder('schedule')
-      .innerJoin('schedule.tags', 'tag')
-      .where('tag.id IN (:...tagIds)', { tagIds })
-      .andWhere('schedule.status = :status', { status: ScheduleStatus.ACTIVE })
-      .andWhere('schedule.deletedAt IS NULL')
-      .groupBy('schedule.id')
-      .having('COUNT(DISTINCT tag.id) = :tagCount', { tagCount: tagIds.length })
-      .select('schedule.id')
-      .getRawMany();
+      if (status) {
+        idQb.andWhere('schedule.status = :status', {
+          status:
+            status === 'active'
+              ? ScheduleStatus.ACTIVE
+              : ScheduleStatus.INACTIVE,
+        });
+      }
 
-    if (scheduleIdsResult.length === 0) return [];
+      const ids = (
+        await idQb
+          .groupBy('schedule.id')
+          .having('COUNT(DISTINCT tag.id) = :tagCount', {
+            tagCount: tagIds.length,
+          })
+          .select('schedule.id')
+          .getRawMany()
+      ).map((r: { schedule_id: number }) => r.schedule_id);
 
-    const ids = scheduleIdsResult.map(
-      (s: { schedule_id: number }) => s.schedule_id,
-    );
+      if (ids.length === 0) return { schedules: [], total: 0 };
 
-    // 전체 데이터 조회
-    return this.scheduleRepository.find({
-      where: { id: In(ids) },
+      const [schedules, total] = await this.scheduleRepository.findAndCount({
+        where: { id: In(ids) },
+        relations: ['tags', 'createdBy'],
+        order: { status: 'ASC', name: 'ASC' },
+        skip: page * pageSize,
+        take: pageSize,
+      });
+
+      return { schedules, total };
+    }
+
+    // 태그 필터 없음 → 기본 find
+    const where: Record<string, unknown> = {};
+    if (status) {
+      where['status'] =
+        status === 'active' ? ScheduleStatus.ACTIVE : ScheduleStatus.INACTIVE;
+    }
+
+    const [schedules, total] = await this.scheduleRepository.findAndCount({
+      where,
       relations: ['tags', 'createdBy'],
-      order: { name: 'ASC' },
+      order: { status: 'ASC', name: 'ASC' },
+      skip: page * pageSize,
+      take: pageSize,
     });
+
+    return { schedules, total };
   }
 
   // 스케줄 업데이트 (Google Calendar도 함께 업데이트)
