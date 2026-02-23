@@ -11,7 +11,7 @@ import { StudentClassService } from './student-class.service';
 import { StudentClassView } from './student-class.view';
 import { UserService } from '../user/user.service';
 import { UserRole } from '../user/user.entity';
-import { StudentClassStatus } from './student-class.entity';
+import { ClassSection } from './student-class.entity';
 
 @Controller()
 export class StudentClassController {
@@ -106,16 +106,20 @@ export class StudentClassController {
   }: SlackViewMiddlewareArgs & AllMiddlewareArgs) {
     try {
       const values = view.state.values;
-      const name = values.name_block.name_input.value ?? '';
+      const admissionYearStr =
+        values.admission_year_block.admission_year_input.value ?? '';
+      const admissionYear = parseInt(admissionYearStr, 10);
+      const section =
+        values.section_block.section_select.selected_option?.value as ClassSection;
       const graduationYearStr =
         values.graduation_year_block.graduation_year_input.value ?? '';
       const graduationYear = parseInt(graduationYearStr, 10);
 
       // 유효성 검사
-      if (!name.trim()) {
+      if (isNaN(admissionYear) || admissionYear < 2000) {
         await ack({
           response_action: 'errors',
-          errors: { name_block: '반 이름을 입력해주세요.' },
+          errors: { admission_year_block: '올바른 입학년도를 입력해주세요.' },
         });
         return;
       }
@@ -128,20 +132,23 @@ export class StudentClassController {
         return;
       }
 
-      await this.studentClassService.createClass({
-        name: name.trim(),
+      const savedClass = await this.studentClassService.createClass({
+        admissionYear,
+        section,
         graduationYear,
       });
 
       await ack();
 
+      const channelName = StudentClassService.buildChannelName(admissionYear, section);
+
       // 생성 완료 메시지
       await client.chat.postMessage({
         channel: body.user.id,
-        text: `반 "${name}"이(가) 생성되었습니다. 동일한 이름의 태그도 자동 생성되었습니다.`,
+        text: `반 "${savedClass.name}"이(가) 생성되었습니다. 채널명: ${channelName}\n동일한 이름의 태그도 자동 생성되었습니다.`,
       });
 
-      logger.info(`StudentClass created: ${name}`);
+      logger.info(`StudentClass created: ${savedClass.name}`);
     } catch (error: any) {
       logger.error('Create class error:', error);
 
@@ -149,12 +156,12 @@ export class StudentClassController {
         // unique violation
         await ack({
           response_action: 'errors',
-          errors: { name_block: '이미 존재하는 반 이름입니다.' },
+          errors: { admission_year_block: '이미 존재하는 반입니다.' },
         });
       } else {
         await ack({
           response_action: 'errors',
-          errors: { name_block: '반 생성 중 오류가 발생했습니다.' },
+          errors: { admission_year_block: '반 생성 중 오류가 발생했습니다.' },
         });
       }
     }

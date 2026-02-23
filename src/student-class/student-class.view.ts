@@ -49,7 +49,7 @@ export class StudentClassView {
           type: 'section',
           text: {
             type: 'mrkdwn',
-            text: `${statusEmoji} *${cls.name}*\n졸업연도: ${cls.graduationYear} | 상태: ${STATUS_LABELS[cls.status]}`,
+            text: `${statusEmoji} *${cls.name}*\n졸업 연도: ${cls.graduationYear} | 상태: ${STATUS_LABELS[cls.status]}`,
           },
           accessory: {
             type: 'button',
@@ -101,18 +101,49 @@ export class StudentClassView {
       blocks: [
         {
           type: 'input',
-          block_id: 'name_block',
+          block_id: 'admission_year_block',
           element: {
             type: 'plain_text_input',
-            action_id: 'name_input',
+            action_id: 'admission_year_input',
+            initial_value: String(currentYear),
             placeholder: {
               type: 'plain_text',
-              text: '예: 2024-A반',
+              text: String(currentYear),
             },
           },
           label: {
             type: 'plain_text',
-            text: '반 이름',
+            text: '입학 연도',
+          },
+          hint: {
+            type: 'plain_text',
+            text: '숫자만 입력하세요 (예: 2024)',
+          },
+        },
+        {
+          type: 'input',
+          block_id: 'section_block',
+          element: {
+            type: 'static_select',
+            action_id: 'section_select',
+            placeholder: {
+              type: 'plain_text',
+              text: '반 선택',
+            },
+            options: [
+              {
+                text: { type: 'plain_text', text: 'A반' },
+                value: 'A',
+              },
+              {
+                text: { type: 'plain_text', text: 'B반' },
+                value: 'B',
+              },
+            ],
+          },
+          label: {
+            type: 'plain_text',
+            text: '반 구분',
           },
         },
         {
@@ -129,11 +160,11 @@ export class StudentClassView {
           },
           label: {
             type: 'plain_text',
-            text: '졸업연도',
+            text: '졸업 연도',
           },
           hint: {
             type: 'plain_text',
-            text: '숫자만 입력하세요 (예: 2026)',
+            text: '숫자만 입력하세요 (예: 2027)',
           },
         },
       ],
