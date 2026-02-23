@@ -11,7 +11,7 @@ import { StudentClassService } from './student-class.service';
 import { StudentClassView } from './student-class.view';
 import { UserService } from '../user/user.service';
 import { UserRole } from '../user/user.entity';
-import { StudentClassStatus } from './student-class.entity';
+import { ClassSection } from './student-class.entity';
 
 @Controller()
 export class StudentClassController {
@@ -104,59 +104,88 @@ export class StudentClassController {
     client,
     logger,
   }: SlackViewMiddlewareArgs & AllMiddlewareArgs) {
+    const values = view.state.values;
+    const admissionYearStr =
+      values.admission_year_block.admission_year_input.value ?? '';
+    const admissionYear = parseInt(admissionYearStr, 10);
+    const section = values.section_block.section_select.selected_option
+      ?.value as ClassSection;
+    const graduationYearStr =
+      values.graduation_year_block.graduation_year_input.value ?? '';
+    const graduationYear = parseInt(graduationYearStr, 10);
+
+    // 유효성 검사 (ack 전)
+    if (isNaN(admissionYear) || admissionYear < 2000) {
+      await ack({
+        response_action: 'errors',
+        errors: { admission_year_block: '올바른 입학년도를 입력해주세요.' },
+      });
+      return;
+    }
+
+    if (isNaN(graduationYear) || graduationYear < 2000) {
+      await ack({
+        response_action: 'errors',
+        errors: { graduation_year_block: '올바른 졸업연도를 입력해주세요.' },
+      });
+      return;
+    }
+
+    // 3초 제한 내 ack — 이후 작업은 DM으로 결과 전달
+    await ack();
+
     try {
-      const values = view.state.values;
-      const name = values.name_block.name_input.value ?? '';
-      const graduationYearStr =
-        values.graduation_year_block.graduation_year_input.value ?? '';
-      const graduationYear = parseInt(graduationYearStr, 10);
-
-      // 유효성 검사
-      if (!name.trim()) {
-        await ack({
-          response_action: 'errors',
-          errors: { name_block: '반 이름을 입력해주세요.' },
-        });
-        return;
-      }
-
-      if (isNaN(graduationYear) || graduationYear < 2000) {
-        await ack({
-          response_action: 'errors',
-          errors: { graduation_year_block: '올바른 졸업연도를 입력해주세요.' },
-        });
-        return;
-      }
-
-      await this.studentClassService.createClass({
-        name: name.trim(),
+      const savedClass = await this.studentClassService.createClass({
+        admissionYear,
+        section,
         graduationYear,
       });
 
-      await ack();
-
-      // 생성 완료 메시지
-      await client.chat.postMessage({
-        channel: body.user.id,
-        text: `반 "${name}"이(가) 생성되었습니다. 동일한 이름의 태그도 자동 생성되었습니다.`,
+      // Slack 채널 생성 (채널명: "2024-a" 형식, ASCII 규칙 준수)
+      const channelName = StudentClassService.buildChannelName(
+        admissionYear,
+        section,
+      );
+      const channelResult = await client.conversations.create({
+        name: channelName,
+        is_private: false,
       });
 
-      logger.info(`StudentClass created: ${name}`);
+      const channelId = channelResult.channel?.id;
+      if (channelId) {
+        // 채널 topic에 반 이름 표시 (한국어 가능)
+        await client.conversations.setTopic({
+          channel: channelId,
+          topic: savedClass.name,
+        });
+        await this.studentClassService.updateSlackChannel(
+          savedClass.id,
+          channelId,
+        );
+      }
+
+      await client.chat.postMessage({
+        channel: body.user.id,
+        text:
+          `반 "${savedClass.name}"이(가) 생성되었습니다.\n` +
+          `• 태그 자동 생성 완료\n` +
+          `• Slack 채널 ${channelId ? `<#${channelId}>` : `\`${channelName}\``} 생성 완료`,
+      });
+
+      logger.info(
+        `StudentClass created: ${savedClass.name}, channelId: ${channelId ?? 'none'}`,
+      );
     } catch (error: any) {
       logger.error('Create class error:', error);
 
-      if (error.code === '23505') {
-        // unique violation
-        await ack({
-          response_action: 'errors',
-          errors: { name_block: '이미 존재하는 반 이름입니다.' },
-        });
-      } else {
-        await ack({
-          response_action: 'errors',
-          errors: { name_block: '반 생성 중 오류가 발생했습니다.' },
-        });
-      }
+      const isDuplicate =
+        error.code === '23505' || error.data?.error === 'name_taken';
+      await client.chat.postMessage({
+        channel: body.user.id,
+        text: isDuplicate
+          ? `이미 존재하는 반 또는 채널입니다.`
+          : `반 생성 중 오류가 발생했습니다: ${error.message ?? '알 수 없는 오류'}`,
+      });
     }
   }
 

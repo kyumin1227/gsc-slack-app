@@ -11,6 +11,7 @@ import { ScheduleService } from './schedule.service';
 import { ScheduleView, WriterItem } from './schedule.view';
 import { UserService } from '../user/user.service';
 import { TagService } from '../tag/tag.service';
+import { ChannelService } from '../channel/channel.service';
 import { UserRole, UserStatus, User } from '../user/user.entity';
 
 @Controller()
@@ -19,6 +20,7 @@ export class ScheduleController {
     private readonly scheduleService: ScheduleService,
     private readonly userService: UserService,
     private readonly tagService: TagService,
+    private readonly channelService: ChannelService,
   ) {}
 
   // 조교 이상 권한 확인 헬퍼
@@ -493,11 +495,13 @@ export class ScheduleController {
       const action = body.actions[0] as { action_id: string };
       const scheduleId = parseInt(action.action_id.split(':').pop()!, 10);
 
-      const [schedule, allTags, permissions] = await Promise.all([
-        this.scheduleService.findById(scheduleId),
-        this.tagService.findAllTags(),
-        this.scheduleService.getCalendarPermissions(scheduleId),
-      ]);
+      const [schedule, allTags, permissions, notifChannelIds] =
+        await Promise.all([
+          this.scheduleService.findById(scheduleId),
+          this.tagService.findAllTags(),
+          this.scheduleService.getCalendarPermissions(scheduleId),
+          this.channelService.getSlackChannelIds(scheduleId),
+        ]);
 
       if (!schedule) return;
 
@@ -520,6 +524,7 @@ export class ScheduleController {
           },
           allTags,
           writers,
+          notifChannelIds,
         ),
       });
     } catch (error) {
@@ -558,11 +563,43 @@ export class ScheduleController {
         parseInt(opt.value, 10),
       );
 
-      await this.scheduleService.updateSchedule(scheduleId, {
+      // 태그 교체 전에 기존 반 태그의 studentClassId 파악
+      const beforeSchedule = await this.scheduleService.findById(scheduleId);
+      const oldStudentClassIds = (beforeSchedule?.tags ?? [])
+        .filter((t) => t.studentClassId)
+        .map((t) => t.studentClassId!);
+
+      const updated = await this.scheduleService.updateSchedule(scheduleId, {
         name: name.trim(),
         description: description?.trim(),
         tagIds,
       });
+
+      // 알림 채널 저장: 제거된 반 채널 제외 후 교체, 신규 반 채널 동기화
+      const selectedChannelIds =
+        (
+          values['notification_channels_block']?.['channels_select'] as
+            | { selected_channels?: string[] }
+            | undefined
+        )?.selected_channels ?? [];
+
+      const newStudentClassIds = (updated?.tags ?? [])
+        .filter((t) => t.studentClassId)
+        .map((t) => t.studentClassId!);
+      const removedStudentClassIds = oldStudentClassIds.filter(
+        (id) => !newStudentClassIds.includes(id),
+      );
+      const removedChannelIds =
+        await this.channelService.getClassSlackChannelIds(removedStudentClassIds);
+      const filteredChannelIds = selectedChannelIds.filter(
+        (id) => !removedChannelIds.includes(id),
+      );
+
+      await this.channelService.setScheduleChannels(
+        scheduleId,
+        filteredChannelIds,
+      );
+      await this.channelService.syncClassChannels(scheduleId, newStudentClassIds);
 
       await client.chat.postMessage({
         channel: body.user.id,
@@ -626,11 +663,13 @@ export class ScheduleController {
       const currentTagOptions =
         currentValues['tags_block']?.['tags_input']?.selected_options;
 
-      const [schedule, allTags, permissions] = await Promise.all([
-        this.scheduleService.findById(scheduleId),
-        this.tagService.findAllTags(),
-        this.scheduleService.getCalendarPermissions(scheduleId),
-      ]);
+      const [schedule, allTags, permissions, notifChannelIds] =
+        await Promise.all([
+          this.scheduleService.findById(scheduleId),
+          this.tagService.findAllTags(),
+          this.scheduleService.getCalendarPermissions(scheduleId),
+          this.channelService.getSlackChannelIds(scheduleId),
+        ]);
 
       if (!body.view?.id || !schedule) return;
 
@@ -657,6 +696,7 @@ export class ScheduleController {
           },
           allTags,
           writers,
+          notifChannelIds,
         ),
       });
 

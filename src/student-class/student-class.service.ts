@@ -1,11 +1,16 @@
 import { Injectable } from '@nestjs/common';
 import { InjectRepository } from '@nestjs/typeorm';
 import { Repository } from 'typeorm';
-import { StudentClass, StudentClassStatus } from './student-class.entity';
+import {
+  StudentClass,
+  StudentClassStatus,
+  ClassSection,
+} from './student-class.entity';
 import { TagService } from '../tag/tag.service';
 
 export interface CreateStudentClassDto {
-  name: string;
+  admissionYear: number;
+  section: ClassSection;
   graduationYear: number;
 }
 
@@ -17,10 +22,24 @@ export class StudentClassService {
     private tagService: TagService,
   ) {}
 
+  // 반 이름 자동 생성: "${admissionYear}-${section}" (예: "2024-A")
+  static buildClassName(admissionYear: number, section: ClassSection): string {
+    return `${admissionYear}-${section}`;
+  }
+
+  // Slack 채널명 생성: "${admissionYear}-${section.toLowerCase()}" (예: "2024-a")
+  static buildChannelName(admissionYear: number, section: ClassSection): string {
+    return `${admissionYear}-${section.toLowerCase()}`;
+  }
+
   // 반 생성 + 태그 자동 생성
   async createClass(dto: CreateStudentClassDto): Promise<StudentClass> {
+    const name = StudentClassService.buildClassName(dto.admissionYear, dto.section);
     const studentClass = this.studentClassRepository.create({
-      ...dto,
+      name,
+      admissionYear: dto.admissionYear,
+      section: dto.section,
+      graduationYear: dto.graduationYear,
       status: StudentClassStatus.ACTIVE,
     });
     const savedClass = await this.studentClassRepository.save(studentClass);
@@ -48,6 +67,14 @@ export class StudentClassService {
 
   async findById(id: number): Promise<StudentClass | null> {
     return this.studentClassRepository.findOne({ where: { id } });
+  }
+
+  // 반에 Slack 채널 ID 저장
+  async updateSlackChannel(
+    id: number,
+    slackChannelId: string,
+  ): Promise<void> {
+    await this.studentClassRepository.update({ id }, { slackChannelId });
   }
 
   // 반 활성화 (졸업 취소)

@@ -225,6 +225,7 @@ export class ScheduleView {
     schedule: EditScheduleItem,
     tags: TagOption[],
     writers: WriterItem[],
+    notificationChannelIds: string[] = [],
   ): View {
     const activeTagOptions = tags
       .filter((t) => t.status === TagStatus.ACTIVE)
@@ -281,6 +282,25 @@ export class ScheduleView {
         label: { type: 'plain_text', text: '태그' },
       });
     }
+
+    // 알림 채널 섹션
+    blocks.push(
+      { type: 'divider' },
+      {
+        type: 'input',
+        block_id: 'notification_channels_block',
+        optional: true,
+        element: {
+          type: 'multi_channels_select',
+          action_id: 'channels_select',
+          placeholder: { type: 'plain_text', text: '알림 받을 채널 선택' },
+          ...(notificationChannelIds.length > 0
+            ? { initial_channels: notificationChannelIds }
+            : {}),
+        },
+        label: { type: 'plain_text', text: '알림 채널' },
+      },
+    );
 
     // 편집자 관리 섹션
     blocks.push(

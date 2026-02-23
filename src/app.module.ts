@@ -9,6 +9,7 @@ import { UserModule } from './user/user.module';
 import { StudentClassModule } from './student-class/student-class.module';
 import { TagModule } from './tag/tag.module';
 import { ScheduleModule } from './schedule/schedule.module';
+import { ChannelModule } from './channel/channel.module';
 
 @Module({
   imports: [
@@ -33,6 +34,7 @@ import { ScheduleModule } from './schedule/schedule.module';
     StudentClassModule,
     TagModule,
     ScheduleModule,
+    ChannelModule,
   ],
   controllers: [AppController],
   providers: [AppService],
