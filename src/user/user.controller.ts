@@ -165,6 +165,7 @@ export class UserController {
       } else {
         // 학생 또는 워크스페이스 소유자는 바로 ACTIVE
         await this.userService.activateWithRole(slackUserId, registrationData);
+        await this.inviteToClassChannel(slackUserId, studentClassId);
       }
 
       await ack();
@@ -259,6 +260,13 @@ export class UserController {
       if (actionType === 'approve') {
         await this.userService.approveUser(targetSlackId);
 
+        const approvedUser =
+          await this.userService.findBySlackId(targetSlackId);
+        await this.inviteToClassChannel(
+          targetSlackId,
+          approvedUser?.studentClassId,
+        );
+
         // 승인된 유저에게 알림
         await client.chat.postMessage({
           channel: targetSlackId,
@@ -297,6 +305,32 @@ export class UserController {
       }
     } catch (error) {
       logger.error('Approval action error:', error);
+    }
+  }
+
+  // 반의 Slack 채널에 유저 초대 (채널 없거나 이미 가입된 경우 조용히 무시)
+  private async inviteToClassChannel(
+    slackUserId: string,
+    studentClassId: number | null | undefined,
+  ): Promise<void> {
+    if (!studentClassId) return;
+
+    const studentClass =
+      await this.studentClassService.findById(studentClassId);
+    if (!studentClass?.slackChannelId) return;
+
+    try {
+      await this.slackService.client.conversations.invite({
+        channel: studentClass.slackChannelId,
+        users: slackUserId,
+      });
+    } catch (error: any) {
+      // 이미 채널 멤버인 경우 무시
+      if (error?.data?.error !== 'already_in_channel') {
+        this.logger.warn(
+          `Failed to invite ${slackUserId} to channel ${studentClass.slackChannelId}: ${error?.message}`,
+        );
+      }
     }
   }
 }
