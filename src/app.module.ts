@@ -4,6 +4,8 @@ import { AppService } from './app.service';
 import { SlackModule } from 'nestjs-slack-bolt';
 import { ConfigModule } from '@nestjs/config';
 import { TypeOrmModule } from '@nestjs/typeorm';
+import { CacheModule } from '@nestjs/cache-manager';
+import { createKeyv } from '@keyv/redis';
 import { SlackHomeModule } from './slack-home/slack-home.module';
 import { UserModule } from './user/user.module';
 import { StudentClassModule } from './student-class/student-class.module';
@@ -14,6 +16,16 @@ import { ChannelModule } from './channel/channel.module';
 @Module({
   imports: [
     ConfigModule.forRoot(),
+    CacheModule.registerAsync({
+      isGlobal: true,
+      useFactory: () => ({
+        stores: [
+          createKeyv(
+            `redis://:${process.env.REDIS_PASSWORD ?? 'redis'}@${process.env.REDIS_HOST ?? 'localhost'}:${process.env.REDIS_PORT ?? '6379'}`,
+          ),
+        ],
+      }),
+    }),
     TypeOrmModule.forRoot({
       type: 'postgres',
       host: process.env.DB_HOST,
