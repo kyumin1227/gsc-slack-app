@@ -1,8 +1,8 @@
 .PHONY: db dev prod down logs backup clean
 
-# DB만 실행 (로컬 개발용)
+# DB + Redis 실행 (로컬 개발용)
 db:
-	docker compose up db -d
+	docker compose up db redis -d
 
 # 개발 환경 (Docker로 앱 빌드 + 실행)
 dev:
