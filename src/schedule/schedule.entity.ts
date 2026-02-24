@@ -53,6 +53,13 @@ export class Schedule {
   @Column()
   createdById: number;
 
+  // Google Calendar Watch 채널 정보
+  @Column({ type: 'varchar', nullable: true })
+  watchChannelId: string | null; // 우리가 지정한 UUID (웹훅 수신 시 스케줄 매핑 키)
+
+  @Column({ type: 'varchar', nullable: true })
+  watchResourceId: string | null; // Google이 발급한 resourceId (watch stop 시 필요)
+
   @CreateDateColumn()
   createdAt: Date;
 

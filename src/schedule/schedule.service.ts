@@ -1,9 +1,10 @@
-import { Injectable } from '@nestjs/common';
+import { Injectable, Logger } from '@nestjs/common';
 import { InjectRepository } from '@nestjs/typeorm';
 import { Repository, In } from 'typeorm';
 import { Schedule, ScheduleStatus } from './schedule.entity';
 import { GoogleCalendarUtil } from '../google/google-calendar.util';
 import { Tag } from '../tag/tag.entity';
+import { randomUUID } from 'crypto';
 
 export interface CreateScheduleDto {
   name: string;
@@ -22,6 +23,8 @@ export interface UpdateScheduleDto {
 
 @Injectable()
 export class ScheduleService {
+  private readonly logger = new Logger(ScheduleService.name);
+
   constructor(
     @InjectRepository(Schedule)
     private scheduleRepository: Repository<Schedule>,
@@ -69,6 +72,9 @@ export class ScheduleService {
         dto.creatorRefreshToken,
       );
     }
+
+    // 5. Google Calendar Watch 등록
+    await this.registerWatch(saved.id);
 
     return saved;
   }
@@ -211,6 +217,7 @@ export class ScheduleService {
 
   // 스케줄 비활성화
   async deactivateSchedule(id: number): Promise<Schedule | null> {
+    await this.stopWatch(id);
     await this.scheduleRepository.update(
       { id },
       { status: ScheduleStatus.INACTIVE },
@@ -224,6 +231,7 @@ export class ScheduleService {
       { id },
       { status: ScheduleStatus.ACTIVE },
     );
+    await this.registerWatch(id);
     return this.findById(id);
   }
 
@@ -232,15 +240,115 @@ export class ScheduleService {
     const schedule = await this.findById(id);
     if (!schedule) return;
 
+    await this.stopWatch(id);
+
     // Google Calendar 삭제
     try {
       await GoogleCalendarUtil.deleteCalendar(schedule.calendarId);
     } catch (error) {
       // Calendar가 이미 삭제된 경우 무시
-      console.warn(`Failed to delete calendar ${schedule.calendarId}:`, error);
+      this.logger.warn(
+        `Failed to delete calendar ${schedule.calendarId}: ${error}`,
+      );
     }
 
     await this.scheduleRepository.softDelete({ id });
+  }
+
+  // ========== Google Calendar Watch ==========
+
+  // watch 등록 — 멱등 (기존 watch가 있으면 stop 후 재등록)
+  async registerWatch(id: number): Promise<void> {
+    const schedule = await this.scheduleRepository.findOne({ where: { id } });
+    if (!schedule) return;
+
+    if (!GoogleCalendarUtil.isWatchConfigured()) {
+      this.logger.warn(
+        'GOOGLE_WEBHOOK_URL not set, skipping watch registration',
+      );
+      return;
+    }
+
+    // 기존 watch가 있으면 먼저 해제
+    if (schedule.watchChannelId && schedule.watchResourceId) {
+      try {
+        await GoogleCalendarUtil.stopCalendarWatch(
+          schedule.watchChannelId,
+          schedule.watchResourceId,
+        );
+      } catch (error) {
+        this.logger.warn(
+          `Failed to stop existing watch for schedule ${id}: ${error}`,
+        );
+      }
+    }
+
+    const channelId = randomUUID();
+
+    try {
+      const { resourceId } = await GoogleCalendarUtil.watchCalendarEvents(
+        schedule.calendarId,
+        channelId,
+      );
+
+      await this.scheduleRepository.update(id, {
+        watchChannelId: channelId,
+        watchResourceId: resourceId,
+      });
+
+      this.logger.log(
+        `Watch registered for schedule ${id} (channelId: ${channelId})`,
+      );
+    } catch (error) {
+      this.logger.error(
+        `Failed to register watch for schedule ${id}: ${error}`,
+      );
+    }
+  }
+
+  // watch 해제
+  async stopWatch(id: number): Promise<void> {
+    const schedule = await this.scheduleRepository.findOne({ where: { id } });
+    if (!schedule?.watchChannelId || !schedule?.watchResourceId) return;
+
+    try {
+      await GoogleCalendarUtil.stopCalendarWatch(
+        schedule.watchChannelId,
+        schedule.watchResourceId,
+      );
+    } catch (error) {
+      this.logger.warn(`Failed to stop watch for schedule ${id}: ${error}`);
+    }
+
+    await this.scheduleRepository.update(id, {
+      watchChannelId: null,
+      watchResourceId: null,
+    });
+
+    this.logger.log(`Watch stopped for schedule ${id}`);
+  }
+
+  // 모든 active 스케줄 watch 일괄 갱신 (weekly cron 전용)
+  async renewAllActiveWatches(): Promise<void> {
+    const activeSchedules = await this.scheduleRepository.find({
+      where: { status: ScheduleStatus.ACTIVE },
+      select: ['id'],
+    });
+
+    this.logger.log(
+      `Renewing watches for ${activeSchedules.length} active schedules`,
+    );
+
+    for (const { id } of activeSchedules) {
+      await this.registerWatch(id);
+    }
+  }
+
+  // watchChannelId로 스케줄 조회 (웹훅 수신 시 사용)
+  async findByWatchChannelId(channelId: string): Promise<Schedule | null> {
+    return this.scheduleRepository.findOne({
+      where: { watchChannelId: channelId },
+    });
   }
 
   // 캘린더 권한 목록 조회 (Google Calendar API 사용)

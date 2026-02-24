@@ -236,6 +236,60 @@ export class GoogleCalendarUtil {
     }
   }
 
+  // ========== Google Calendar Watch (Push Notification) ==========
+
+  static isWatchConfigured(): boolean {
+    return !!process.env.GOOGLE_WEBHOOK_URL;
+  }
+
+  // 캘린더 이벤트 변경 watch 등록
+  static async watchCalendarEvents(
+    calendarId: string,
+    channelId: string,
+  ): Promise<{ resourceId: string }> {
+    const callbackUrl = `${process.env.GOOGLE_WEBHOOK_URL}/google/calendar/webhook`;
+    const watchDurationMs = 7 * 24 * 60 * 60 * 1000;
+    const calendar = this.getCalendarClient();
+
+    const response = await calendar.events.watch({
+      calendarId,
+      requestBody: {
+        id: channelId,
+        type: 'web_hook',
+        address: callbackUrl,
+        expiration: String(Date.now() + watchDurationMs),
+      },
+    });
+
+    if (!response.data.resourceId) {
+      throw new Error(
+        'Failed to register calendar watch: no resourceId returned',
+      );
+    }
+
+    return { resourceId: response.data.resourceId };
+  }
+
+  // watch 해제
+  static async stopCalendarWatch(
+    channelId: string,
+    resourceId: string,
+  ): Promise<void> {
+    const calendar = this.getCalendarClient();
+
+    try {
+      await calendar.channels.stop({
+        requestBody: { id: channelId, resourceId },
+      });
+    } catch (error: any) {
+      // 이미 만료됐거나 존재하지 않는 채널이면 무시
+      if (error.code === 404 || error.code === 400) {
+        return;
+      }
+      throw error;
+    }
+  }
+
   // 사용자 캘린더 목록에서 캘린더 제거
   static async removeCalendarFromUserList(
     calendarId: string,

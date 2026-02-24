@@ -5,6 +5,7 @@ import { SlackModule } from 'nestjs-slack-bolt';
 import { ConfigModule } from '@nestjs/config';
 import { TypeOrmModule } from '@nestjs/typeorm';
 import { CacheModule } from '@nestjs/cache-manager';
+import { ScheduleModule as NestScheduleModule } from '@nestjs/schedule';
 import { createKeyv } from '@keyv/redis';
 import { SlackHomeModule } from './slack-home/slack-home.module';
 import { UserModule } from './user/user.module';
@@ -16,6 +17,7 @@ import { ChannelModule } from './channel/channel.module';
 @Module({
   imports: [
     ConfigModule.forRoot(),
+    NestScheduleModule.forRoot(),
     CacheModule.registerAsync({
       isGlobal: true,
       useFactory: () => ({
