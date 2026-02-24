@@ -1,7 +1,9 @@
 import { Controller, Headers, HttpCode, Logger, Post } from '@nestjs/common';
 import { WebClient } from '@slack/web-api';
 import { ChannelService } from '../channel/channel.service';
+import { GoogleCalendarUtil } from '../google/google-calendar.util';
 import { ScheduleService } from './schedule.service';
+import { buildCalendarNotificationBlocks } from './schedule-watch.view';
 
 @Controller('google/calendar')
 export class ScheduleWatchController {
@@ -17,7 +19,6 @@ export class ScheduleWatchController {
   @HttpCode(200)
   async handleWebhook(
     @Headers('x-goog-channel-id') channelId: string,
-    @Headers('x-goog-resource-id') resourceId: string,
     @Headers('x-goog-resource-state') resourceState: string,
   ): Promise<void> {
     // 최초 연결 확인 (sync) — 200만 반환
@@ -26,7 +27,6 @@ export class ScheduleWatchController {
       return;
     }
 
-    // 이벤트 변경 알림 (exists)
     if (resourceState !== 'exists') return;
 
     const schedule = await this.scheduleService.findByWatchChannelId(channelId);
@@ -40,16 +40,31 @@ export class ScheduleWatchController {
     );
     if (slackChannelIds.length === 0) return;
 
-    const message = `📅 *${schedule.name}* 시간표에 변경 사항이 있습니다.\n<https://calendar.google.com/calendar/embed?src=${encodeURIComponent(schedule.calendarId)}|캘린더에서 확인하기>`;
-
-    await Promise.allSettled(
-      slackChannelIds.map((channel) =>
-        this.slack.chat.postMessage({ channel, text: message }),
-      ),
+    // 최근 변경된 이벤트 조회
+    const events = await GoogleCalendarUtil.getRecentChangedEvents(
+      schedule.calendarId,
     );
+    if (events.length === 0) {
+      this.logger.warn(`No recent events found for schedule ${schedule.id}`);
+      return;
+    }
+
+    // 이벤트별 Slack 알림 전송
+    for (const event of events) {
+      const blocks = buildCalendarNotificationBlocks(schedule.name, event);
+      await Promise.allSettled(
+        slackChannelIds.map((channel) =>
+          this.slack.chat.postMessage({
+            channel,
+            text: `📅 ${schedule.name} 일정 변경 알림`,
+            blocks,
+          }),
+        ),
+      );
+    }
 
     this.logger.log(
-      `Notified ${slackChannelIds.length} channels for schedule ${schedule.id} (${schedule.name})`,
+      `Notified ${slackChannelIds.length} channels for schedule ${schedule.id} (${schedule.name}), ${events.length} event(s)`,
     );
   }
 }

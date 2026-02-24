@@ -290,6 +290,24 @@ export class GoogleCalendarUtil {
     }
   }
 
+  // 최근 변경된 이벤트 조회 (웹훅 수신 후 상세 조회용)
+  static async getRecentChangedEvents(
+    calendarId: string,
+  ): Promise<calendar_v3.Schema$Event[]> {
+    const calendar = this.getCalendarClient();
+    const updatedMin = new Date(Date.now() - 30_000);
+
+    const response = await calendar.events.list({
+      calendarId,
+      updatedMin: updatedMin.toISOString(),
+      showDeleted: true,
+      singleEvents: true,
+      maxResults: 10,
+    });
+
+    return response.data.items ?? [];
+  }
+
   // 사용자 캘린더 목록에서 캘린더 제거
   static async removeCalendarFromUserList(
     calendarId: string,
