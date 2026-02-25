@@ -57,9 +57,6 @@ export class ScheduleWatchController {
       const existing = await this.notificationService.getPendingEntry(key);
 
       if (!existing) {
-        // 처음 감지: 취소 이벤트는 무시 (등록되지 않은 이벤트의 삭제)
-        if (currentType === 'cancelled') continue;
-
         const entry: DebounceEntry = {
           originalType: currentType,
           calendarId: schedule.calendarId,
@@ -72,6 +69,12 @@ export class ScheduleWatchController {
       } else {
         if (currentType === 'cancelled' && existing.originalType === 'added') {
           // 신규 생성 후 삭제 → 알림 취소
+          await this.notificationService.cancel(key);
+        } else if (
+          existing.originalType === 'cancelled' &&
+          currentType === 'updated'
+        ) {
+          // 삭제 후 실행 취소
           await this.notificationService.cancel(key);
         } else {
           // 타이머 리셋 (originalType 유지)
