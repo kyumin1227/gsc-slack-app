@@ -1,18 +1,21 @@
 import { Controller, Headers, HttpCode, Logger, Post } from '@nestjs/common';
-import { WebClient } from '@slack/web-api';
 import { ChannelService } from '../channel/channel.service';
 import { GoogleCalendarUtil } from '../google/google-calendar.util';
 import { ScheduleService } from './schedule.service';
-import { buildCalendarNotificationBlocks } from './schedule-watch.view';
+import {
+  ScheduleNotificationService,
+  DebounceEntry,
+} from './schedule-notification.service';
+import { detectChangeType } from './schedule-watch.view';
 
 @Controller('google/calendar')
 export class ScheduleWatchController {
   private readonly logger = new Logger(ScheduleWatchController.name);
-  private readonly slack = new WebClient(process.env.SLACK_BOT_TOKEN);
 
   constructor(
     private readonly scheduleService: ScheduleService,
     private readonly channelService: ChannelService,
+    private readonly notificationService: ScheduleNotificationService,
   ) {}
 
   @Post('webhook')
@@ -35,36 +38,49 @@ export class ScheduleWatchController {
       return;
     }
 
+    // 연결된 Slack 채널 없으면 조기 종료
     const slackChannelIds = await this.channelService.getSlackChannelIds(
       schedule.id,
     );
     if (slackChannelIds.length === 0) return;
 
-    // 최근 변경된 이벤트 조회
     const events = await GoogleCalendarUtil.getRecentChangedEvents(
       schedule.calendarId,
     );
-    if (events.length === 0) {
-      this.logger.warn(`No recent events found for schedule ${schedule.id}`);
-      return;
-    }
+    if (events.length === 0) return;
 
-    // 이벤트별 Slack 알림 전송
     for (const event of events) {
-      const blocks = buildCalendarNotificationBlocks(schedule.name, event);
-      await Promise.allSettled(
-        slackChannelIds.map((channel) =>
-          this.slack.chat.postMessage({
-            channel,
-            text: `📅 ${schedule.name} 일정 변경 알림`,
-            blocks,
-          }),
-        ),
-      );
-    }
+      if (!event.id) continue;
 
-    this.logger.log(
-      `Notified ${slackChannelIds.length} channels for schedule ${schedule.id} (${schedule.name}), ${events.length} event(s)`,
-    );
+      const key = `${schedule.id}:${event.id}`;
+      const currentType = detectChangeType(event);
+      const existing = await this.notificationService.getPendingEntry(key);
+
+      if (!existing) {
+        // 처음 감지: 취소 이벤트는 무시 (등록되지 않은 이벤트의 삭제)
+        if (currentType === 'cancelled') continue;
+
+        const entry: DebounceEntry = {
+          originalType: currentType,
+          calendarId: schedule.calendarId,
+          scheduleId: schedule.id,
+          scheduleName: schedule.name,
+          eventId: event.id,
+          dueAt: Date.now() + 3 * 60 * 1000,
+        };
+        await this.notificationService.enqueue(key, entry);
+      } else {
+        if (currentType === 'cancelled' && existing.originalType === 'added') {
+          // 신규 생성 후 삭제 → 알림 취소
+          await this.notificationService.cancel(key);
+        } else {
+          // 타이머 리셋 (originalType 유지)
+          await this.notificationService.enqueue(key, {
+            ...existing,
+            dueAt: Date.now() + 3 * 60 * 1000,
+          });
+        }
+      }
+    }
   }
 }

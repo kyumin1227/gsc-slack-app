@@ -308,6 +308,22 @@ export class GoogleCalendarUtil {
     return response.data.items ?? [];
   }
 
+  // 단일 이벤트 조회 (디바운스 발송 시점에 최신 상태 확인용)
+  static async getEventById(
+    calendarId: string,
+    eventId: string,
+  ): Promise<calendar_v3.Schema$Event | null> {
+    const calendar = this.getCalendarClient();
+
+    try {
+      const response = await calendar.events.get({ calendarId, eventId });
+      return response.data;
+    } catch (error: any) {
+      if (error.code === 404 || error.code === 410) return null;
+      throw error;
+    }
+  }
+
   // 사용자 캘린더 목록에서 캘린더 제거
   static async removeCalendarFromUserList(
     calendarId: string,

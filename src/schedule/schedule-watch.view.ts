@@ -1,13 +1,15 @@
 import { KnownBlock } from '@slack/web-api';
 import { calendar_v3 } from 'googleapis';
 
-type EventChangeType = 'cancelled' | 'added' | 'updated';
+export type EventChangeType = 'cancelled' | 'added' | 'updated';
 
-function detectChangeType(event: calendar_v3.Schema$Event): EventChangeType {
+export function detectChangeType(
+  event: calendar_v3.Schema$Event,
+): EventChangeType {
   if (event.status === 'cancelled') return 'cancelled';
   const updated = event.updated ? new Date(event.updated).getTime() : 0;
   const created = event.created ? new Date(event.created).getTime() : 0;
-  return Math.abs(updated - created) <= 3000 ? 'added' : 'updated';
+  return Math.abs(updated - created) <= 10_000 ? 'added' : 'updated';
 }
 
 function formatDate(dt: string): string {
@@ -43,9 +45,8 @@ function formatUpdated(dt: string): string {
 export function buildCalendarNotificationBlocks(
   scheduleName: string,
   event: calendar_v3.Schema$Event,
+  changeType: EventChangeType,
 ): KnownBlock[] {
-  const changeType = detectChangeType(event);
-
   const headerMap: Record<EventChangeType, string> = {
     cancelled: `🚫 [${scheduleName}] 일정 취소 안내`,
     added: `✨ [${scheduleName}] 일정 추가 안내`,

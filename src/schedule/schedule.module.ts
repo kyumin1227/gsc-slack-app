@@ -4,6 +4,7 @@ import { Schedule } from './schedule.entity';
 import { ScheduleService } from './schedule.service';
 import { ScheduleController } from './schedule.controller';
 import { ScheduleCronService } from './schedule-cron.service';
+import { ScheduleNotificationService } from './schedule-notification.service';
 import { ScheduleWatchController } from './schedule-watch.controller';
 import { UserModule } from '../user/user.module';
 import { TagModule } from '../tag/tag.module';
@@ -18,7 +19,7 @@ import { ChannelModule } from '../channel/channel.module';
     ChannelModule,
   ],
   controllers: [ScheduleController, ScheduleWatchController],
-  providers: [ScheduleService, ScheduleCronService],
+  providers: [ScheduleService, ScheduleCronService, ScheduleNotificationService],
   exports: [ScheduleService],
 })
 export class ScheduleModule {}
