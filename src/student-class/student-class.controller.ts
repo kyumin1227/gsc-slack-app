@@ -63,8 +63,10 @@ export class StudentClassController {
         classes.map((c) => ({
           id: c.id,
           name: c.name,
+          admissionYear: c.admissionYear,
           graduationYear: c.graduationYear,
           status: c.status,
+          slackChannelId: c.slackChannelId ?? undefined,
         })),
       ),
     });
@@ -220,8 +222,10 @@ export class StudentClassController {
             classes.map((c) => ({
               id: c.id,
               name: c.name,
+              admissionYear: c.admissionYear,
               graduationYear: c.graduationYear,
               status: c.status,
+              slackChannelId: c.slackChannelId ?? undefined,
             })),
           ),
         });

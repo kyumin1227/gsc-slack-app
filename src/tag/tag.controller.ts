@@ -54,18 +54,11 @@ export class TagController {
       return;
     }
 
-    const tags = await this.tagService.findAllTags();
+    const tags = await this.tagService.findDisplayTags();
 
     await client.views.open({
       trigger_id: body.trigger_id,
-      view: TagView.listModal(
-        tags.map((t) => ({
-          id: t.id,
-          name: t.name,
-          status: t.status,
-          isClassTag: t.studentClassId !== null,
-        })),
-      ),
+      view: TagView.listModal(tags),
     });
   }
 
@@ -167,19 +160,12 @@ export class TagController {
       }
 
       // 목록 새로고침
-      const tags = await this.tagService.findAllTags();
+      const tags = await this.tagService.findDisplayTags();
 
       if (body.view?.id) {
         await client.views.update({
           view_id: body.view.id,
-          view: TagView.listModal(
-            tags.map((t) => ({
-              id: t.id,
-              name: t.name,
-              status: t.status,
-              isClassTag: t.studentClassId !== null,
-            })),
-          ),
+          view: TagView.listModal(tags),
         });
       }
 
