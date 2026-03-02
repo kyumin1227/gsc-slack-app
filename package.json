@@ -1,6 +1,6 @@
 {
   "name": "gsc-slack-app",
-  "version": "0.0.1",
+  "version": "0.1.0",
   "description": "",
   "author": "",
   "private": true,
@@ -20,14 +20,19 @@
     "test:e2e": "jest --config ./test/jest-e2e.json"
   },
   "dependencies": {
+    "@keyv/redis": "^5.1.6",
+    "@nestjs/cache-manager": "^3.1.0",
     "@nestjs/common": "^11.0.1",
     "@nestjs/config": "^4.0.2",
     "@nestjs/core": "^11.0.1",
     "@nestjs/mapped-types": "*",
     "@nestjs/platform-express": "^11.0.1",
+    "@nestjs/schedule": "^6.1.1",
     "@nestjs/typeorm": "^11.0.0",
     "@slack/bolt": "^4.6.0",
     "@slack/types": "^2.19.0",
+    "cache-manager": "^7.2.8",
+    "googleapis": "^170.1.0",
     "nestjs-slack-bolt": "^1.5.0",
     "pg": "^8.17.2",
     "reflect-metadata": "^0.2.2",

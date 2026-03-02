@@ -1,0 +1,15 @@
+services:
+  db:
+    env_file:
+      - .env
+
+  redis:
+    env_file:
+      - .env
+
+  app:
+    build: .
+    ports:
+      - "3000:3000"
+    env_file:
+      - .env
