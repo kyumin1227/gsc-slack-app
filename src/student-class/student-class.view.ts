@@ -4,8 +4,10 @@ import { StudentClassStatus } from './student-class.entity';
 export interface StudentClassListItem {
   id: number;
   name: string;
+  admissionYear: number;
   graduationYear: number;
   status: StudentClassStatus;
+  slackChannelId?: string;
 }
 
 const STATUS_LABELS: Record<StudentClassStatus, string> = {
@@ -45,11 +47,19 @@ export class StudentClassView {
         const toggleValue =
           cls.status === StudentClassStatus.ACTIVE ? 'graduate' : 'activate';
 
+        const gradeInfo =
+          cls.status === StudentClassStatus.GRADUATED
+            ? '졸업'
+            : `${new Date().getFullYear() - cls.admissionYear + 1}학년`;
+        const channelInfo = cls.slackChannelId
+          ? ` | 채널: <#${cls.slackChannelId}>`
+          : '';
+
         blocks.push({
           type: 'section',
           text: {
             type: 'mrkdwn',
-            text: `${statusEmoji} *${cls.name}*\n졸업 연도: ${cls.graduationYear} | 상태: ${STATUS_LABELS[cls.status]}`,
+            text: `${statusEmoji} *${cls.name}* (${gradeInfo})\n졸업 연도: ${cls.graduationYear} | 상태: ${STATUS_LABELS[cls.status]}${channelInfo}`,
           },
           accessory: {
             type: 'button',

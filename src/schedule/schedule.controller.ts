@@ -63,18 +63,20 @@ export class ScheduleController {
       status === 'all' ? undefined : (status as 'active' | 'inactive');
     const tagFilter = tagIds.length > 0 ? tagIds : undefined;
 
-    const [{ schedules, total }, allTags] = await Promise.all([
+    const [{ schedules, total }, displayTags] = await Promise.all([
       this.scheduleService.findSchedulesPaginated({
         page,
         pageSize: this.SCHEDULE_PAGE_SIZE,
         status: statusFilter,
         tagIds: tagFilter,
       }),
-      this.tagService.findAllTags(),
+      this.tagService.findDisplayTags(),
     ]);
 
     const totalPages = Math.max(1, Math.ceil(total / this.SCHEDULE_PAGE_SIZE));
     const safePage = Math.min(page, totalPages - 1);
+
+    const displayTagMap = new Map(displayTags.map((t) => [t.id, t.name]));
 
     return ScheduleView.listModal(
       schedules.map((s) => ({
@@ -82,11 +84,14 @@ export class ScheduleController {
         name: s.name,
         description: s.description,
         status: s.status,
-        tags: s.tags.map((t) => ({ id: t.id, name: t.name })),
+        tags: s.tags.map((t) => ({
+          id: t.id,
+          name: displayTagMap.get(t.id) ?? t.name,
+        })),
         createdBy: { name: s.createdBy?.name ?? '알 수 없음' },
         createdAt: s.createdAt,
       })),
-      allTags.map((t) => ({ id: t.id, name: t.name, status: t.status })),
+      displayTags,
       {
         page: safePage,
         totalPages,
@@ -145,17 +150,11 @@ export class ScheduleController {
       return;
     }
 
-    const tags = await this.tagService.findAllTags();
+    const tags = await this.tagService.findDisplayTags();
 
     await client.views.open({
       trigger_id: body.trigger_id,
-      view: ScheduleView.createModal(
-        tags.map((t) => ({
-          id: t.id,
-          name: t.name,
-          status: t.status,
-        })),
-      ),
+      view: ScheduleView.createModal(tags),
     });
   }
 
@@ -351,17 +350,11 @@ export class ScheduleController {
       return;
     }
 
-    const tags = await this.tagService.findAllTags();
+    const tags = await this.tagService.findDisplayTags();
 
     await client.views.open({
       trigger_id: body.trigger_id,
-      view: ScheduleView.subscribeSearchModal(
-        tags.map((t) => ({
-          id: t.id,
-          name: t.name,
-          status: t.status,
-        })),
-      ),
+      view: ScheduleView.subscribeSearchModal(tags),
     });
   }
 
@@ -373,25 +366,29 @@ export class ScheduleController {
   ) {
     const tagFilter = tagIds.length > 0 ? tagIds : undefined;
 
-    const [{ schedules, total }, activeTags] = await Promise.all([
+    const [{ schedules, total }, displayActiveTags] = await Promise.all([
       this.scheduleService.findSchedulesPaginated({
         page,
         pageSize: this.SCHEDULE_PAGE_SIZE,
         status: 'active',
         tagIds: tagFilter,
       }),
-      this.tagService.findActiveTags(),
+      this.tagService.findDisplayTags(true),
     ]);
 
     const totalPages = Math.max(1, Math.ceil(total / this.SCHEDULE_PAGE_SIZE));
     const safePage = Math.min(page, totalPages - 1);
+    const displayActiveTagMap = new Map(displayActiveTags.map((t) => [t.id, t.name]));
 
     const schedulesWithSubscription = await Promise.all(
       schedules.map(async (s) => ({
         id: s.id,
         name: s.name,
         description: s.description,
-        tags: s.tags.map((t) => ({ id: t.id, name: t.name })),
+        tags: s.tags.map((t) => ({
+          id: t.id,
+          name: displayActiveTagMap.get(t.id) ?? t.name,
+        })),
         createdBy: { name: s.createdBy?.name ?? '알 수 없음' },
         createdAt: s.createdAt,
         isSubscribed: await this.scheduleService.isSubscribed(s.id, userEmail),
@@ -399,7 +396,7 @@ export class ScheduleController {
     );
 
     return ScheduleView.subscribeSearchModal(
-      activeTags.map((t) => ({ id: t.id, name: t.name, status: t.status })),
+      displayActiveTags,
       schedulesWithSubscription,
       tagIds,
       { page: safePage, totalPages, total },
@@ -495,10 +492,10 @@ export class ScheduleController {
       const action = body.actions[0] as { action_id: string };
       const scheduleId = parseInt(action.action_id.split(':').pop()!, 10);
 
-      const [schedule, allTags, permissions, notifChannelIds] =
+      const [schedule, displayTags, permissions, notifChannelIds] =
         await Promise.all([
           this.scheduleService.findById(scheduleId),
-          this.tagService.findAllTags(),
+          this.tagService.findDisplayTags(),
           this.scheduleService.getCalendarPermissions(scheduleId),
           this.channelService.getSlackChannelIds(scheduleId),
         ]);
@@ -522,7 +519,7 @@ export class ScheduleController {
             description: schedule.description,
             tags: schedule.tags,
           },
-          allTags,
+          displayTags,
           writers,
           notifChannelIds,
         ),
@@ -590,7 +587,9 @@ export class ScheduleController {
         (id) => !newStudentClassIds.includes(id),
       );
       const removedChannelIds =
-        await this.channelService.getClassSlackChannelIds(removedStudentClassIds);
+        await this.channelService.getClassSlackChannelIds(
+          removedStudentClassIds,
+        );
       const filteredChannelIds = selectedChannelIds.filter(
         (id) => !removedChannelIds.includes(id),
       );
@@ -599,7 +598,10 @@ export class ScheduleController {
         scheduleId,
         filteredChannelIds,
       );
-      await this.channelService.syncClassChannels(scheduleId, newStudentClassIds);
+      await this.channelService.syncClassChannels(
+        scheduleId,
+        newStudentClassIds,
+      );
 
       await client.chat.postMessage({
         channel: body.user.id,
@@ -663,10 +665,10 @@ export class ScheduleController {
       const currentTagOptions =
         currentValues['tags_block']?.['tags_input']?.selected_options;
 
-      const [schedule, allTags, permissions, notifChannelIds] =
+      const [schedule, displayTags, permissions, notifChannelIds] =
         await Promise.all([
           this.scheduleService.findById(scheduleId),
-          this.tagService.findAllTags(),
+          this.tagService.findDisplayTags(),
           this.scheduleService.getCalendarPermissions(scheduleId),
           this.channelService.getSlackChannelIds(scheduleId),
         ]);
@@ -694,7 +696,7 @@ export class ScheduleController {
                 }))
               : schedule.tags,
           },
-          allTags,
+          displayTags,
           writers,
           notifChannelIds,
         ),
@@ -789,9 +791,9 @@ export class ScheduleController {
       await this.scheduleService.shareCalendar(scheduleId, email, 'writer');
 
       // 편집자 추가 후 수정 모달 갱신
-      const [schedule, allTags, permissions] = await Promise.all([
+      const [schedule, displayTags, permissions] = await Promise.all([
         this.scheduleService.findById(scheduleId),
-        this.tagService.findAllTags(),
+        this.tagService.findDisplayTags(),
         this.scheduleService.getCalendarPermissions(scheduleId),
       ]);
 
@@ -812,7 +814,7 @@ export class ScheduleController {
               description: schedule.description,
               tags: schedule.tags,
             },
-            allTags,
+            displayTags,
             writers,
           ),
         });
