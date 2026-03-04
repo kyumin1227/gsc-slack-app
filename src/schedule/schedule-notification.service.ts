@@ -1,9 +1,4 @@
-import {
-  Inject,
-  Injectable,
-  Logger,
-  OnApplicationBootstrap,
-} from '@nestjs/common';
+import { Inject, Injectable, Logger } from '@nestjs/common';
 import { CACHE_MANAGER } from '@nestjs/cache-manager';
 import type { Cache } from 'cache-manager';
 import { WebClient } from '@slack/web-api';
@@ -23,14 +18,14 @@ export interface DebounceEntry {
   dueAt: number;
 }
 
-type PendingMap = Record<string, DebounceEntry>;
-
-const PENDING_KEY = 'calendar:debounce:pending';
+const DEBOUNCE_KEY_PREFIX = 'calendar:debounce:';
 const DEBOUNCE_MS = 3 * 60 * 1000;
-const PENDING_TTL_MS = 60 * 60 * 1000; // 1시간 안전 TTL
+const ENTRY_TTL_MS = 60 * 60 * 1000; // 1시간 안전 TTL
+
+const pendingKey = (key: string) => `${DEBOUNCE_KEY_PREFIX}${key}`;
 
 @Injectable()
-export class ScheduleNotificationService implements OnApplicationBootstrap {
+export class ScheduleNotificationService {
   private readonly logger = new Logger(ScheduleNotificationService.name);
   private readonly timers = new Map<string, NodeJS.Timeout>();
   private readonly slack = new WebClient(process.env.SLACK_BOT_TOKEN);
@@ -40,28 +35,9 @@ export class ScheduleNotificationService implements OnApplicationBootstrap {
     private readonly channelService: ChannelService,
   ) {}
 
-  // 서버 재시작 시 Redis에 남은 대기 항목 타이머 재예약
-  async onApplicationBootstrap(): Promise<void> {
-    const pending = await this.getPending();
-    const entries = Object.entries(pending);
-
-    if (entries.length === 0) return;
-
-    this.logger.log(
-      `Recovering ${entries.length} pending notification(s) from Redis`,
-    );
-
-    for (const [key, entry] of entries) {
-      const remainingMs = Math.max(0, entry.dueAt - Date.now());
-      this.scheduleTimer(key, remainingMs);
-    }
-  }
-
   // 웹훅 수신 시: Redis 저장 + 타이머 예약 (타이머 리셋)
   async enqueue(key: string, entry: DebounceEntry): Promise<void> {
-    const pending = await this.getPending();
-    pending[key] = entry;
-    await this.setPending(pending);
+    await this.cache.set(pendingKey(key), entry, ENTRY_TTL_MS);
 
     // 기존 타이머 있으면 취소 후 재예약
     this.clearTimer(key);
@@ -75,10 +51,7 @@ export class ScheduleNotificationService implements OnApplicationBootstrap {
   // 신규 생성 후 삭제 시: 타이머 취소 + Redis 제거
   async cancel(key: string): Promise<void> {
     this.clearTimer(key);
-
-    const pending = await this.getPending();
-    delete pending[key];
-    await this.setPending(pending);
+    await this.cache.del(pendingKey(key));
 
     this.logger.log(`Debounce cancelled (new→delete): ${key}`);
   }
@@ -100,12 +73,10 @@ export class ScheduleNotificationService implements OnApplicationBootstrap {
     this.timers.delete(key);
 
     // Redis에서 entry 읽고 제거
-    const pending = await this.getPending();
-    const entry = pending[key];
+    const entry = await this.cache.get<DebounceEntry>(pendingKey(key));
     if (!entry) return;
 
-    delete pending[key];
-    await this.setPending(pending);
+    await this.cache.del(pendingKey(key));
 
     // 최신 이벤트 조회
     const event = await GoogleCalendarUtil.getEventById(
@@ -152,17 +123,8 @@ export class ScheduleNotificationService implements OnApplicationBootstrap {
     );
   }
 
-  private async getPending(): Promise<PendingMap> {
-    return (await this.cache.get<PendingMap>(PENDING_KEY)) ?? {};
-  }
-
-  private async setPending(pending: PendingMap): Promise<void> {
-    await this.cache.set(PENDING_KEY, pending, PENDING_TTL_MS);
-  }
-
   // 외부에서 현재 대기 entry 조회 (컨트롤러에서 중복 확인용)
   async getPendingEntry(key: string): Promise<DebounceEntry | undefined> {
-    const pending = await this.getPending();
-    return pending[key];
+    return (await this.cache.get<DebounceEntry>(pendingKey(key))) ?? undefined;
   }
 }
