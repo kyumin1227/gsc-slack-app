@@ -324,6 +324,71 @@ export class GoogleCalendarUtil {
     }
   }
 
+  // ========== 스터디룸 예약 ==========
+
+  // 이벤트 생성 (참석자 포함, 메일 발송 없음)
+  static async createEvent(
+    calendarId: string,
+    refreshToken: string,
+    params: {
+      summary: string;
+      startTime: Date;
+      endTime: Date;
+      attendeeEmails?: string[];
+      location?: string;
+      description?: string;
+    },
+  ): Promise<string> {
+    const calendar = this.getUserCalendarClient(refreshToken);
+
+    const response = await calendar.events.insert({
+      calendarId,
+      sendUpdates: 'none',
+      requestBody: {
+        summary: params.summary,
+        description: params.description,
+        location: params.location,
+        start: {
+          dateTime: params.startTime.toISOString(),
+          timeZone: 'Asia/Seoul',
+        },
+        end: {
+          dateTime: params.endTime.toISOString(),
+          timeZone: 'Asia/Seoul',
+        },
+        attendees: params.attendeeEmails?.map((email) => ({ email })),
+      },
+    });
+
+    if (!response.data.id) {
+      throw new Error('Failed to create calendar event');
+    }
+
+    return response.data.id;
+  }
+
+  // FreeBusy API로 시간대 사용 여부 확인
+  static async isTimeSlotBusy(
+    calendarId: string,
+    refreshToken: string,
+    startTime: Date,
+    endTime: Date,
+  ): Promise<boolean> {
+    const calendar = this.getUserCalendarClient(refreshToken);
+
+    const response = await calendar.freebusy.query({
+      requestBody: {
+        timeMin: startTime.toISOString(),
+        timeMax: endTime.toISOString(),
+        timeZone: 'Asia/Seoul',
+        items: [{ id: calendarId }],
+      },
+    });
+
+    const busy = response.data.calendars?.[calendarId]?.busy ?? [];
+    return busy.length > 0;
+  }
+
   // 사용자 캘린더 목록에서 캘린더 제거
   static async removeCalendarFromUserList(
     calendarId: string,

@@ -13,6 +13,7 @@ import { StudentClassModule } from './student-class/student-class.module';
 import { TagModule } from './tag/tag.module';
 import { ScheduleModule } from './schedule/schedule.module';
 import { ChannelModule } from './channel/channel.module';
+import { StudyRoomModule } from './study-room/study-room.module';
 
 @Module({
   imports: [
@@ -49,6 +50,7 @@ import { ChannelModule } from './channel/channel.module';
     TagModule,
     ScheduleModule,
     ChannelModule,
+    StudyRoomModule,
   ],
   controllers: [AppController],
   providers: [AppService],
