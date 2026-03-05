@@ -1,6 +1,18 @@
 import type { View } from '@slack/types';
 import { StudyRoom } from './study-room.entity';
 
+// Google Calendar 캘린더 색상
+const ROOM_COLORS = [
+  '%234285F4', // 파랑
+  '%23DB4437', // 빨강
+  '%230F9D58', // 초록
+  '%23F4B400', // 노랑
+  '%239E69AF', // 보라
+  '%23F6511D', // 주황
+  '%2300BCD4', // 하늘
+  '%23E91E63', // 분홍
+];
+
 const DURATION_OPTIONS = (() => {
   const options: {
     text: { type: 'plain_text'; text: string };
@@ -21,6 +33,18 @@ const DURATION_OPTIONS = (() => {
 
 export class StudyRoomView {
   static listModal(rooms: StudyRoom[]): View {
+    const combinedCalendarUrl =
+      rooms.length > 0
+        ? 'https://calendar.google.com/calendar/embed?' +
+          rooms
+            .map(
+              (room, i) =>
+                `src=${encodeURIComponent(room.calendarId)}&color=${ROOM_COLORS[i % ROOM_COLORS.length]}`,
+            )
+            .join('&') +
+          '&ctz=Asia%2FSeoul&mode=WEEK'
+        : undefined;
+
     const blocks: View['blocks'] = [
       {
         type: 'section',
@@ -28,6 +52,14 @@ export class StudyRoomView {
           type: 'mrkdwn',
           text: '예약할 스터디룸을 선택하세요.',
         },
+        ...(combinedCalendarUrl && {
+          accessory: {
+            type: 'button',
+            text: { type: 'plain_text', text: '전체 일정 보기' },
+            url: combinedCalendarUrl,
+            action_id: 'study-room:action:view-all-calendar',
+          },
+        }),
       },
       { type: 'divider' },
     ];
@@ -38,8 +70,9 @@ export class StudyRoomView {
         text: { type: 'mrkdwn', text: '등록된 스터디룸이 없습니다.' },
       });
     } else {
-      for (const room of rooms) {
-        const calendarUrl = `https://calendar.google.com/calendar/embed?src=${encodeURIComponent(room.calendarId)}&ctz=Asia%2FSeoul&mode=WEEK`;
+      for (const [i, room] of rooms.entries()) {
+        const color = ROOM_COLORS[i % ROOM_COLORS.length];
+        const calendarUrl = `https://calendar.google.com/calendar/embed?src=${encodeURIComponent(room.calendarId)}&color=${color}&ctz=Asia%2FSeoul&mode=WEEK`;
         blocks.push(
           {
             type: 'section',
