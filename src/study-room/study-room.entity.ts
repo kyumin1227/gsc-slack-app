@@ -7,6 +7,11 @@ import {
   DeleteDateColumn,
 } from 'typeorm';
 
+export enum StudyRoomStatus {
+  ACTIVE = 'active',
+  INACTIVE = 'inactive',
+}
+
 @Entity()
 export class StudyRoom {
   @PrimaryGeneratedColumn()
@@ -17,6 +22,16 @@ export class StudyRoom {
 
   @Column({ unique: true })
   calendarId: string;
+
+  @Column({ nullable: true })
+  description: string;
+
+  @Column({
+    type: 'enum',
+    enum: StudyRoomStatus,
+    default: StudyRoomStatus.ACTIVE,
+  })
+  status: StudyRoomStatus;
 
   @CreateDateColumn()
   createdAt: Date;
