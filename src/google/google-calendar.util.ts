@@ -389,6 +389,101 @@ export class GoogleCalendarUtil {
     return busy.length > 0;
   }
 
+  // 특정 사용자가 참석자인 이벤트 목록 조회 (여러 캘린더, 서비스 계정 사용)
+  static async getUserBookings(
+    calendarIds: string[],
+    userEmail: string,
+  ): Promise<Array<{ calendarId: string; event: calendar_v3.Schema$Event }>> {
+    const calendar = this.getCalendarClient();
+    const now = new Date().toISOString();
+    const results: Array<{
+      calendarId: string;
+      event: calendar_v3.Schema$Event;
+    }> = [];
+
+    await Promise.all(
+      calendarIds.map(async (calendarId) => {
+        const response = await calendar.events.list({
+          calendarId,
+          q: userEmail,
+          timeMin: now,
+          singleEvents: true,
+          orderBy: 'startTime',
+        });
+
+        const events = response.data.items ?? [];
+        for (const event of events) {
+          const isAttendee = event.attendees?.some(
+            (a) => a.email === userEmail,
+          );
+          if (isAttendee) {
+            results.push({ calendarId, event });
+          }
+        }
+      }),
+    );
+
+    results.sort((a, b) => {
+      const aTime = a.event.start?.dateTime ?? '';
+      const bTime = b.event.start?.dateTime ?? '';
+      return aTime.localeCompare(bTime);
+    });
+
+    return results;
+  }
+
+  // 이벤트 삭제
+  static async deleteEvent(
+    calendarId: string,
+    refreshToken: string,
+    eventId: string,
+  ): Promise<void> {
+    const calendar = this.getUserCalendarClient(refreshToken);
+    await calendar.events.delete({ calendarId, eventId, sendUpdates: 'none' });
+  }
+
+  // 이벤트 수정 (부분 업데이트)
+  static async updateEvent(
+    calendarId: string,
+    refreshToken: string,
+    eventId: string,
+    params: {
+      summary?: string;
+      startTime?: Date;
+      endTime?: Date;
+      attendeeEmails?: string[];
+      location?: string;
+    },
+  ): Promise<void> {
+    const calendar = this.getUserCalendarClient(refreshToken);
+    const requestBody: calendar_v3.Schema$Event = {};
+
+    if (params.summary !== undefined) requestBody.summary = params.summary;
+    if (params.location !== undefined) requestBody.location = params.location;
+    if (params.startTime !== undefined) {
+      requestBody.start = {
+        dateTime: params.startTime.toISOString(),
+        timeZone: 'Asia/Seoul',
+      };
+    }
+    if (params.endTime !== undefined) {
+      requestBody.end = {
+        dateTime: params.endTime.toISOString(),
+        timeZone: 'Asia/Seoul',
+      };
+    }
+    if (params.attendeeEmails !== undefined) {
+      requestBody.attendees = params.attendeeEmails.map((email) => ({ email }));
+    }
+
+    await calendar.events.update({
+      calendarId,
+      eventId,
+      sendUpdates: 'none',
+      requestBody,
+    });
+  }
+
   // 사용자 캘린더 목록에서 캘린더 제거
   static async removeCalendarFromUserList(
     calendarId: string,

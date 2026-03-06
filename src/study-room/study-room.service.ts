@@ -18,6 +18,23 @@ export interface BookStudyRoomDto {
   attendeeSlackIds: string[];
 }
 
+export interface BookingItem {
+  calendarId: string;
+  eventId: string;
+  roomName: string;
+  summary: string;
+  startTime: Date;
+  endTime: Date;
+}
+
+export interface ModifyBookingDto {
+  title: string;
+  startTime: Date;
+  endTime: Date;
+  attendeeSlackIds: string[];
+  roomName: string;
+}
+
 @Injectable()
 export class StudyRoomService {
   private readonly logger = new Logger(StudyRoomService.name);
@@ -107,5 +124,77 @@ export class StudyRoomService {
     );
 
     return eventId;
+  }
+
+  private async getEditorRefreshToken(calendarId: string): Promise<string> {
+    const acl = await GoogleCalendarUtil.getCalendarAcl(calendarId);
+    const editorEmails = acl
+      .filter((e) => e.role === 'writer' || e.role === 'owner')
+      .map((e) => e.email);
+
+    const editor = await this.userService.findActiveByEmails(editorEmails);
+    if (!editor)
+      throw new Error('캘린더 수정 권한을 가진 활성 유저를 찾을 수 없습니다.');
+
+    const refreshToken = this.userService.getDecryptedRefreshToken(editor);
+    if (!refreshToken)
+      throw new Error('캘린더 수정 권한자의 인증 정보가 없습니다.');
+
+    return refreshToken;
+  }
+
+  // TODO 토큰 절약을 위해 추후 Redis 캐싱 예정
+  async getMyBookings(slackId: string): Promise<BookingItem[]> {
+    const user = await this.userService.findBySlackId(slackId);
+    if (!user) return [];
+
+    const rooms = await this.findAll();
+    if (rooms.length === 0) return [];
+
+    const calendarIds = rooms.map((r) => r.calendarId);
+    const roomMap = new Map(rooms.map((r) => [r.calendarId, r.name]));
+
+    const rawBookings = await GoogleCalendarUtil.getUserBookings(
+      calendarIds,
+      user.email,
+    );
+
+    return rawBookings.map(({ calendarId, event }) => ({
+      calendarId,
+      eventId: event.id!,
+      roomName: roomMap.get(calendarId) ?? calendarId,
+      summary: event.summary ?? '(제목 없음)',
+      startTime: new Date(event.start!.dateTime!),
+      endTime: new Date(event.end!.dateTime!),
+    }));
+  }
+
+  async cancelBooking(calendarId: string, eventId: string): Promise<void> {
+    const refreshToken = await this.getEditorRefreshToken(calendarId);
+    await GoogleCalendarUtil.deleteEvent(calendarId, refreshToken, eventId);
+  }
+
+  async modifyBooking(
+    calendarId: string,
+    eventId: string,
+    dto: ModifyBookingDto,
+  ): Promise<void> {
+    const refreshToken = await this.getEditorRefreshToken(calendarId);
+
+    const attendeeEmails = (
+      await Promise.all(
+        dto.attendeeSlackIds.map((id) => this.userService.findBySlackId(id)),
+      )
+    )
+      .filter((u): u is NonNullable<typeof u> => u !== null)
+      .map((u) => u.email);
+
+    await GoogleCalendarUtil.updateEvent(calendarId, refreshToken, eventId, {
+      summary: dto.title,
+      startTime: dto.startTime,
+      endTime: dto.endTime,
+      attendeeEmails,
+      location: dto.roomName,
+    });
   }
 }

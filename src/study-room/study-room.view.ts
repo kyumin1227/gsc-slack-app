@@ -1,5 +1,6 @@
 import type { View } from '@slack/types';
 import { StudyRoom } from './study-room.entity';
+import { BookingItem } from './study-room.service';
 
 // Google Calendar 캘린더 색상
 const ROOM_COLORS = [
@@ -194,6 +195,7 @@ export class StudyRoomView {
         },
         {
           type: 'context',
+          block_id: 'end_time_context',
           elements: [
             {
               type: 'mrkdwn',
@@ -212,6 +214,195 @@ export class StudyRoomView {
             type: 'multi_users_select',
             action_id: 'attendees_select',
             placeholder: { type: 'plain_text', text: '참석자를 선택하세요' },
+          },
+        },
+      ],
+    };
+  }
+
+  static myBookingsModal(bookings: BookingItem[]): View {
+    const blocks: View['blocks'] = [];
+
+    if (bookings.length === 0) {
+      blocks.push({
+        type: 'section',
+        text: { type: 'mrkdwn', text: '예약 내역이 없습니다.' },
+      });
+    } else {
+      for (const booking of bookings) {
+        const start = booking.startTime;
+        const end = booking.endTime;
+        const dateStr = `${start.getFullYear()}.${String(start.getMonth() + 1).padStart(2, '0')}.${String(start.getDate()).padStart(2, '0')}`;
+        const startStr = `${String(start.getHours()).padStart(2, '0')}:${String(start.getMinutes()).padStart(2, '0')}`;
+        const endStr = `${String(end.getHours()).padStart(2, '0')}:${String(end.getMinutes()).padStart(2, '0')}`;
+        const meta = JSON.stringify({
+          calendarId: booking.calendarId,
+          eventId: booking.eventId,
+          roomName: booking.roomName,
+          startIso: booking.startTime.toISOString(),
+          endIso: booking.endTime.toISOString(),
+        });
+
+        blocks.push(
+          {
+            type: 'section',
+            text: {
+              type: 'mrkdwn',
+              text: `*${booking.summary}*\n${booking.roomName} | ${dateStr} ${startStr}~${endStr}`,
+            },
+          },
+          {
+            type: 'actions',
+            elements: [
+              {
+                type: 'button',
+                text: { type: 'plain_text', text: '수정' },
+                action_id: 'study-room:action:modify',
+                value: meta,
+              },
+              {
+                type: 'button',
+                text: { type: 'plain_text', text: '취소' },
+                action_id: 'study-room:action:cancel',
+                style: 'danger',
+                value: meta,
+                confirm: {
+                  title: { type: 'plain_text', text: '예약 취소' },
+                  text: {
+                    type: 'mrkdwn',
+                    text: `*${booking.summary}* 예약을 취소하시겠습니까?\n이 작업은 되돌릴 수 없습니다.`,
+                  },
+                  confirm: { type: 'plain_text', text: '취소하기' },
+                  deny: { type: 'plain_text', text: '돌아가기' },
+                  style: 'danger',
+                },
+              },
+            ],
+          },
+          { type: 'divider' },
+        );
+      }
+    }
+
+    return {
+      type: 'modal',
+      callback_id: 'study-room:modal:my-bookings',
+      title: { type: 'plain_text', text: '내 예약' },
+      close: { type: 'plain_text', text: '닫기' },
+      blocks,
+    };
+  }
+
+  static modifyBookingModal(
+    booking: {
+      calendarId: string;
+      eventId: string;
+      roomName: string;
+      summary: string;
+      startTime: Date;
+      endTime: Date;
+    },
+    initialAttendeeSlackIds: string[] = [],
+  ): View {
+    const durationMinutes = Math.round(
+      (booking.endTime.getTime() - booking.startTime.getTime()) / 60000,
+    );
+    const clampedDuration = Math.min(Math.max(durationMinutes, 15), 240);
+    const snappedDuration = Math.round(clampedDuration / 15) * 15;
+
+    const dateStr = `${booking.startTime.getFullYear()}-${String(booking.startTime.getMonth() + 1).padStart(2, '0')}-${String(booking.startTime.getDate()).padStart(2, '0')}`;
+    const timeStr = `${String(booking.startTime.getHours()).padStart(2, '0')}:${String(booking.startTime.getMinutes()).padStart(2, '0')}`;
+
+    return {
+      type: 'modal',
+      callback_id: 'study-room:modal:modify-booking',
+      title: { type: 'plain_text', text: '예약 수정' },
+      submit: { type: 'plain_text', text: '수정' },
+      close: { type: 'plain_text', text: '취소' },
+      private_metadata: JSON.stringify({
+        calendarId: booking.calendarId,
+        eventId: booking.eventId,
+        roomName: booking.roomName,
+      }),
+      blocks: [
+        {
+          type: 'section',
+          text: { type: 'mrkdwn', text: `*${booking.roomName}*` },
+        },
+        { type: 'divider' },
+        {
+          type: 'input',
+          block_id: 'title_block',
+          label: { type: 'plain_text', text: '목적' },
+          element: {
+            type: 'plain_text_input',
+            action_id: 'title_input',
+            initial_value: booking.summary,
+            placeholder: { type: 'plain_text', text: '이용 목적을 입력하세요' },
+          },
+        },
+        {
+          type: 'input',
+          block_id: 'date_block',
+          label: { type: 'plain_text', text: '날짜' },
+          element: {
+            type: 'datepicker',
+            action_id: 'date_select',
+            initial_date: dateStr,
+          },
+        },
+        {
+          type: 'input',
+          block_id: 'start_time_block',
+          label: { type: 'plain_text', text: '시간' },
+          hint: {
+            type: 'plain_text',
+            text: '15분 단위로 입력하세요 (예: 09:00, 09:15, 09:30)',
+          },
+          dispatch_action: true,
+          element: {
+            type: 'timepicker',
+            action_id: 'start_time_select',
+            initial_time: timeStr,
+          },
+        },
+        {
+          type: 'input',
+          block_id: 'duration_block',
+          label: { type: 'plain_text', text: '이용 시간' },
+          dispatch_action: true,
+          element: {
+            type: 'static_select',
+            action_id: 'duration_select',
+            placeholder: { type: 'plain_text', text: '이용 시간 선택' },
+            options: DURATION_OPTIONS,
+            initial_option: DURATION_OPTIONS.find(
+              (o) => o.value === String(snappedDuration),
+            ),
+          },
+        },
+        {
+          type: 'context',
+          block_id: 'end_time_context',
+          elements: [
+            {
+              type: 'mrkdwn',
+              text: `⏰ 종료 시간: *${String(booking.endTime.getHours()).padStart(2, '0')}:${String(booking.endTime.getMinutes()).padStart(2, '0')}*`,
+            },
+          ],
+        },
+        {
+          type: 'input',
+          block_id: 'attendees_block',
+          label: { type: 'plain_text', text: '참석자' },
+          optional: true,
+          element: {
+            type: 'multi_users_select',
+            action_id: 'attendees_select',
+            placeholder: { type: 'plain_text', text: '참석자를 선택하세요' },
+            ...(initialAttendeeSlackIds.length > 0 && {
+              initial_users: initialAttendeeSlackIds,
+            }),
           },
         },
       ],
