@@ -1,7 +1,7 @@
 import { Injectable, Logger } from '@nestjs/common';
 import { InjectRepository } from '@nestjs/typeorm';
 import { Repository } from 'typeorm';
-import { StudyRoom } from './study-room.entity';
+import { StudyRoom, StudyRoomStatus } from './study-room.entity';
 import { GoogleCalendarUtil } from '../google/google-calendar.util';
 import { UserService } from '../user/user.service';
 
@@ -55,8 +55,11 @@ export class StudyRoomService {
     return this.studyRoomRepository.save(room);
   }
 
-  async findAll(): Promise<StudyRoom[]> {
-    return this.studyRoomRepository.find({ order: { name: 'ASC' } });
+  async findAll(onlyActive = false): Promise<StudyRoom[]> {
+    return this.studyRoomRepository.find({
+      where: onlyActive ? { status: StudyRoomStatus.ACTIVE } : {},
+      order: { name: 'ASC' },
+    });
   }
 
   async findById(id: number): Promise<StudyRoom | null> {
@@ -167,6 +170,43 @@ export class StudyRoomService {
       startTime: new Date(event.start!.dateTime!),
       endTime: new Date(event.end!.dateTime!),
     }));
+  }
+
+  async rename(id: number, name: string): Promise<void> {
+    const room = await this.findById(id);
+    if (!room) throw new Error('스터디룸을 찾을 수 없습니다.');
+    await GoogleCalendarUtil.updateCalendar(room.calendarId, name);
+    await this.studyRoomRepository.update(id, { name });
+  }
+
+  async updateInfo(
+    id: number,
+    dto: { description?: string | null; status?: StudyRoomStatus },
+  ): Promise<void> {
+    await this.studyRoomRepository.update(id, dto as any);
+  }
+
+  async addEditor(id: number, email: string): Promise<void> {
+    const room = await this.findById(id);
+    if (!room) throw new Error('스터디룸을 찾을 수 없습니다.');
+    await GoogleCalendarUtil.shareCalendar({
+      calendarId: room.calendarId,
+      email,
+      role: 'writer',
+    });
+  }
+
+  async removeEditor(id: number, email: string): Promise<void> {
+    const room = await this.findById(id);
+    if (!room) throw new Error('스터디룸을 찾을 수 없습니다.');
+    await GoogleCalendarUtil.unshareCalendar(room.calendarId, email);
+  }
+
+  async remove(id: number): Promise<void> {
+    const room = await this.findById(id);
+    if (!room) throw new Error('스터디룸을 찾을 수 없습니다.');
+    await GoogleCalendarUtil.deleteCalendar(room.calendarId);
+    await this.studyRoomRepository.softDelete(id);
   }
 
   async cancelBooking(calendarId: string, eventId: string): Promise<void> {

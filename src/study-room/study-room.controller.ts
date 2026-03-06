@@ -9,6 +9,7 @@ import type {
 } from '@slack/bolt';
 import { StudyRoomService } from './study-room.service';
 import { StudyRoomView } from './study-room.view';
+import { StudyRoomStatus } from './study-room.entity';
 import { UserService } from '../user/user.service';
 import { UserRole, UserStatus } from '../user/user.entity';
 import { GoogleCalendarUtil } from '../google/google-calendar.util';
@@ -98,7 +99,7 @@ export class StudyRoomController {
       return;
     }
 
-    const rooms = await this.studyRoomService.findAll();
+    const rooms = await this.studyRoomService.findAll(true);
     await client.views.open({
       trigger_id: body.trigger_id,
       view: StudyRoomView.listModal(rooms),
@@ -407,6 +408,288 @@ export class StudyRoomController {
       await client.chat.postMessage({
         channel: body.user.id,
         text: `❌ 예약 수정에 실패했습니다: ${message}`,
+      });
+    }
+  }
+
+  // ========== 스터디룸 관리 (어드민) ==========
+
+  private async checkAdminPermission({
+    ack,
+    client,
+    body,
+  }: SlackCommandMiddlewareArgs & AllMiddlewareArgs): Promise<boolean> {
+    const user = await this.userService.findBySlackId(body.user_id);
+    const allowed = [UserRole.PROFESSOR, UserRole.TA];
+    if (
+      !user ||
+      user.status !== UserStatus.ACTIVE ||
+      !allowed.includes(user.role)
+    ) {
+      await ack();
+      await client.chat.postEphemeral({
+        channel: body.channel_id,
+        user: body.user_id,
+        text: '조교 이상 권한이 필요합니다.',
+      });
+      return false;
+    }
+    return true;
+  }
+
+  @Command('/스터디룸')
+  async openManageModal({
+    ack,
+    client,
+    body,
+    ...rest
+  }: SlackCommandMiddlewareArgs & AllMiddlewareArgs) {
+    const allowed = await this.checkAdminPermission({
+      ack,
+      client,
+      body,
+      ...rest,
+    } as SlackCommandMiddlewareArgs & AllMiddlewareArgs);
+    if (!allowed) return;
+    await ack();
+
+    const rooms = await this.studyRoomService.findAll();
+    await client.views.open({
+      trigger_id: body.trigger_id,
+      view: StudyRoomView.manageModal(rooms),
+    });
+  }
+
+  @Action('study-room:admin:open-create')
+  async adminOpenCreate({
+    ack,
+    client,
+    body,
+  }: SlackActionMiddlewareArgs<BlockAction> & AllMiddlewareArgs) {
+    await ack();
+    await client.views.push({
+      trigger_id: body.trigger_id,
+      view: StudyRoomView.createModal(),
+    });
+  }
+
+  @Action('study-room:admin:open-edit')
+  async adminOpenEdit({
+    ack,
+    client,
+    body,
+    action,
+  }: SlackActionMiddlewareArgs<BlockAction> & AllMiddlewareArgs) {
+    await ack();
+    const { roomId } = JSON.parse((action as { value: string }).value) as {
+      roomId: number;
+    };
+    const room = await this.studyRoomService.findById(roomId);
+    if (!room) return;
+    await client.views.push({
+      trigger_id: body.trigger_id,
+      view: StudyRoomView.editModal(room),
+    });
+  }
+
+  @View('study-room:modal:edit')
+  async submitEdit({
+    ack,
+    client,
+    body,
+  }: SlackViewMiddlewareArgs & AllMiddlewareArgs) {
+    await ack();
+    const values = body.view.state.values;
+    const { roomId } = JSON.parse(body.view.private_metadata) as {
+      roomId: number;
+    };
+    const name = values.name_block.name_input.value ?? '';
+    const description =
+      values.description_block.description_input.value ?? null;
+    const status = values.status_block.status_select.selected_option
+      ?.value as import('./study-room.entity').StudyRoomStatus;
+
+    try {
+      await this.studyRoomService.rename(roomId, name);
+      await this.studyRoomService.updateInfo(roomId, { description, status });
+      await client.chat.postMessage({
+        channel: body.user.id,
+        text: `✅ *${name}* 정보가 수정되었습니다.`,
+      });
+    } catch (error: unknown) {
+      const message =
+        error instanceof Error ? error.message : '수정 중 오류가 발생했습니다.';
+      this.logger.error(`Study room edit failed: ${message}`);
+      await client.chat.postMessage({
+        channel: body.user.id,
+        text: `❌ 수정에 실패했습니다: ${message}`,
+      });
+    }
+  }
+
+  @Action('study-room:admin:open-editors')
+  async adminOpenEditors({
+    ack,
+    client,
+    body,
+    action,
+  }: SlackActionMiddlewareArgs<BlockAction> & AllMiddlewareArgs) {
+    await ack();
+    const { roomId, calendarId } = JSON.parse(
+      (action as { value: string }).value,
+    ) as { roomId: number; calendarId: string };
+
+    const room = await this.studyRoomService.findById(roomId);
+    if (!room) return;
+
+    const acl = await GoogleCalendarUtil.getCalendarAcl(calendarId);
+    const editors = acl.filter(
+      (e) => e.role === 'writer' || e.role === 'owner',
+    );
+
+    await client.views.push({
+      trigger_id: body.trigger_id,
+      view: StudyRoomView.editorsModal(room, editors),
+    });
+  }
+
+  @Action('study-room:admin:open-add-editor')
+  async adminOpenAddEditor({
+    ack,
+    client,
+    body,
+    action,
+  }: SlackActionMiddlewareArgs<BlockAction> & AllMiddlewareArgs) {
+    await ack();
+    const { roomId } = JSON.parse((action as { value: string }).value) as {
+      roomId: number;
+    };
+    const room = await this.studyRoomService.findById(roomId);
+    if (!room) return;
+    await client.views.push({
+      trigger_id: body.trigger_id,
+      view: StudyRoomView.addEditorModal(room),
+    });
+  }
+
+  @View('study-room:modal:add-editor')
+  async submitAddEditor({
+    ack,
+    client,
+    body,
+  }: SlackViewMiddlewareArgs & AllMiddlewareArgs) {
+    await ack();
+    const values = body.view.state.values;
+    const { roomId, roomName } = JSON.parse(body.view.private_metadata) as {
+      roomId: number;
+      roomName: string;
+    };
+    const slackId =
+      values.editor_block.editor_select.selected_user ?? '';
+
+    const user = await this.userService.findBySlackId(slackId);
+    if (!user) {
+      await client.chat.postMessage({
+        channel: body.user.id,
+        text: '❌ 해당 사용자를 시스템에서 찾을 수 없습니다.',
+      });
+      return;
+    }
+
+    try {
+      await this.studyRoomService.addEditor(roomId, user.email);
+      await client.chat.postMessage({
+        channel: body.user.id,
+        text: `✅ *${roomName}* 에 *${user.name}* (${user.email}) 수정자가 추가되었습니다.`,
+      });
+    } catch (error: unknown) {
+      const message =
+        error instanceof Error ? error.message : '추가 중 오류가 발생했습니다.';
+      this.logger.error(`Study room add-editor failed: ${message}`);
+      await client.chat.postMessage({
+        channel: body.user.id,
+        text: `❌ 수정자 추가에 실패했습니다: ${message}`,
+      });
+    }
+  }
+
+  @Action('study-room:admin:remove-editor')
+  async adminRemoveEditor({
+    ack,
+    client,
+    body,
+    action,
+  }: SlackActionMiddlewareArgs<BlockAction> & AllMiddlewareArgs) {
+    await ack();
+    const { roomId, calendarId, email } = JSON.parse(
+      (action as { value: string }).value,
+    ) as { roomId: number; calendarId: string; email: string };
+
+    try {
+      await this.studyRoomService.removeEditor(roomId, email);
+
+      // 수정자 목록 모달 갱신
+      const room = await this.studyRoomService.findById(roomId);
+      if (!room) return;
+      const acl = await GoogleCalendarUtil.getCalendarAcl(calendarId);
+      const editors = acl.filter(
+        (e) => e.role === 'writer' || e.role === 'owner',
+      );
+      await client.views.update({
+        view_id: body.view?.id ?? '',
+        view: StudyRoomView.editorsModal(room, editors),
+      });
+    } catch (error: unknown) {
+      const message =
+        error instanceof Error ? error.message : '제거 중 오류가 발생했습니다.';
+      this.logger.error(`Study room remove-editor failed: ${message}`);
+      await client.chat.postMessage({
+        channel: body.user.id,
+        text: `❌ 수정자 제거에 실패했습니다: ${message}`,
+      });
+    }
+  }
+
+  @Action('study-room:admin:toggle-status')
+  async adminToggleStatus({
+    ack,
+    client,
+    body,
+    action,
+  }: SlackActionMiddlewareArgs<BlockAction> & AllMiddlewareArgs) {
+    await ack();
+    const { roomId, roomName } = JSON.parse(
+      (action as { value: string }).value,
+    ) as { roomId: number; roomName: string };
+
+    const room = await this.studyRoomService.findById(roomId);
+    if (!room) return;
+
+    const newStatus =
+      room.status === StudyRoomStatus.ACTIVE
+        ? StudyRoomStatus.INACTIVE
+        : StudyRoomStatus.ACTIVE;
+
+    try {
+      await this.studyRoomService.updateInfo(roomId, { status: newStatus });
+
+      const rooms = await this.studyRoomService.findAll();
+      await client.views.update({
+        view_id: body.view?.id ?? '',
+        view: StudyRoomView.manageModal(rooms),
+      });
+      const label = newStatus === StudyRoomStatus.ACTIVE ? '활성화' : '비활성화';
+      await client.chat.postMessage({
+        channel: body.user.id,
+        text: `✅ *${roomName}* 이 ${label}되었습니다.`,
+      });
+    } catch (error: unknown) {
+      const message =
+        error instanceof Error ? error.message : '상태 변경 중 오류가 발생했습니다.';
+      this.logger.error(`Study room toggle-status failed: ${message}`);
+      await client.chat.postMessage({
+        channel: body.user.id,
+        text: `❌ 상태 변경에 실패했습니다: ${message}`,
       });
     }
   }

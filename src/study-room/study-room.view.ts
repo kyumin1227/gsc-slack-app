@@ -1,6 +1,7 @@
 import type { View } from '@slack/types';
-import { StudyRoom } from './study-room.entity';
+import { StudyRoom, StudyRoomStatus } from './study-room.entity';
 import { BookingItem } from './study-room.service';
+import { CalendarAclEntry } from '../google/google-calendar.util';
 
 // Google Calendar 캘린더 색상
 const ROOM_COLORS = [
@@ -403,6 +404,287 @@ export class StudyRoomView {
             ...(initialAttendeeSlackIds.length > 0 && {
               initial_users: initialAttendeeSlackIds,
             }),
+          },
+        },
+      ],
+    };
+  }
+
+  // ========== 스터디룸 관리 (어드민) ==========
+
+  static manageModal(rooms: StudyRoom[]): View {
+    const blocks: View['blocks'] = [
+      {
+        type: 'actions',
+        elements: [
+          {
+            type: 'button',
+            text: { type: 'plain_text', text: '+ 새 스터디룸 등록' },
+            action_id: 'study-room:admin:open-create',
+            style: 'primary',
+          },
+        ],
+      },
+      { type: 'divider' },
+    ];
+
+    if (rooms.length === 0) {
+      blocks.push({
+        type: 'section',
+        text: { type: 'mrkdwn', text: '등록된 스터디룸이 없습니다.' },
+      });
+    } else {
+      for (const room of rooms) {
+        const meta = JSON.stringify({
+          roomId: room.id,
+          roomName: room.name,
+          calendarId: room.calendarId,
+        });
+        const statusLabel =
+          room.status === StudyRoomStatus.ACTIVE ? '활성' : '비활성';
+
+        blocks.push(
+          {
+            type: 'section',
+            text: {
+              type: 'mrkdwn',
+              text: `*${room.name}* \`${statusLabel}\`${room.description ? `\n${room.description}` : ''}`,
+            },
+          },
+          {
+            type: 'actions',
+            elements: [
+              {
+                type: 'button',
+                text: { type: 'plain_text', text: '수정' },
+                action_id: 'study-room:admin:open-edit',
+                value: meta,
+              },
+              {
+                type: 'button',
+                text: { type: 'plain_text', text: '수정자 관리' },
+                action_id: 'study-room:admin:open-editors',
+                value: meta,
+              },
+              {
+                type: 'button',
+                text: {
+                  type: 'plain_text',
+                  text:
+                    room.status === StudyRoomStatus.ACTIVE
+                      ? '비활성화'
+                      : '활성화',
+                },
+                action_id: 'study-room:admin:toggle-status',
+                style:
+                  room.status === StudyRoomStatus.ACTIVE ? 'danger' : 'primary',
+                value: meta,
+                confirm:
+                  room.status === StudyRoomStatus.ACTIVE
+                    ? {
+                        title: { type: 'plain_text', text: '비활성화 확인' },
+                        text: {
+                          type: 'mrkdwn',
+                          text: `*${room.name}*을 비활성화하시겠습니까?\n예약 목록에서 숨겨집니다.`,
+                        },
+                        confirm: { type: 'plain_text', text: '비활성화' },
+                        deny: { type: 'plain_text', text: '취소' },
+                        style: 'danger',
+                      }
+                    : undefined,
+              },
+            ],
+          },
+          { type: 'divider' },
+        );
+      }
+    }
+
+    return {
+      type: 'modal',
+      callback_id: 'study-room:modal:manage',
+      title: { type: 'plain_text', text: '스터디룸 관리' },
+      close: { type: 'plain_text', text: '닫기' },
+      blocks,
+    };
+  }
+
+  static editModal(room: StudyRoom): View {
+    return {
+      type: 'modal',
+      callback_id: 'study-room:modal:edit',
+      title: { type: 'plain_text', text: '스터디룸 수정' },
+      submit: { type: 'plain_text', text: '저장' },
+      close: { type: 'plain_text', text: '취소' },
+      private_metadata: JSON.stringify({
+        roomId: room.id,
+        roomName: room.name,
+        calendarId: room.calendarId,
+      }),
+      blocks: [
+        {
+          type: 'input',
+          block_id: 'name_block',
+          label: { type: 'plain_text', text: '이름' },
+          element: {
+            type: 'plain_text_input',
+            action_id: 'name_input',
+            initial_value: room.name,
+          },
+        },
+        {
+          type: 'input',
+          block_id: 'description_block',
+          label: { type: 'plain_text', text: '설명' },
+          optional: true,
+          element: {
+            type: 'plain_text_input',
+            action_id: 'description_input',
+            multiline: true,
+            initial_value: room.description ?? '',
+            placeholder: {
+              type: 'plain_text',
+              text: '시설 정보, 수용 인원 등',
+            },
+          },
+        },
+        {
+          type: 'input',
+          block_id: 'status_block',
+          label: { type: 'plain_text', text: '상태' },
+          element: {
+            type: 'static_select',
+            action_id: 'status_select',
+            options: [
+              {
+                text: { type: 'plain_text', text: '활성' },
+                value: StudyRoomStatus.ACTIVE,
+              },
+              {
+                text: { type: 'plain_text', text: '비활성' },
+                value: StudyRoomStatus.INACTIVE,
+              },
+            ],
+            initial_option: {
+              text: {
+                type: 'plain_text',
+                text:
+                  room.status === StudyRoomStatus.ACTIVE ? '활성' : '비활성',
+              },
+              value: room.status,
+            },
+          },
+        },
+      ],
+    };
+  }
+
+  static editorsModal(room: StudyRoom, editors: CalendarAclEntry[]): View {
+    const blocks: View['blocks'] = [
+      {
+        type: 'section',
+        text: { type: 'mrkdwn', text: `*${room.name}* 수정자 목록` },
+      },
+      { type: 'divider' },
+    ];
+
+    if (editors.length === 0) {
+      blocks.push({
+        type: 'section',
+        text: { type: 'mrkdwn', text: '수정자가 없습니다.' },
+      });
+    } else {
+      for (const editor of editors) {
+        blocks.push({
+          type: 'section',
+          text: { type: 'mrkdwn', text: editor.email },
+          accessory: {
+            type: 'button',
+            text: { type: 'plain_text', text: '제거' },
+            action_id: 'study-room:admin:remove-editor',
+            style: 'danger',
+            value: JSON.stringify({
+              roomId: room.id,
+              calendarId: room.calendarId,
+              email: editor.email,
+            }),
+            confirm: {
+              title: { type: 'plain_text', text: '수정자 제거' },
+              text: {
+                type: 'mrkdwn',
+                text: `*${editor.email}*의 수정 권한을 제거하시겠습니까?`,
+              },
+              confirm: { type: 'plain_text', text: '제거' },
+              deny: { type: 'plain_text', text: '취소' },
+              style: 'danger',
+            },
+          },
+        });
+      }
+    }
+
+    blocks.push(
+      { type: 'divider' },
+      {
+        type: 'actions',
+        elements: [
+          {
+            type: 'button',
+            text: { type: 'plain_text', text: '+ 수정자 추가' },
+            action_id: 'study-room:admin:open-add-editor',
+            style: 'primary',
+            value: JSON.stringify({
+              roomId: room.id,
+              roomName: room.name,
+              calendarId: room.calendarId,
+            }),
+          },
+        ],
+      },
+    );
+
+    return {
+      type: 'modal',
+      callback_id: 'study-room:modal:editors',
+      title: { type: 'plain_text', text: '수정자 관리' },
+      close: { type: 'plain_text', text: '닫기' },
+      private_metadata: JSON.stringify({
+        roomId: room.id,
+        roomName: room.name,
+        calendarId: room.calendarId,
+      }),
+      blocks,
+    };
+  }
+
+  static addEditorModal(room: StudyRoom): View {
+    return {
+      type: 'modal',
+      callback_id: 'study-room:modal:add-editor',
+      title: { type: 'plain_text', text: '수정자 추가' },
+      submit: { type: 'plain_text', text: '추가' },
+      close: { type: 'plain_text', text: '취소' },
+      private_metadata: JSON.stringify({
+        roomId: room.id,
+        roomName: room.name,
+        calendarId: room.calendarId,
+      }),
+      blocks: [
+        {
+          type: 'section',
+          text: {
+            type: 'mrkdwn',
+            text: `*${room.name}*에 수정자를 추가합니다.`,
+          },
+        },
+        {
+          type: 'input',
+          block_id: 'editor_block',
+          label: { type: 'plain_text', text: '추가할 사용자' },
+          element: {
+            type: 'users_select',
+            action_id: 'editor_select',
+            placeholder: { type: 'plain_text', text: '사용자를 선택하세요' },
           },
         },
       ],
