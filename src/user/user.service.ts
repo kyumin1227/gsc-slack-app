@@ -36,6 +36,16 @@ export class UserService {
     return this.userRepository.findOne({ where: { email } });
   }
 
+  async findActiveByEmails(emails: string[]): Promise<User | null> {
+    if (emails.length === 0) return null;
+    return this.userRepository
+      .createQueryBuilder('user')
+      .where('user.email IN (:...emails)', { emails })
+      .andWhere('user.status = :status', { status: UserStatus.ACTIVE })
+      .andWhere('user.refreshToken IS NOT NULL')
+      .getOne();
+  }
+
   // 1단계: Google 로그인 완료 → REGISTERED
   async createUser(dto: CreateUserDto): Promise<User> {
     const user = this.userRepository.create({
