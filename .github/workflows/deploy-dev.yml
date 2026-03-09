@@ -1,0 +1,30 @@
+name: Deploy to Dev Server
+
+on:
+  workflow_run:
+    workflows: ["Build and Push Docker Image"]
+    types: [completed]
+    branches: [dev]
+
+jobs:
+  deploy:
+    name: Deploy to school server
+    runs-on: self-hosted
+    if: ${{ github.event.workflow_run.conclusion == 'success' }}
+
+    steps:
+      - name: Pull latest image
+        run: docker pull ghcr.io/kyumin1227/gsc-slack-app:dev
+
+      - name: Verify image pulled
+        run: docker image inspect ghcr.io/kyumin1227/gsc-slack-app:dev --format '{{.Id}}'
+
+      - name: Restart app
+        working-directory: ${{ vars.DEPLOY_DIR }}
+        run: make dev
+
+      - name: Verify app is running
+        run: |
+          sleep 10
+          docker inspect --format='{{.State.Status}}' gsc-slack-app | grep -q "running"
+          echo "✅ App is running"
