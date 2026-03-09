@@ -13,6 +13,7 @@ import { StudyRoomStatus } from './study-room.entity';
 import { UserService } from '../user/user.service';
 import { UserRole, UserStatus } from '../user/user.entity';
 import { GoogleCalendarUtil } from '../google/google-calendar.util';
+import { CMD } from '../common/slack-commands';
 
 @Controller()
 export class StudyRoomController {
@@ -23,7 +24,7 @@ export class StudyRoomController {
     private readonly userService: UserService,
   ) {}
 
-  @Command('/스터디룸생성')
+  @Command(CMD.스터디룸생성)
   async openCreateModal({
     ack,
     client,
@@ -81,7 +82,7 @@ export class StudyRoomController {
     }
   }
 
-  @Command('/예약')
+  @Command(CMD.예약)
   async openList({
     ack,
     client,
@@ -259,7 +260,7 @@ export class StudyRoomController {
     }
   }
 
-  @Command('/내예약')
+  @Command(CMD.내예약)
   async openMyBookings({
     ack,
     client,
@@ -437,7 +438,7 @@ export class StudyRoomController {
     return true;
   }
 
-  @Command('/스터디룸')
+  @Command(CMD.스터디룸)
   async openManageModal({
     ack,
     client,
@@ -584,8 +585,7 @@ export class StudyRoomController {
       roomId: number;
       roomName: string;
     };
-    const slackId =
-      values.editor_block.editor_select.selected_user ?? '';
+    const slackId = values.editor_block.editor_select.selected_user ?? '';
 
     const user = await this.userService.findBySlackId(slackId);
     if (!user) {
@@ -678,14 +678,17 @@ export class StudyRoomController {
         view_id: body.view?.id ?? '',
         view: StudyRoomView.manageModal(rooms),
       });
-      const label = newStatus === StudyRoomStatus.ACTIVE ? '활성화' : '비활성화';
+      const label =
+        newStatus === StudyRoomStatus.ACTIVE ? '활성화' : '비활성화';
       await client.chat.postMessage({
         channel: body.user.id,
         text: `✅ *${roomName}* 이 ${label}되었습니다.`,
       });
     } catch (error: unknown) {
       const message =
-        error instanceof Error ? error.message : '상태 변경 중 오류가 발생했습니다.';
+        error instanceof Error
+          ? error.message
+          : '상태 변경 중 오류가 발생했습니다.';
       this.logger.error(`Study room toggle-status failed: ${message}`);
       await client.chat.postMessage({
         channel: body.user.id,
