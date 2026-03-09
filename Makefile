@@ -1,26 +1,38 @@
-.PHONY: db dev prod down logs backup clean
+.PHONY: db local local-d dev prod down-local down-dev down-prod down-db logs logs-app backup clean
 
 # DB + Redis 실행 (로컬 개발용)
 db:
 	docker compose up db redis -d
 
-# 개발 환경 (Docker로 앱 빌드 + 실행)
-dev:
-	docker compose -f docker-compose.yml -f docker-compose.dev.yml --profile app up --build
+# 로컬 환경 (소스 빌드 + 실행)
+local:
+	docker compose -f docker-compose.yml -f docker-compose.local.yml up --build
 
-# 개발 환경 (백그라운드)
-dev-d:
-	docker compose -f docker-compose.yml -f docker-compose.dev.yml --profile app up --build -d
+# 로컬 환경 (백그라운드)
+local-d:
+	docker compose -f docker-compose.yml -f docker-compose.local.yml up --build -d
+
+# 개발(스테이징) 환경 - 학교 서버용
+dev:
+	docker compose -f docker-compose.yml -f docker-compose.dev.yml up -d
 
 # 프로덕션 환경
 prod:
-	docker compose -f docker-compose.yml -f docker-compose.prod.yml --profile app up -d
+	docker compose -f docker-compose.yml -f docker-compose.prod.yml up -d
 
-# 전체 종료
-down:
-	docker compose --profile app down
+# 로컬 환경 종료
+down-local:
+	docker compose -f docker-compose.yml -f docker-compose.local.yml down
 
-# DB 종료 (로컬 개발용)
+# 개발(스테이징) 환경 종료
+down-dev:
+	docker compose -f docker-compose.yml -f docker-compose.dev.yml down
+
+# 프로덕션 환경 종료
+down-prod:
+	docker compose -f docker-compose.yml -f docker-compose.prod.yml down
+
+# DB + Redis 종료 (로컬 개발용)
 down-db:
 	docker compose down
 
@@ -40,5 +52,5 @@ backup:
 
 # 미사용 Docker 리소스 정리
 clean:
-	docker compose --profile app down -v --remove-orphans
+	docker compose -f docker-compose.yml -f docker-compose.local.yml down -v --remove-orphans
 	docker system prune -f
