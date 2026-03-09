@@ -11,6 +11,7 @@ import { TagService } from './tag.service';
 import { TagView } from './tag.view';
 import { UserService } from '../user/user.service';
 import { UserRole } from '../user/user.entity';
+import { CMD } from '../common/slack-commands';
 
 @Controller()
 export class TagController {
@@ -36,7 +37,7 @@ export class TagController {
   }
 
   // /태그 - 태그 목록 조회
-  @Command('/태그')
+  @Command(CMD.태그)
   async listTags({
     ack,
     client,
@@ -63,7 +64,7 @@ export class TagController {
   }
 
   // /태그생성 - 태그 생성 모달
-  @Command('/태그생성')
+  @Command(CMD.태그생성)
   async openCreateModal({
     ack,
     client,

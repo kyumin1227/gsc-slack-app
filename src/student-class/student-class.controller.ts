@@ -12,6 +12,7 @@ import { StudentClassView } from './student-class.view';
 import { UserService } from '../user/user.service';
 import { UserRole } from '../user/user.entity';
 import { ClassSection } from './student-class.entity';
+import { CMD } from '../common/slack-commands';
 
 @Controller()
 export class StudentClassController {
@@ -37,7 +38,7 @@ export class StudentClassController {
   }
 
   // /반 - 반 목록 조회
-  @Command('/반')
+  @Command(CMD.반)
   async listClasses({
     ack,
     client,
@@ -73,7 +74,7 @@ export class StudentClassController {
   }
 
   // /반생성 - 반 생성 모달
-  @Command('/반생성')
+  @Command(CMD.반생성)
   async openCreateModal({
     ack,
     client,

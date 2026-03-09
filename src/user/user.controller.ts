@@ -13,6 +13,7 @@ import { UserView } from './user.view';
 import { OAuthUtil } from './google-oauth.util';
 import { UserRole } from './user.entity';
 import { StudentClassService } from '../student-class/student-class.service';
+import { CMD } from '../common/slack-commands';
 
 @Controller()
 export class UserController {
@@ -196,7 +197,7 @@ export class UserController {
 
   // 관리자: /승인 명령어 - 승인 대기 목록 모달
   // 조교(TA) 이상 권한 필요
-  @Command('/승인')
+  @Command(CMD.승인)
   async openApprovalModal({
     ack,
     client,

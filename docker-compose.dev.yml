@@ -1,15 +1,29 @@
 services:
   db:
-    env_file:
-      - .env
+    volumes:
+      - ./postgres_data:/var/lib/postgresql/data
 
   redis:
-    env_file:
-      - .env
+    volumes:
+      - redis_data:/data
 
   app:
-    build: .
-    ports:
-      - "3000:3000"
-    env_file:
-      - .env
+    image: ${DOCKER_IMAGE:-ghcr.io/kyumin1227/gsc-slack-app:dev}
+    restart: always
+    logging:
+      driver: "json-file"
+      options:
+        max-size: "10m"
+        max-file: "3"
+
+  cloudflared:
+    image: cloudflare/cloudflared:latest
+    restart: unless-stopped
+    command: tunnel --no-autoupdate run
+    environment:
+      - TUNNEL_TOKEN=${CLOUDFLARE_TUNNEL_TOKEN}
+    depends_on:
+      - app
+
+volumes:
+  redis_data:

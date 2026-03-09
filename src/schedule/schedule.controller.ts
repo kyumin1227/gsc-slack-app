@@ -13,6 +13,7 @@ import { UserService } from '../user/user.service';
 import { TagService } from '../tag/tag.service';
 import { ChannelService } from '../channel/channel.service';
 import { UserRole, UserStatus, User } from '../user/user.entity';
+import { CMD } from '../common/slack-commands';
 
 @Controller()
 export class ScheduleController {
@@ -103,7 +104,7 @@ export class ScheduleController {
   }
 
   // /시간표 - 시간표 목록 조회
-  @Command('/시간표')
+  @Command(CMD.시간표)
   async listSchedules({
     ack,
     client,
@@ -130,7 +131,7 @@ export class ScheduleController {
   }
 
   // /시간표생성 - 시간표 생성 모달
-  @Command('/시간표생성')
+  @Command(CMD.시간표생성)
   async openCreateModal({
     ack,
     client,
@@ -332,7 +333,7 @@ export class ScheduleController {
   }
 
   // /구독 - 시간표 구독 (태그 선택)
-  @Command('/구독')
+  @Command(CMD.구독)
   async openSubscribeModal({
     ack,
     client,

@@ -2,6 +2,7 @@ import type { View } from '@slack/types';
 import { StudyRoom, StudyRoomStatus } from './study-room.entity';
 import { BookingItem } from './study-room.service';
 import { CalendarAclEntry } from '../google/google-calendar.util';
+import { toKST } from '../utils/date.util';
 
 // Google Calendar 캘린더 색상
 const ROOM_COLORS = [
@@ -231,11 +232,11 @@ export class StudyRoomView {
       });
     } else {
       for (const booking of bookings) {
-        const start = booking.startTime;
-        const end = booking.endTime;
-        const dateStr = `${start.getFullYear()}.${String(start.getMonth() + 1).padStart(2, '0')}.${String(start.getDate()).padStart(2, '0')}`;
-        const startStr = `${String(start.getHours()).padStart(2, '0')}:${String(start.getMinutes()).padStart(2, '0')}`;
-        const endStr = `${String(end.getHours()).padStart(2, '0')}:${String(end.getMinutes()).padStart(2, '0')}`;
+        const start = toKST(booking.startTime);
+        const end = toKST(booking.endTime);
+        const dateStr = `${start.getUTCFullYear()}.${String(start.getUTCMonth() + 1).padStart(2, '0')}.${String(start.getUTCDate()).padStart(2, '0')}`;
+        const startStr = `${String(start.getUTCHours()).padStart(2, '0')}:${String(start.getUTCMinutes()).padStart(2, '0')}`;
+        const endStr = `${String(end.getUTCHours()).padStart(2, '0')}:${String(end.getUTCMinutes()).padStart(2, '0')}`;
         const meta = JSON.stringify({
           calendarId: booking.calendarId,
           eventId: booking.eventId,
@@ -311,8 +312,9 @@ export class StudyRoomView {
     const clampedDuration = Math.min(Math.max(durationMinutes, 15), 240);
     const snappedDuration = Math.round(clampedDuration / 15) * 15;
 
-    const dateStr = `${booking.startTime.getFullYear()}-${String(booking.startTime.getMonth() + 1).padStart(2, '0')}-${String(booking.startTime.getDate()).padStart(2, '0')}`;
-    const timeStr = `${String(booking.startTime.getHours()).padStart(2, '0')}:${String(booking.startTime.getMinutes()).padStart(2, '0')}`;
+    const kstStart = toKST(booking.startTime);
+    const dateStr = `${kstStart.getUTCFullYear()}-${String(kstStart.getUTCMonth() + 1).padStart(2, '0')}-${String(kstStart.getUTCDate()).padStart(2, '0')}`;
+    const timeStr = `${String(kstStart.getUTCHours()).padStart(2, '0')}:${String(kstStart.getUTCMinutes()).padStart(2, '0')}`;
 
     return {
       type: 'modal',
@@ -388,7 +390,7 @@ export class StudyRoomView {
           elements: [
             {
               type: 'mrkdwn',
-              text: `⏰ 종료 시간: *${String(booking.endTime.getHours()).padStart(2, '0')}:${String(booking.endTime.getMinutes()).padStart(2, '0')}*`,
+              text: `⏰ 종료 시간: *${String(toKST(booking.endTime).getUTCHours()).padStart(2, '0')}:${String(toKST(booking.endTime).getUTCMinutes()).padStart(2, '0')}*`,
             },
           ],
         },
