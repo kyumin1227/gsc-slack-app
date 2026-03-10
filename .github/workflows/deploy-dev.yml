@@ -19,6 +19,10 @@ jobs:
       - name: Verify image pulled
         run: docker image inspect ghcr.io/kyumin1227/gsc-slack-app:dev --format '{{.Id}}'
 
+      - name: Pull latest code
+        working-directory: ${{ vars.DEPLOY_DIR }}
+        run: git pull origin dev
+
       - name: Restart app
         working-directory: ${{ vars.DEPLOY_DIR }}
         run: make dev
