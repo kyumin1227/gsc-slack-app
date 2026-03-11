@@ -2,7 +2,7 @@
 
 # DB + Redis 실행 (로컬 개발용)
 db:
-	docker compose up db redis -d
+	docker compose -f docker-compose.yml -f docker-compose.local.yml up -d; docker stop gsc-slack-app 2>/dev/null || true
 
 # 로컬 환경 (소스 빌드 + 실행)
 local:
@@ -34,7 +34,7 @@ down-prod:
 
 # DB + Redis 종료 (로컬 개발용)
 down-db:
-	docker compose down
+	docker compose -f docker-compose.yml -f docker-compose.local.yml down
 
 # 로그 확인
 logs:
