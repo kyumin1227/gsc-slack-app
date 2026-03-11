@@ -44,9 +44,22 @@ export class ScheduleWatchController {
     );
     if (slackChannelIds.length === 0) return;
 
-    const events = await GoogleCalendarUtil.getRecentChangedEvents(
-      schedule.calendarId,
-    );
+    if (!schedule.syncToken) {
+      this.logger.warn(
+        `No syncToken for schedule ${schedule.id}, skipping webhook`,
+      );
+      return;
+    }
+
+    // TODO: 반복 이벤트, 단일 이벤트 별도 처리 로직 필요
+    const { events, nextSyncToken } =
+      await GoogleCalendarUtil.getChangedEventsBySyncToken(
+        schedule.calendarId,
+        schedule.syncToken,
+      );
+
+    await this.scheduleService.updateSyncToken(schedule.id, nextSyncToken);
+
     if (events.length === 0) return;
 
     for (const event of events) {

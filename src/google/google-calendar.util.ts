@@ -290,7 +290,63 @@ export class GoogleCalendarUtil {
     }
   }
 
-  // 최근 변경된 이벤트 조회 (웹훅 수신 후 상세 조회용)
+  // 초기 syncToken 발급 (watch 등록 시 호출)
+  static async getInitialSyncToken(calendarId: string): Promise<string> {
+    const calendar = this.getCalendarClient();
+    let pageToken: string | undefined;
+
+    while (true) {
+      const response = await calendar.events.list({
+        calendarId,
+        showDeleted: true,
+        singleEvents: true,
+        maxResults: 2500,
+        ...(pageToken ? { pageToken } : {}),
+      });
+
+      if (response.data.nextSyncToken) {
+        return response.data.nextSyncToken;
+      }
+
+      if (!response.data.nextPageToken) {
+        throw new Error('Failed to get initial sync token');
+      }
+
+      pageToken = response.data.nextPageToken;
+    }
+  }
+
+  // syncToken으로 변경된 이벤트 조회 (웹훅 수신 후 사용)
+  // 410 Gone 시 getInitialSyncToken으로 fallback → { events: [], nextSyncToken }
+  static async getChangedEventsBySyncToken(
+    calendarId: string,
+    syncToken: string,
+  ): Promise<{ events: calendar_v3.Schema$Event[]; nextSyncToken: string }> {
+    const calendar = this.getCalendarClient();
+
+    try {
+      const response = await calendar.events.list({
+        calendarId,
+        syncToken,
+        showDeleted: true,
+        singleEvents: true,
+      });
+
+      return {
+        events: response.data.items ?? [],
+        nextSyncToken: response.data.nextSyncToken!,
+      };
+    } catch (error: any) {
+      // syncToken 만료 (410 Gone) → 전체 재동기화
+      if (error.code === 410) {
+        const newToken = await this.getInitialSyncToken(calendarId);
+        return { events: [], nextSyncToken: newToken };
+      }
+      throw error;
+    }
+  }
+
+  // 최근 변경된 이벤트 조회 (레거시 — syncToken 없는 경우 fallback용)
   static async getRecentChangedEvents(
     calendarId: string,
   ): Promise<calendar_v3.Schema$Event[]> {

@@ -60,6 +60,9 @@ export class Schedule {
   @Column({ type: 'varchar', nullable: true })
   watchResourceId: string | null; // Google이 발급한 resourceId (watch stop 시 필요)
 
+  @Column({ type: 'varchar', nullable: true })
+  syncToken: string | null; // Google Calendar 증분 동기화 토큰
+
   @CreateDateColumn()
   createdAt: Date;
 

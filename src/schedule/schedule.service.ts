@@ -291,9 +291,14 @@ export class ScheduleService {
         channelId,
       );
 
+      const syncToken = await GoogleCalendarUtil.getInitialSyncToken(
+        schedule.calendarId,
+      );
+
       await this.scheduleRepository.update(id, {
         watchChannelId: channelId,
         watchResourceId: resourceId,
+        syncToken,
       });
 
       this.logger.log(
@@ -349,6 +354,11 @@ export class ScheduleService {
     return this.scheduleRepository.findOne({
       where: { watchChannelId: channelId },
     });
+  }
+
+  // syncToken 업데이트 (웹훅 수신 후 새 토큰 저장)
+  async updateSyncToken(id: number, syncToken: string): Promise<void> {
+    await this.scheduleRepository.update(id, { syncToken });
   }
 
   // 캘린더 권한 목록 조회 (Google Calendar API 사용)
