@@ -487,18 +487,16 @@ export class ScheduleService {
     const groupId = randomUUID();
     await this.cache.set(`suppress:group:${groupId}`, true, 3 * 60 * 1000);
 
-    // 3. 이벤트 N개 병렬 생성
-    const results = await Promise.allSettled(
-      dates.map(({ startDateTime, endDateTime }) =>
-        GoogleCalendarUtil.createEventAsServiceAccount(schedule.calendarId, {
-          summary: dto.title,
-          startDateTime,
-          endDateTime,
-          description: dto.description,
-          location: dto.location,
-          groupId,
-        }),
-      ),
+    // 3. 이벤트 10개씩 청크 생성 (Rate Limit 방지)
+    const results = await runInChunks(dates, ({ startDateTime, endDateTime }) =>
+      GoogleCalendarUtil.createEventAsServiceAccount(schedule.calendarId, {
+        summary: dto.title,
+        startDateTime,
+        endDateTime,
+        description: dto.description,
+        location: dto.location,
+        groupId,
+      }),
     );
 
     const successCount = results.filter((r) => r.status === 'fulfilled').length;
@@ -609,12 +607,10 @@ export class ScheduleService {
       );
     }
 
-    const results = await Promise.allSettled(
-      events.map((e) =>
-        GoogleCalendarUtil.deleteEventAsServiceAccount(
-          schedule.calendarId,
-          e.id!,
-        ),
+    const results = await runInChunks(events, (e) =>
+      GoogleCalendarUtil.deleteEventAsServiceAccount(
+        schedule.calendarId,
+        e.id!,
       ),
     );
     const deletedCount = results.filter((r) => r.status === 'fulfilled').length;
@@ -687,33 +683,31 @@ export class ScheduleService {
       );
     }
 
-    const results = await Promise.allSettled(
-      events.map((e) => {
-        let startDateTime: string | undefined;
-        let endDateTime: string | undefined;
+    const results = await runInChunks(events, (e) => {
+      let startDateTime: string | undefined;
+      let endDateTime: string | undefined;
 
-        if (dto.startTime && e.start?.dateTime) {
-          const datePart = e.start.dateTime.slice(0, 10);
-          startDateTime = `${datePart}T${dto.startTime}:00+09:00`;
-        }
-        if (dto.endTime && e.end?.dateTime) {
-          const datePart = e.end.dateTime.slice(0, 10);
-          endDateTime = `${datePart}T${dto.endTime}:00+09:00`;
-        }
+      if (dto.startTime && e.start?.dateTime) {
+        const datePart = e.start.dateTime.slice(0, 10);
+        startDateTime = `${datePart}T${dto.startTime}:00+09:00`;
+      }
+      if (dto.endTime && e.end?.dateTime) {
+        const datePart = e.end.dateTime.slice(0, 10);
+        endDateTime = `${datePart}T${dto.endTime}:00+09:00`;
+      }
 
-        return GoogleCalendarUtil.updateEventAsServiceAccount(
-          schedule.calendarId,
-          e.id!,
-          {
-            summary: dto.title,
-            description: dto.description,
-            location: dto.location,
-            startDateTime,
-            endDateTime,
-          },
-        );
-      }),
-    );
+      return GoogleCalendarUtil.updateEventAsServiceAccount(
+        schedule.calendarId,
+        e.id!,
+        {
+          summary: dto.title,
+          description: dto.description,
+          location: dto.location,
+          startDateTime,
+          endDateTime,
+        },
+      );
+    });
     const updatedCount = results.filter((r) => r.status === 'fulfilled').length;
 
     if (dto.title) {
@@ -801,6 +795,49 @@ function jsWeekdayToRRule(day: number): Weekday {
   return map[day];
 }
 
+// 429 Rate Limit 시 exponential backoff으로 재시도
+async function withRetry<R>(
+  fn: () => Promise<R>,
+  maxRetries = 3,
+  baseDelayMs = 1000,
+): Promise<R> {
+  let lastError: unknown;
+  for (let attempt = 0; attempt <= maxRetries; attempt++) {
+    try {
+      return await fn();
+    } catch (err: unknown) {
+      lastError = err;
+      const isRateLimit =
+        err instanceof Error && err.message.includes('Rate Limit');
+      if (!isRateLimit || attempt === maxRetries) throw err;
+      await new Promise((resolve) =>
+        setTimeout(resolve, baseDelayMs * 2 ** attempt),
+      );
+    }
+  }
+  throw lastError;
+}
+
+// 10개씩 청크로 나눠 순차 실행 (Google Calendar API Rate Limit 방지)
+async function runInChunks<T, R>(
+  items: T[],
+  fn: (item: T) => Promise<R>,
+  chunkSize = 10,
+  delayMs = 500,
+): Promise<PromiseSettledResult<R>[]> {
+  const allResults: PromiseSettledResult<R>[] = [];
+  for (let i = 0; i < items.length; i += chunkSize) {
+    const chunk = items.slice(i, i + chunkSize);
+    const results = await Promise.allSettled(
+      chunk.map((item) => withRetry(() => fn(item))),
+    );
+    allResults.push(...results);
+    if (i + chunkSize < items.length) {
+      await new Promise((resolve) => setTimeout(resolve, delayMs));
+    }
+  }
+  return allResults;
+}
 
 function buildRecurringDeleteBlocks(
   scheduleName: string,
