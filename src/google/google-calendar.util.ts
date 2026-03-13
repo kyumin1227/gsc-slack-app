@@ -290,7 +290,63 @@ export class GoogleCalendarUtil {
     }
   }
 
-  // 최근 변경된 이벤트 조회 (웹훅 수신 후 상세 조회용)
+  // 초기 syncToken 발급 (watch 등록 시 호출)
+  static async getInitialSyncToken(calendarId: string): Promise<string> {
+    const calendar = this.getCalendarClient();
+    let pageToken: string | undefined;
+
+    while (true) {
+      const response = await calendar.events.list({
+        calendarId,
+        showDeleted: true,
+        singleEvents: true,
+        maxResults: 2500,
+        ...(pageToken ? { pageToken } : {}),
+      });
+
+      if (response.data.nextSyncToken) {
+        return response.data.nextSyncToken;
+      }
+
+      if (!response.data.nextPageToken) {
+        throw new Error('Failed to get initial sync token');
+      }
+
+      pageToken = response.data.nextPageToken;
+    }
+  }
+
+  // syncToken으로 변경된 이벤트 조회 (웹훅 수신 후 사용)
+  // 410 Gone 시 getInitialSyncToken으로 fallback → { events: [], nextSyncToken }
+  static async getChangedEventsBySyncToken(
+    calendarId: string,
+    syncToken: string,
+  ): Promise<{ events: calendar_v3.Schema$Event[]; nextSyncToken: string }> {
+    const calendar = this.getCalendarClient();
+
+    try {
+      const response = await calendar.events.list({
+        calendarId,
+        syncToken,
+        showDeleted: true,
+        singleEvents: true,
+      });
+
+      return {
+        events: response.data.items ?? [],
+        nextSyncToken: response.data.nextSyncToken!,
+      };
+    } catch (error: any) {
+      // syncToken 만료 (410 Gone) → 전체 재동기화
+      if (error.code === 410) {
+        const newToken = await this.getInitialSyncToken(calendarId);
+        return { events: [], nextSyncToken: newToken };
+      }
+      throw error;
+    }
+  }
+
+  // 최근 변경된 이벤트 조회 (레거시 — syncToken 없는 경우 fallback용)
   static async getRecentChangedEvents(
     calendarId: string,
   ): Promise<calendar_v3.Schema$Event[]> {
@@ -322,6 +378,108 @@ export class GoogleCalendarUtil {
       if (error.code === 404 || error.code === 410) return null;
       throw error;
     }
+  }
+
+  // ========== 반복 일정 (서비스 계정 기반) ==========
+
+  // 서비스 계정으로 이벤트 생성 (groupId extendedProperties 포함)
+  static async createEventAsServiceAccount(
+    calendarId: string,
+    params: {
+      summary: string;
+      startDateTime: string; // ISO8601
+      endDateTime: string;
+      description?: string;
+      location?: string;
+      groupId: string;
+    },
+  ): Promise<string> {
+    const calendar = this.getCalendarClient();
+
+    const response = await calendar.events.insert({
+      calendarId,
+      sendUpdates: 'none',
+      requestBody: {
+        summary: params.summary,
+        description: params.description,
+        location: params.location,
+        start: { dateTime: params.startDateTime, timeZone: 'Asia/Seoul' },
+        end: { dateTime: params.endDateTime, timeZone: 'Asia/Seoul' },
+        extendedProperties: {
+          private: { groupId: params.groupId },
+        },
+      },
+    });
+
+    if (!response.data.id) {
+      throw new Error('Failed to create calendar event');
+    }
+
+    return response.data.id;
+  }
+
+  // groupId로 이벤트 목록 조회 (전체 삭제/수정용)
+  static async listEventsByGroupId(
+    calendarId: string,
+    groupId: string,
+  ): Promise<calendar_v3.Schema$Event[]> {
+    const calendar = this.getCalendarClient();
+    const events: calendar_v3.Schema$Event[] = [];
+    let pageToken: string | undefined;
+
+    do {
+      const response = await calendar.events.list({
+        calendarId,
+        privateExtendedProperty: [`groupId=${groupId}`],
+        showDeleted: false,
+        singleEvents: true,
+        maxResults: 2500,
+        ...(pageToken ? { pageToken } : {}),
+      });
+
+      events.push(...(response.data.items ?? []));
+      pageToken = response.data.nextPageToken ?? undefined;
+    } while (pageToken);
+
+    return events;
+  }
+
+  // 서비스 계정으로 이벤트 삭제
+  static async deleteEventAsServiceAccount(
+    calendarId: string,
+    eventId: string,
+  ): Promise<void> {
+    const calendar = this.getCalendarClient();
+    await calendar.events.delete({ calendarId, eventId, sendUpdates: 'none' });
+  }
+
+  // 서비스 계정으로 이벤트 수정 (patch: undefined 필드는 변경 안 함)
+  static async updateEventAsServiceAccount(
+    calendarId: string,
+    eventId: string,
+    params: {
+      summary?: string;
+      description?: string;
+      location?: string;
+      startDateTime?: string; // ISO8601
+      endDateTime?: string;
+    },
+  ): Promise<void> {
+    const calendar = this.getCalendarClient();
+    const body: calendar_v3.Schema$Event = {};
+    if (params.summary !== undefined) body.summary = params.summary;
+    if (params.description !== undefined) body.description = params.description;
+    if (params.location !== undefined) body.location = params.location;
+    if (params.startDateTime)
+      body.start = { dateTime: params.startDateTime, timeZone: 'Asia/Seoul' };
+    if (params.endDateTime)
+      body.end = { dateTime: params.endDateTime, timeZone: 'Asia/Seoul' };
+    await calendar.events.patch({
+      calendarId,
+      eventId,
+      sendUpdates: 'none',
+      requestBody: body,
+    });
   }
 
   // ========== 스터디룸 예약 ==========
