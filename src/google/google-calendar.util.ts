@@ -607,6 +607,7 @@ export class GoogleCalendarUtil {
     eventId: string,
     params: {
       summary?: string;
+      description?: string;
       startTime?: Date;
       endTime?: Date;
       attendeeEmails?: string[];
@@ -617,6 +618,8 @@ export class GoogleCalendarUtil {
     const requestBody: calendar_v3.Schema$Event = {};
 
     if (params.summary !== undefined) requestBody.summary = params.summary;
+    if (params.description !== undefined)
+      requestBody.description = params.description;
     if (params.location !== undefined) requestBody.location = params.location;
     if (params.startTime !== undefined) {
       requestBody.start = {
