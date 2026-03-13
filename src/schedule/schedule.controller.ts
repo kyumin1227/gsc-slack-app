@@ -1043,4 +1043,179 @@ export class ScheduleController {
       });
     }
   }
+
+  // /반복일정삭제 - 반복 일정 삭제 모달
+  @Command(CMD.반복일정삭제)
+  async openDeleteRecurringModal({
+    ack,
+    client,
+    body,
+  }: SlackCommandMiddlewareArgs & AllMiddlewareArgs) {
+    await ack();
+
+    const { hasPermission, message } = await this.checkAdminPermission(
+      body.user_id,
+    );
+    if (!hasPermission) {
+      await client.chat.postEphemeral({
+        channel: body.channel_id,
+        user: body.user_id,
+        text: message!,
+      });
+      return;
+    }
+
+    const groups = await this.scheduleService.findAllRecurrenceGroups();
+
+    if (groups.length === 0) {
+      await client.chat.postEphemeral({
+        channel: body.channel_id,
+        user: body.user_id,
+        text: '삭제할 반복 일정이 없습니다.',
+      });
+      return;
+    }
+
+    await client.views.open({
+      trigger_id: body.trigger_id,
+      view: ScheduleView.deleteRecurringModal(groups),
+    });
+  }
+
+  // 반복 일정 삭제 폼 제출
+  @View('recurring:modal:delete')
+  async handleDeleteRecurring({
+    ack,
+    body,
+    view,
+    client,
+    logger,
+  }: SlackViewMiddlewareArgs & AllMiddlewareArgs) {
+    const values = view.state.values;
+    const groupDbId = parseInt(
+      values.group_block.group_input.selected_option?.value ?? '',
+      10,
+    );
+    const scope = (values.scope_block.scope_input.selected_option?.value ??
+      'all') as 'all' | 'future';
+
+    await ack();
+
+    try {
+      const { deleted, total } =
+        await this.scheduleService.deleteRecurringGroup(groupDbId, scope);
+      await client.chat.postMessage({
+        channel: body.user.id,
+        text: `반복 일정 삭제 완료: ${deleted}/${total}개`,
+      });
+    } catch (error) {
+      logger.error('Delete recurring events error:', error);
+      const err = error as { message?: string };
+      await client.chat.postMessage({
+        channel: body.user.id,
+        text: `반복 일정 삭제 중 오류가 발생했습니다: ${err.message ?? '알 수 없는 오류'}`,
+      });
+    }
+  }
+
+  // /반복일정수정 - 반복 일정 수정 모달
+  @Command(CMD.반복일정수정)
+  async openEditRecurringModal({
+    ack,
+    client,
+    body,
+  }: SlackCommandMiddlewareArgs & AllMiddlewareArgs) {
+    await ack();
+
+    const { hasPermission, message } = await this.checkAdminPermission(
+      body.user_id,
+    );
+    if (!hasPermission) {
+      await client.chat.postEphemeral({
+        channel: body.channel_id,
+        user: body.user_id,
+        text: message!,
+      });
+      return;
+    }
+
+    const groups = await this.scheduleService.findAllRecurrenceGroups();
+
+    if (groups.length === 0) {
+      await client.chat.postEphemeral({
+        channel: body.channel_id,
+        user: body.user_id,
+        text: '수정할 반복 일정이 없습니다.',
+      });
+      return;
+    }
+
+    await client.views.open({
+      trigger_id: body.trigger_id,
+      view: ScheduleView.editRecurringModal(groups),
+    });
+  }
+
+  // 반복 일정 수정 폼 제출
+  @View('recurring:modal:edit')
+  async handleEditRecurring({
+    ack,
+    body,
+    view,
+    client,
+    logger,
+  }: SlackViewMiddlewareArgs & AllMiddlewareArgs) {
+    const values = view.state.values;
+    const groupDbId = parseInt(
+      values.group_block.group_input.selected_option?.value ?? '',
+      10,
+    );
+    const title = values.title_block.title_input.value ?? undefined;
+    const description =
+      values.description_block.description_input.value ?? undefined;
+    const location = values.location_block.location_input.value ?? undefined;
+    const startTime =
+      values.start_time_block.start_time_input.selected_time ?? undefined;
+    const endTime =
+      values.end_time_block.end_time_input.selected_time ?? undefined;
+    const scope = (values.scope_block.scope_input.selected_option?.value ??
+      'all') as 'all' | 'future';
+
+    if (startTime && !endTime) {
+      await ack({
+        response_action: 'errors',
+        errors: { end_time_block: '종료 시각도 함께 입력해주세요.' },
+      });
+      return;
+    }
+    if (!startTime && endTime) {
+      await ack({
+        response_action: 'errors',
+        errors: { start_time_block: '시작 시각도 함께 입력해주세요.' },
+      });
+      return;
+    }
+
+    await ack();
+
+    try {
+      const { updated, total } =
+        await this.scheduleService.updateRecurringGroup(
+          groupDbId,
+          { title, description, location, startTime, endTime },
+          scope,
+        );
+      await client.chat.postMessage({
+        channel: body.user.id,
+        text: `반복 일정 수정 완료: ${updated}/${total}개`,
+      });
+    } catch (error) {
+      logger.error('Edit recurring events error:', error);
+      const err = error as { message?: string };
+      await client.chat.postMessage({
+        channel: body.user.id,
+        text: `반복 일정 수정 중 오류가 발생했습니다: ${err.message ?? '알 수 없는 오류'}`,
+      });
+    }
+  }
 }

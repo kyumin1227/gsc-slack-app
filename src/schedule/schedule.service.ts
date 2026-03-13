@@ -30,6 +30,14 @@ export interface UpdateScheduleDto {
 
 export type RecurrenceType = 'weekly' | 'biweekly' | 'monthly';
 
+export interface UpdateRecurringEventsDto {
+  title?: string;
+  description?: string;
+  location?: string;
+  startTime?: string; // HH:MM, undefined → 시간 변경 안 함
+  endTime?: string; // HH:MM
+}
+
 export interface CreateRecurringEventsDto {
   scheduleId: number;
   title: string;
@@ -494,11 +502,18 @@ export class ScheduleService {
     );
 
     const successCount = results.filter((r) => r.status === 'fulfilled').length;
-    const failCount = results.length - successCount;
 
-    if (failCount > 0) {
+    results.forEach((result, index) => {
+      if (result.status === 'rejected') {
+        this.logger.warn(
+          `Failed to create event at ${dates[index].startDateTime}: ${result.reason}`,
+        );
+      }
+    });
+
+    if (successCount < results.length) {
       this.logger.warn(
-        `createRecurringEvents: ${failCount}/${results.length} events failed (groupId: ${groupId})`,
+        `createRecurringEvents: ${results.length - successCount}/${results.length} events failed (groupId: ${groupId})`,
       );
     }
 
@@ -544,6 +559,194 @@ export class ScheduleService {
       where: { scheduleId },
       order: { createdAt: 'DESC' },
     });
+  }
+
+  // 전체 반복 그룹 조회 (삭제되지 않은 것)
+  async findAllRecurrenceGroups(): Promise<
+    (RecurrenceGroup & { scheduleName: string })[]
+  > {
+    const groups = await this.recurrenceGroupRepository.find({
+      order: { createdAt: 'DESC' },
+    });
+    const scheduleIds = [...new Set(groups.map((g) => g.scheduleId))];
+    const schedules = await this.scheduleRepository.findBy({
+      id: In(scheduleIds),
+    });
+    const scheduleMap = new Map(schedules.map((s) => [s.id, s.name]));
+    return groups.map((g) => ({
+      ...g,
+      scheduleName: scheduleMap.get(g.scheduleId) ?? '',
+    }));
+  }
+
+  async deleteRecurringGroup(
+    groupDbId: number,
+    scope: 'all' | 'future',
+  ): Promise<{ deleted: number; total: number }> {
+    const group = await this.recurrenceGroupRepository.findOne({
+      where: { id: groupDbId },
+    });
+    if (!group) throw new Error('반복 그룹을 찾을 수 없습니다.');
+
+    const schedule = await this.findById(group.scheduleId);
+    if (!schedule) throw new Error('시간표를 찾을 수 없습니다.');
+
+    await this.cache.set(
+      `suppress:group:${group.groupId}`,
+      true,
+      3 * 60 * 1000,
+    );
+
+    let events = await GoogleCalendarUtil.listEventsByGroupId(
+      schedule.calendarId,
+      group.groupId,
+    );
+
+    if (scope === 'future') {
+      const today = new Date().toISOString().slice(0, 10);
+      events = events.filter(
+        (e) => (e.start?.dateTime ?? e.start?.date ?? '') >= today,
+      );
+    }
+
+    const results = await Promise.allSettled(
+      events.map((e) =>
+        GoogleCalendarUtil.deleteEventAsServiceAccount(
+          schedule.calendarId,
+          e.id!,
+        ),
+      ),
+    );
+    const deletedCount = results.filter((r) => r.status === 'fulfilled').length;
+    results.forEach((result, index) => {
+      if (result.status === 'rejected') {
+        this.logger.warn(
+          `Failed to delete event ${events[index].id}: ${result.reason}`,
+        );
+      }
+    });
+
+    if (scope === 'all') {
+      await this.recurrenceGroupRepository.softDelete({ id: groupDbId });
+    }
+
+    const slackChannelIds = await this.channelService.getSlackChannelIds(
+      group.scheduleId,
+    );
+    await Promise.allSettled(
+      slackChannelIds.map((channel) =>
+        this.slack.chat.postMessage({
+          channel,
+          text: `🗑️ ${schedule.name} 반복 일정 삭제 안내`,
+          blocks: buildRecurringDeleteBlocks(
+            schedule.name,
+            group.title,
+            scope,
+            deletedCount,
+            events.length,
+          ),
+        }),
+      ),
+    );
+
+    this.logger.log(
+      `Recurring group deleted: groupId=${group.groupId}, scope=${scope}, deleted=${deletedCount}/${events.length}`,
+    );
+
+    return { deleted: deletedCount, total: events.length };
+  }
+
+  async updateRecurringGroup(
+    groupDbId: number,
+    dto: UpdateRecurringEventsDto,
+    scope: 'all' | 'future',
+  ): Promise<{ updated: number; total: number }> {
+    const group = await this.recurrenceGroupRepository.findOne({
+      where: { id: groupDbId },
+    });
+    if (!group) throw new Error('반복 그룹을 찾을 수 없습니다.');
+
+    const schedule = await this.findById(group.scheduleId);
+    if (!schedule) throw new Error('시간표를 찾을 수 없습니다.');
+
+    await this.cache.set(
+      `suppress:group:${group.groupId}`,
+      true,
+      3 * 60 * 1000,
+    );
+
+    let events = await GoogleCalendarUtil.listEventsByGroupId(
+      schedule.calendarId,
+      group.groupId,
+    );
+
+    if (scope === 'future') {
+      const today = new Date().toISOString().slice(0, 10);
+      events = events.filter(
+        (e) => (e.start?.dateTime ?? e.start?.date ?? '') >= today,
+      );
+    }
+
+    const results = await Promise.allSettled(
+      events.map((e) => {
+        let startDateTime: string | undefined;
+        let endDateTime: string | undefined;
+
+        if (dto.startTime && e.start?.dateTime) {
+          const datePart = e.start.dateTime.slice(0, 10);
+          startDateTime = `${datePart}T${dto.startTime}:00+09:00`;
+        }
+        if (dto.endTime && e.end?.dateTime) {
+          const datePart = e.end.dateTime.slice(0, 10);
+          endDateTime = `${datePart}T${dto.endTime}:00+09:00`;
+        }
+
+        return GoogleCalendarUtil.updateEventAsServiceAccount(
+          schedule.calendarId,
+          e.id!,
+          {
+            summary: dto.title,
+            description: dto.description,
+            location: dto.location,
+            startDateTime,
+            endDateTime,
+          },
+        );
+      }),
+    );
+    const updatedCount = results.filter((r) => r.status === 'fulfilled').length;
+
+    if (dto.title) {
+      await this.recurrenceGroupRepository.update(
+        { id: groupDbId },
+        { title: dto.title },
+      );
+    }
+
+    const slackChannelIds = await this.channelService.getSlackChannelIds(
+      group.scheduleId,
+    );
+    await Promise.allSettled(
+      slackChannelIds.map((channel) =>
+        this.slack.chat.postMessage({
+          channel,
+          text: `✏️ ${schedule.name} 반복 일정 수정 안내`,
+          blocks: buildRecurringUpdateBlocks(
+            schedule.name,
+            dto.title ?? group.title,
+            scope,
+            updatedCount,
+            events.length,
+          ),
+        }),
+      ),
+    );
+
+    this.logger.log(
+      `Recurring group updated: groupId=${group.groupId}, scope=${scope}, updated=${updatedCount}/${events.length}`,
+    );
+
+    return { updated: updatedCount, total: events.length };
   }
 }
 
@@ -616,6 +819,90 @@ function toKstIso(date: Date): string {
   const h = pad(date.getHours());
   const mi = pad(date.getMinutes());
   return `${y}-${mo}-${d}T${h}:${mi}:00+09:00`;
+}
+
+function buildRecurringDeleteBlocks(
+  scheduleName: string,
+  title: string,
+  scope: 'all' | 'future',
+  deletedCount: number,
+  totalCount: number,
+): KnownBlock[] {
+  const scopeText = scope === 'all' ? '전체' : '오늘 이후';
+  const statusText =
+    deletedCount < totalCount
+      ? `⚠️ ${deletedCount}/${totalCount}개 삭제 완료`
+      : `총 ${deletedCount}개 삭제`;
+
+  return [
+    {
+      type: 'header',
+      text: {
+        type: 'plain_text',
+        text: `🗑️ [${scheduleName}] 반복 일정 삭제 안내`,
+        emoji: true,
+      },
+    },
+    { type: 'divider' },
+    {
+      type: 'section',
+      text: { type: 'mrkdwn', text: `📌 *일정 제목*\n*${title}*` },
+    },
+    {
+      type: 'section',
+      fields: [
+        { type: 'mrkdwn', text: `🔍 *삭제 범위*\n${scopeText}` },
+        { type: 'mrkdwn', text: `📊 *처리 결과*\n${statusText}` },
+      ],
+    },
+    { type: 'divider' },
+    {
+      type: 'context',
+      elements: [{ type: 'mrkdwn', text: `*Bannote Bot*` }],
+    },
+  ] as unknown as KnownBlock[];
+}
+
+function buildRecurringUpdateBlocks(
+  scheduleName: string,
+  title: string,
+  scope: 'all' | 'future',
+  updatedCount: number,
+  totalCount: number,
+): KnownBlock[] {
+  const scopeText = scope === 'all' ? '전체' : '오늘 이후';
+  const statusText =
+    updatedCount < totalCount
+      ? `⚠️ ${updatedCount}/${totalCount}개 수정 완료`
+      : `총 ${updatedCount}개 수정`;
+
+  return [
+    {
+      type: 'header',
+      text: {
+        type: 'plain_text',
+        text: `✏️ [${scheduleName}] 반복 일정 수정 안내`,
+        emoji: true,
+      },
+    },
+    { type: 'divider' },
+    {
+      type: 'section',
+      text: { type: 'mrkdwn', text: `📌 *일정 제목*\n*${title}*` },
+    },
+    {
+      type: 'section',
+      fields: [
+        { type: 'mrkdwn', text: `🔍 *수정 범위*\n${scopeText}` },
+        { type: 'mrkdwn', text: `📊 *처리 결과*\n${statusText}` },
+      ],
+    },
+    { type: 'divider' },
+    {
+      type: 'context',
+      elements: [{ type: 'mrkdwn', text: `*Bannote Bot*` }],
+    },
+  ] as unknown as KnownBlock[];
 }
 
 // Slack 알림 블록 빌더

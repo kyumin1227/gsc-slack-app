@@ -896,4 +896,158 @@ export class ScheduleView {
       ],
     };
   }
+
+  static deleteRecurringModal(
+    groups: { id: number; title: string; scheduleName: string }[],
+  ): View {
+    return {
+      type: 'modal',
+      callback_id: 'recurring:modal:delete',
+      title: { type: 'plain_text', text: '반복 일정 삭제' },
+      submit: { type: 'plain_text', text: '삭제' },
+      close: { type: 'plain_text', text: '취소' },
+      blocks: [
+        {
+          type: 'input',
+          block_id: 'group_block',
+          label: { type: 'plain_text', text: '삭제할 반복 일정' },
+          element: {
+            type: 'static_select',
+            action_id: 'group_input',
+            placeholder: { type: 'plain_text', text: '반복 일정 선택' },
+            options: groups.map((g) => ({
+              text: {
+                type: 'plain_text' as const,
+                text: `[${g.scheduleName}] ${g.title}`,
+              },
+              value: String(g.id),
+            })),
+          },
+        },
+        {
+          type: 'input',
+          block_id: 'scope_block',
+          label: { type: 'plain_text', text: '삭제 범위' },
+          element: {
+            type: 'static_select',
+            action_id: 'scope_input',
+            options: [
+              { text: { type: 'plain_text', text: '전체' }, value: 'all' },
+              {
+                text: { type: 'plain_text', text: '오늘 이후만' },
+                value: 'future',
+              },
+            ],
+          },
+        },
+      ],
+    };
+  }
+
+  static editRecurringModal(
+    groups: { id: number; title: string; scheduleName: string }[],
+  ): View {
+    return {
+      type: 'modal',
+      callback_id: 'recurring:modal:edit',
+      title: { type: 'plain_text', text: '반복 일정 수정' },
+      submit: { type: 'plain_text', text: '수정' },
+      close: { type: 'plain_text', text: '취소' },
+      blocks: [
+        {
+          type: 'input',
+          block_id: 'group_block',
+          label: { type: 'plain_text', text: '수정할 반복 일정' },
+          element: {
+            type: 'static_select',
+            action_id: 'group_input',
+            placeholder: { type: 'plain_text', text: '반복 일정 선택' },
+            options: groups.map((g) => ({
+              text: {
+                type: 'plain_text' as const,
+                text: `[${g.scheduleName}] ${g.title}`,
+              },
+              value: String(g.id),
+            })),
+          },
+        },
+        {
+          type: 'input',
+          block_id: 'title_block',
+          label: { type: 'plain_text', text: '새 제목' },
+          optional: true,
+          element: {
+            type: 'plain_text_input',
+            action_id: 'title_input',
+            placeholder: { type: 'plain_text', text: '비우면 기존 제목 유지' },
+          },
+        },
+        {
+          type: 'input',
+          block_id: 'description_block',
+          label: { type: 'plain_text', text: '새 설명' },
+          optional: true,
+          element: {
+            type: 'plain_text_input',
+            action_id: 'description_input',
+            multiline: true,
+            placeholder: { type: 'plain_text', text: '비우면 기존 설명 유지' },
+          },
+        },
+        {
+          type: 'input',
+          block_id: 'location_block',
+          label: { type: 'plain_text', text: '새 장소' },
+          optional: true,
+          element: {
+            type: 'plain_text_input',
+            action_id: 'location_input',
+            placeholder: { type: 'plain_text', text: '비우면 기존 장소 유지' },
+          },
+        },
+        {
+          type: 'input',
+          block_id: 'start_time_block',
+          label: { type: 'plain_text', text: '새 시작 시각' },
+          optional: true,
+          hint: {
+            type: 'plain_text',
+            text: '시간 변경 시에만 입력 (시작/종료 함께 입력)',
+          },
+          element: {
+            type: 'timepicker',
+            action_id: 'start_time_input',
+            placeholder: { type: 'plain_text', text: '시작 시각' },
+          },
+        },
+        {
+          type: 'input',
+          block_id: 'end_time_block',
+          label: { type: 'plain_text', text: '새 종료 시각' },
+          optional: true,
+          element: {
+            type: 'timepicker',
+            action_id: 'end_time_input',
+            placeholder: { type: 'plain_text', text: '종료 시각' },
+          },
+        },
+        {
+          type: 'input',
+          block_id: 'scope_block',
+          label: { type: 'plain_text', text: '수정 범위' },
+          element: {
+            type: 'static_select',
+            action_id: 'scope_input',
+            options: [
+              { text: { type: 'plain_text', text: '전체' }, value: 'all' },
+              {
+                text: { type: 'plain_text', text: '오늘 이후만' },
+                value: 'future',
+              },
+            ],
+          },
+        },
+      ],
+    };
+  }
 }

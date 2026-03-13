@@ -444,6 +444,44 @@ export class GoogleCalendarUtil {
     return events;
   }
 
+  // 서비스 계정으로 이벤트 삭제
+  static async deleteEventAsServiceAccount(
+    calendarId: string,
+    eventId: string,
+  ): Promise<void> {
+    const calendar = this.getCalendarClient();
+    await calendar.events.delete({ calendarId, eventId, sendUpdates: 'none' });
+  }
+
+  // 서비스 계정으로 이벤트 수정 (patch: undefined 필드는 변경 안 함)
+  static async updateEventAsServiceAccount(
+    calendarId: string,
+    eventId: string,
+    params: {
+      summary?: string;
+      description?: string;
+      location?: string;
+      startDateTime?: string; // ISO8601
+      endDateTime?: string;
+    },
+  ): Promise<void> {
+    const calendar = this.getCalendarClient();
+    const body: calendar_v3.Schema$Event = {};
+    if (params.summary !== undefined) body.summary = params.summary;
+    if (params.description !== undefined) body.description = params.description;
+    if (params.location !== undefined) body.location = params.location;
+    if (params.startDateTime)
+      body.start = { dateTime: params.startDateTime, timeZone: 'Asia/Seoul' };
+    if (params.endDateTime)
+      body.end = { dateTime: params.endDateTime, timeZone: 'Asia/Seoul' };
+    await calendar.events.patch({
+      calendarId,
+      eventId,
+      sendUpdates: 'none',
+      requestBody: body,
+    });
+  }
+
   // ========== 스터디룸 예약 ==========
 
   // 이벤트 생성 (참석자 포함, 메일 발송 없음)
