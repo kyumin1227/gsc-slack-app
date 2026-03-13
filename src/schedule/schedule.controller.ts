@@ -386,6 +386,7 @@ export class ScheduleController {
         id: s.id,
         name: s.name,
         description: s.description,
+        calendarId: s.calendarId,
         tags: s.tags.map((t) => ({
           id: t.id,
           name: displayActiveTagMap.get(t.id) ?? t.name,

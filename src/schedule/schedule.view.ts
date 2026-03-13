@@ -29,6 +29,7 @@ export interface SubscribeScheduleItem {
   id: number;
   name: string;
   description?: string;
+  calendarId: string;
   tags: { id: number; name: string }[];
   createdBy: { name: string };
   isSubscribed: boolean;
@@ -153,7 +154,7 @@ export class ScheduleView {
           type: 'section',
           text: {
             type: 'mrkdwn',
-            text: `${statusEmoji} *${schedule.name}*${description}\n태그: ${tagNames}\n상태: ${STATUS_LABELS[schedule.status]} | 생성자: ${schedule.createdBy.name} | 생성일: ${schedule.createdAt.toLocaleString('ko-KR', { timeZone: 'Asia/Seoul' })}`,
+            text: `${statusEmoji} *${schedule.name}*${description}\n태그: ${tagNames}\n상태: ${STATUS_LABELS[schedule.status]} | 생성자: ${schedule.createdBy.name} | 생성일: ${schedule.createdAt.toLocaleDateString('ko-KR', { timeZone: 'Asia/Seoul' })}`,
           },
         },
         {
@@ -577,17 +578,7 @@ export class ScheduleView {
         value: t.id.toString(),
       }));
 
-    const blocks: View['blocks'] = [
-      {
-        type: 'header',
-        text: {
-          type: 'plain_text',
-          text: '🔍 시간표 통합 검색',
-          emoji: true,
-        },
-      },
-      { type: 'divider' },
-    ];
+    const blocks: View['blocks'] = [];
 
     if (activeTagOptions.length === 0) {
       blocks.push({
@@ -662,33 +653,46 @@ export class ScheduleView {
           const buttonValue = schedule.isSubscribed
             ? 'unsubscribe'
             : 'subscribe';
-          const tagLabels = schedule.tags.map((t) => t.name).join(', ');
+          const tagNames =
+            schedule.tags.length > 0
+              ? schedule.tags.map((t) => `\`${t.name}\``).join(' ')
+              : '없음';
 
           const descriptionText = schedule.description
             ? `\n${schedule.description}`
             : '';
 
-          blocks.push({
-            type: 'section',
-            text: {
-              type: 'mrkdwn',
-              text: `📅 *[${tagLabels}] ${schedule.name}*${descriptionText}\n생성자: ${schedule.createdBy.name}`,
-            },
-            accessory: {
-              type: 'button',
+          const calendarUrl = `https://calendar.google.com/calendar/embed?src=${encodeURIComponent(schedule.calendarId)}&ctz=Asia%2FSeoul&mode=WEEK`;
+          blocks.push(
+            {
+              type: 'section',
               text: {
-                type: 'plain_text',
-                text: buttonText,
-                emoji: true,
+                type: 'mrkdwn',
+                text: `*${schedule.name}*${descriptionText}\n태그: ${tagNames}\n생성자: ${schedule.createdBy.name}`,
               },
-              style: buttonStyle,
-              action_id: `schedule:subscribe:toggle:${schedule.id}`,
-              value: JSON.stringify({
-                action: buttonValue,
-                tagIds: selectedTagIds ?? [],
-              }),
             },
-          });
+            {
+              type: 'actions',
+              elements: [
+                {
+                  type: 'button',
+                  text: { type: 'plain_text', text: buttonText, emoji: true },
+                  style: buttonStyle,
+                  action_id: `schedule:subscribe:toggle:${schedule.id}`,
+                  value: JSON.stringify({
+                    action: buttonValue,
+                    tagIds: selectedTagIds ?? [],
+                  }),
+                },
+                {
+                  type: 'button',
+                  text: { type: 'plain_text', text: '일정 보기 ❐' },
+                  url: calendarUrl,
+                  action_id: `schedule:subscribe:view-calendar:${schedule.id}`,
+                },
+              ],
+            },
+          );
         }
 
         // 페이지 네비게이션
@@ -754,9 +758,7 @@ export class ScheduleView {
     };
   }
 
-  static createRecurringModal(
-    schedules: { id: number; name: string }[],
-  ): View {
+  static createRecurringModal(schedules: { id: number; name: string }[]): View {
     return {
       type: 'modal',
       callback_id: 'schedule:modal:create_recurring',
