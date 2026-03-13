@@ -32,6 +32,13 @@ export class UserService {
     return this.userRepository.findOne({ where: { slackId } });
   }
 
+  async findBySlackIdWithClass(slackId: string): Promise<User | null> {
+    return this.userRepository.findOne({
+      where: { slackId },
+      relations: { studentClass: true },
+    });
+  }
+
   async findByEmail(email: string): Promise<User | null> {
     return this.userRepository.findOne({ where: { email } });
   }

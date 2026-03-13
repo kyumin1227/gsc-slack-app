@@ -99,15 +99,25 @@ export class StudyRoomService {
       throw new Error('해당 시간대에 이미 예약이 있습니다.');
     }
 
-    // 3. 참석자 이메일 조회 (예약자 포함)
+    // 3. 참석자 정보 조회 (예약자 포함)
     const allSlackIds = [dto.bookerSlackId, ...dto.attendeeSlackIds];
-    const attendeeEmails = (
+    const attendees = (
       await Promise.all(
-        allSlackIds.map((id) => this.userService.findBySlackId(id)),
+        allSlackIds.map((id) => this.userService.findBySlackIdWithClass(id)),
       )
-    )
-      .filter((u): u is NonNullable<typeof u> => u !== null)
-      .map((u) => u.email);
+    ).filter((u): u is NonNullable<typeof u> => u !== null);
+
+    const attendeeEmails = attendees.map((u) => u.email);
+    const currentYear = new Date().getFullYear();
+    const description = attendees
+      .map((u) => {
+        const admissionYear = u.studentClass?.name?.split('-')[0];
+        const gradePart = admissionYear
+          ? ` (${currentYear - parseInt(admissionYear) + 1}학년)`
+          : '';
+        return `${u.name}${gradePart} | ${u.code ?? '-'} | ${u.email}`;
+      })
+      .join('\n');
 
     // 4. 구글 캘린더 이벤트 생성
     const eventId = await GoogleCalendarUtil.createEvent(
@@ -119,6 +129,7 @@ export class StudyRoomService {
         endTime: dto.endTime,
         attendeeEmails,
         location: room.name,
+        description,
       },
     );
 
@@ -221,13 +232,25 @@ export class StudyRoomService {
   ): Promise<void> {
     const refreshToken = await this.getEditorRefreshToken(calendarId);
 
-    const attendeeEmails = (
+    const attendees = (
       await Promise.all(
-        dto.attendeeSlackIds.map((id) => this.userService.findBySlackId(id)),
+        dto.attendeeSlackIds.map((id) =>
+          this.userService.findBySlackIdWithClass(id),
+        ),
       )
-    )
-      .filter((u): u is NonNullable<typeof u> => u !== null)
-      .map((u) => u.email);
+    ).filter((u): u is NonNullable<typeof u> => u !== null);
+
+    const attendeeEmails = attendees.map((u) => u.email);
+    const currentYear = new Date().getFullYear();
+    const description = attendees
+      .map((u) => {
+        const admissionYear = u.studentClass?.name?.split('-')[0];
+        const gradePart = admissionYear
+          ? ` (${currentYear - parseInt(admissionYear) + 1}학년)`
+          : '';
+        return `${u.name}${gradePart} | ${u.code ?? '-'} | ${u.email}`;
+      })
+      .join('\n');
 
     await GoogleCalendarUtil.updateEvent(calendarId, refreshToken, eventId, {
       summary: dto.title,
@@ -235,6 +258,7 @@ export class StudyRoomService {
       endTime: dto.endTime,
       attendeeEmails,
       location: dto.roomName,
+      description,
     });
   }
 }
