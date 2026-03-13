@@ -203,7 +203,7 @@ export class ScheduleController {
       const creatorRefreshToken =
         this.userService.getDecryptedRefreshToken(user);
 
-      await this.scheduleService.createSchedule({
+      const created = await this.scheduleService.createSchedule({
         name: name.trim(),
         description: description?.trim(),
         tagIds,
@@ -211,6 +211,12 @@ export class ScheduleController {
         creatorEmail: user.email,
         creatorRefreshToken: creatorRefreshToken ?? undefined,
       });
+
+      // 학반 태그 기반 알림 채널 자동 등록
+      const studentClassIds = (created.tags ?? [])
+        .filter((t) => t.studentClassId)
+        .map((t) => t.studentClassId!);
+      await this.channelService.syncClassChannels(created.id, studentClassIds);
 
       await client.chat.postMessage({
         channel: body.user.id,
