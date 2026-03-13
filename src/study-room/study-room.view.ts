@@ -58,9 +58,9 @@ export class StudyRoomView {
         ...(combinedCalendarUrl && {
           accessory: {
             type: 'button',
-            text: { type: 'plain_text', text: '전체 일정 보기' },
+            text: { type: 'plain_text', text: '전체 일정 보기 ❐' },
             url: combinedCalendarUrl,
-            action_id: 'study-room:action:view-all-calendar',
+            action_id: 'study-room:action:view-calendar',
           },
         }),
       },
@@ -79,7 +79,12 @@ export class StudyRoomView {
         blocks.push(
           {
             type: 'section',
-            text: { type: 'mrkdwn', text: `*${room.name}*` },
+            text: {
+              type: 'mrkdwn',
+              text: room.description
+                ? `*${room.name}*\n${room.description}`
+                : `*${room.name}*`,
+            },
           },
           {
             type: 'actions',
@@ -87,12 +92,13 @@ export class StudyRoomView {
               {
                 type: 'button',
                 text: { type: 'plain_text', text: '예약' },
+                style: 'primary',
                 action_id: 'study-room:action:book',
                 value: String(room.id),
               },
               {
                 type: 'button',
-                text: { type: 'plain_text', text: '일정 보기' },
+                text: { type: 'plain_text', text: '일정 보기 ❐' },
                 url: calendarUrl,
                 action_id: 'study-room:action:view-calendar',
               },

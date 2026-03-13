@@ -1,7 +1,12 @@
 import { Controller, Get, Redirect } from '@nestjs/common';
 import { AppService } from './app.service';
-import { Message } from 'nestjs-slack-bolt';
-import type { SlackEventMiddlewareArgs } from '@slack/bolt';
+import { Action, Message } from 'nestjs-slack-bolt';
+import type {
+  SlackEventMiddlewareArgs,
+  SlackActionMiddlewareArgs,
+  BlockAction,
+  AllMiddlewareArgs,
+} from '@slack/bolt';
 
 @Controller()
 export class AppController {
@@ -24,5 +29,13 @@ export class AppController {
         `호스트: ${info.hostname} (${info.ip})\n` +
         `시작: ${info.startedAt}`,
     );
+  }
+
+  // URL 버튼처럼 ack만 필요한 액션 핸들러
+  @Action(/view-calendar/)
+  async handleViewCalendar({
+    ack,
+  }: SlackActionMiddlewareArgs<BlockAction> & AllMiddlewareArgs) {
+    await ack();
   }
 }
