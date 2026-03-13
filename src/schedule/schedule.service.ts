@@ -757,17 +757,9 @@ function expandRecurringDates(dto: CreateRecurringEventsDto): {
   startDateTime: string;
   endDateTime: string;
 }[] {
-  const [startH, startM] = dto.startTime.split(':').map(Number);
-  const [endH, endM] = dto.endTime.split(':').map(Number);
-
-  // rrule의 dtstart/until은 UTC로 처리되므로 Asia/Seoul 오프셋(+9h) 적용
-  const toSeoulMidnight = (dateStr: string) => {
-    const d = new Date(`${dateStr}T00:00:00+09:00`);
-    return d;
-  };
-
-  const dtstart = toSeoulMidnight(dto.startDate);
-  const until = toSeoulMidnight(dto.endDate);
+  // UTC midnight으로 생성 → rrule이 UTC 기준 날짜를 그대로 반환
+  const dtstart = new Date(`${dto.startDate}T00:00:00Z`);
+  const until = new Date(`${dto.endDate}T00:00:00Z`);
 
   const ruleOptions: ConstructorParameters<typeof RRule>[0] = {
     freq: dto.recurrenceType === 'monthly' ? RRule.MONTHLY : RRule.WEEKLY,
@@ -781,17 +773,16 @@ function expandRecurringDates(dto: CreateRecurringEventsDto): {
   }
 
   const rule = new RRule(ruleOptions);
+  const pad = (n: number) => String(n).padStart(2, '0');
 
   return rule.all().map((date) => {
-    const start = new Date(date);
-    start.setHours(startH, startM, 0, 0);
-    const end = new Date(date);
-    end.setHours(endH, endM, 0, 0);
-
-    // UTC → KST ISO 문자열 (Asia/Seoul 오프셋 포함)
+    // getUTC* 사용으로 서버 timezone 무관하게 정확한 날짜 추출
+    const y = date.getUTCFullYear();
+    const mo = pad(date.getUTCMonth() + 1);
+    const d = pad(date.getUTCDate());
     return {
-      startDateTime: toKstIso(start),
-      endDateTime: toKstIso(end),
+      startDateTime: `${y}-${mo}-${d}T${dto.startTime}:00+09:00`,
+      endDateTime: `${y}-${mo}-${d}T${dto.endTime}:00+09:00`,
     };
   });
 }
@@ -810,16 +801,6 @@ function jsWeekdayToRRule(day: number): Weekday {
   return map[day];
 }
 
-// Date를 +09:00 형식 ISO 문자열로 변환
-function toKstIso(date: Date): string {
-  const pad = (n: number) => String(n).padStart(2, '0');
-  const y = date.getFullYear();
-  const mo = pad(date.getMonth() + 1);
-  const d = pad(date.getDate());
-  const h = pad(date.getHours());
-  const mi = pad(date.getMinutes());
-  return `${y}-${mo}-${d}T${h}:${mi}:00+09:00`;
-}
 
 function buildRecurringDeleteBlocks(
   scheduleName: string,
