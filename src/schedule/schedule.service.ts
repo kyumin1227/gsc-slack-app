@@ -95,7 +95,10 @@ export class ScheduleService {
 
     const saved = await this.scheduleRepository.save(schedule);
 
-    // 4. 생성자에게 writer 권한 부여 및 자동 구독
+    // 4. 캘린더 전체 공개 설정
+    await GoogleCalendarUtil.makeCalendarPublic(calendarId);
+
+    // 5. 생성자에게 writer 권한 부여 및 자동 구독
     if (dto.creatorEmail && dto.creatorRefreshToken) {
       await GoogleCalendarUtil.shareCalendar({
         calendarId,
@@ -108,7 +111,7 @@ export class ScheduleService {
       );
     }
 
-    // 5. Google Calendar Watch 등록
+    // 6. Google Calendar Watch 등록
     await this.registerWatch(saved.id);
 
     return saved;
