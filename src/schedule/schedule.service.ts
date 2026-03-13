@@ -1,10 +1,17 @@
-import { Injectable, Logger } from '@nestjs/common';
+import { Inject, Injectable, Logger } from '@nestjs/common';
+import { CACHE_MANAGER } from '@nestjs/cache-manager';
+import type { Cache } from 'cache-manager';
 import { InjectRepository } from '@nestjs/typeorm';
 import { Repository, In } from 'typeorm';
 import { Schedule, ScheduleStatus } from './schedule.entity';
+import { RecurrenceGroup } from './recurrence-group.entity';
 import { GoogleCalendarUtil } from '../google/google-calendar.util';
 import { Tag } from '../tag/tag.entity';
+import { ChannelService } from '../channel/channel.service';
+import { WebClient } from '@slack/web-api';
+import { KnownBlock } from '@slack/web-api';
 import { randomUUID } from 'crypto';
+import { RRule, Weekday } from 'rrule';
 
 export interface CreateScheduleDto {
   name: string;
@@ -21,15 +28,35 @@ export interface UpdateScheduleDto {
   tagIds?: number[];
 }
 
+export type RecurrenceType = 'weekly' | 'biweekly' | 'monthly';
+
+export interface CreateRecurringEventsDto {
+  scheduleId: number;
+  title: string;
+  description?: string;
+  location?: string;
+  startDate: string; // YYYY-MM-DD
+  endDate: string; // YYYY-MM-DD
+  startTime: string; // HH:MM
+  endTime: string; // HH:MM
+  recurrenceType: RecurrenceType;
+  daysOfWeek?: number[]; // 0=일, 1=월 ... 6=토 (weekly/biweekly 시 사용)
+}
+
 @Injectable()
 export class ScheduleService {
   private readonly logger = new Logger(ScheduleService.name);
+  private readonly slack = new WebClient(process.env.SLACK_BOT_TOKEN);
 
   constructor(
     @InjectRepository(Schedule)
     private scheduleRepository: Repository<Schedule>,
     @InjectRepository(Tag)
     private tagRepository: Repository<Tag>,
+    @InjectRepository(RecurrenceGroup)
+    private recurrenceGroupRepository: Repository<RecurrenceGroup>,
+    @Inject(CACHE_MANAGER) private cache: Cache,
+    private readonly channelService: ChannelService,
   ) {}
 
   // 스케줄 생성 (Google Calendar도 함께 생성)
@@ -437,4 +464,239 @@ export class ScheduleService {
     if (!permissions) return false;
     return permissions.some((p) => p.email === email);
   }
+
+  // ========== 반복 일정 ==========
+
+  async createRecurringEvents(dto: CreateRecurringEventsDto): Promise<void> {
+    const schedule = await this.findById(dto.scheduleId);
+    if (!schedule) throw new Error('Schedule not found');
+
+    // 1. 날짜 배열 계산
+    const dates = expandRecurringDates(dto);
+    if (dates.length === 0) throw new Error('생성할 일정이 없습니다.');
+
+    // 2. groupId 생성 + Redis suppress 등록 (이벤트 생성 전)
+    const groupId = randomUUID();
+    await this.cache.set(`suppress:group:${groupId}`, true, 3 * 60 * 1000);
+
+    // 3. 이벤트 N개 병렬 생성
+    const results = await Promise.allSettled(
+      dates.map(({ startDateTime, endDateTime }) =>
+        GoogleCalendarUtil.createEventAsServiceAccount(schedule.calendarId, {
+          summary: dto.title,
+          startDateTime,
+          endDateTime,
+          description: dto.description,
+          location: dto.location,
+          groupId,
+        }),
+      ),
+    );
+
+    const successCount = results.filter((r) => r.status === 'fulfilled').length;
+    const failCount = results.length - successCount;
+
+    if (failCount > 0) {
+      this.logger.warn(
+        `createRecurringEvents: ${failCount}/${results.length} events failed (groupId: ${groupId})`,
+      );
+    }
+
+    // 4. RecurrenceGroup DB 저장
+    await this.recurrenceGroupRepository.save({
+      groupId,
+      title: dto.title,
+      scheduleId: dto.scheduleId,
+    });
+
+    // 5. Slack 채널에 요약 알림 직접 발송
+    const slackChannelIds = await this.channelService.getSlackChannelIds(
+      dto.scheduleId,
+    );
+    if (slackChannelIds.length > 0) {
+      const blocks = buildRecurringCreationBlocks(
+        schedule.name,
+        dto,
+        dates.length,
+        successCount,
+      );
+      await Promise.allSettled(
+        slackChannelIds.map((channel) =>
+          this.slack.chat.postMessage({
+            channel,
+            text: `✨ ${schedule.name} 반복 일정 추가 안내`,
+            blocks,
+          }),
+        ),
+      );
+    }
+
+    this.logger.log(
+      `Recurring events created: groupId=${groupId}, total=${successCount}/${dates.length}`,
+    );
+  }
+
+  // groupId로 그룹 조회
+  async findRecurrenceGroupsBySchedule(
+    scheduleId: number,
+  ): Promise<RecurrenceGroup[]> {
+    return this.recurrenceGroupRepository.find({
+      where: { scheduleId },
+      order: { createdAt: 'DESC' },
+    });
+  }
+}
+
+// ========== 날짜 확장 헬퍼 ==========
+// TODO 타입 의존성 제거 후 DateUtil로 이동 예정
+
+function expandRecurringDates(dto: CreateRecurringEventsDto): {
+  startDateTime: string;
+  endDateTime: string;
+}[] {
+  const [startH, startM] = dto.startTime.split(':').map(Number);
+  const [endH, endM] = dto.endTime.split(':').map(Number);
+
+  // rrule의 dtstart/until은 UTC로 처리되므로 Asia/Seoul 오프셋(+9h) 적용
+  const toSeoulMidnight = (dateStr: string) => {
+    const d = new Date(`${dateStr}T00:00:00+09:00`);
+    return d;
+  };
+
+  const dtstart = toSeoulMidnight(dto.startDate);
+  const until = toSeoulMidnight(dto.endDate);
+
+  const ruleOptions: ConstructorParameters<typeof RRule>[0] = {
+    freq: dto.recurrenceType === 'monthly' ? RRule.MONTHLY : RRule.WEEKLY,
+    interval: dto.recurrenceType === 'biweekly' ? 2 : 1,
+    dtstart,
+    until,
+  };
+
+  if (dto.recurrenceType !== 'monthly' && dto.daysOfWeek?.length) {
+    ruleOptions.byweekday = dto.daysOfWeek.map(jsWeekdayToRRule);
+  }
+
+  const rule = new RRule(ruleOptions);
+
+  return rule.all().map((date) => {
+    const start = new Date(date);
+    start.setHours(startH, startM, 0, 0);
+    const end = new Date(date);
+    end.setHours(endH, endM, 0, 0);
+
+    // UTC → KST ISO 문자열 (Asia/Seoul 오프셋 포함)
+    return {
+      startDateTime: toKstIso(start),
+      endDateTime: toKstIso(end),
+    };
+  });
+}
+
+// JS getDay() 기준 (0=일) → rrule Weekday
+function jsWeekdayToRRule(day: number): Weekday {
+  const map = [
+    RRule.SU,
+    RRule.MO,
+    RRule.TU,
+    RRule.WE,
+    RRule.TH,
+    RRule.FR,
+    RRule.SA,
+  ];
+  return map[day];
+}
+
+// Date를 +09:00 형식 ISO 문자열로 변환
+function toKstIso(date: Date): string {
+  const pad = (n: number) => String(n).padStart(2, '0');
+  const y = date.getFullYear();
+  const mo = pad(date.getMonth() + 1);
+  const d = pad(date.getDate());
+  const h = pad(date.getHours());
+  const mi = pad(date.getMinutes());
+  return `${y}-${mo}-${d}T${h}:${mi}:00+09:00`;
+}
+
+// Slack 알림 블록 빌더
+function buildRecurringCreationBlocks(
+  scheduleName: string,
+  dto: CreateRecurringEventsDto,
+  totalCount: number,
+  successCount: number,
+): KnownBlock[] {
+  const recurrenceLabel: Record<RecurrenceType, string> = {
+    weekly: '매주',
+    biweekly: '격주',
+    monthly: '매월',
+  };
+  const dayLabels = ['일', '월', '화', '수', '목', '금', '토'];
+  const daysText = dto.daysOfWeek?.length
+    ? dto.daysOfWeek.map((d) => dayLabels[d]).join(', ')
+    : '';
+
+  const recurrenceText =
+    dto.recurrenceType !== 'monthly' && daysText
+      ? `${recurrenceLabel[dto.recurrenceType]} ${daysText}요일`
+      : recurrenceLabel[dto.recurrenceType];
+
+  const statusText =
+    successCount < totalCount
+      ? `⚠️ ${successCount}/${totalCount}개 생성 완료`
+      : `총 ${successCount}개`;
+
+  return [
+    {
+      type: 'header',
+      text: {
+        type: 'plain_text',
+        text: `✨ [${scheduleName}] 반복 일정 추가 안내`,
+        emoji: true,
+      },
+    },
+    { type: 'divider' },
+    {
+      type: 'section',
+      text: {
+        type: 'mrkdwn',
+        text: `📌 *일정 제목*\n*${dto.title}*`,
+      },
+    },
+    {
+      type: 'section',
+      fields: [
+        {
+          type: 'mrkdwn',
+          text: `🗓️ *기간*\n${dto.startDate} ~ ${dto.endDate}`,
+        },
+        {
+          type: 'mrkdwn',
+          text: `🕐 *시간*\n${dto.startTime} ~ ${dto.endTime}`,
+        },
+      ],
+    },
+    {
+      type: 'section',
+      fields: [
+        {
+          type: 'mrkdwn',
+          text: `🔁 *반복*\n${recurrenceText}`,
+        },
+        {
+          type: 'mrkdwn',
+          text: `📊 *생성 결과*\n${statusText}`,
+        },
+      ],
+    },
+    { type: 'divider' },
+    {
+      type: 'context',
+      elements: [
+        {
+          type: 'mrkdwn',
+          text: `*Bannote Bot*`,
+        },
+      ],
+    },
+  ] as unknown as KnownBlock[];
 }

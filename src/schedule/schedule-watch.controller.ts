@@ -1,4 +1,6 @@
-import { Controller, Headers, HttpCode, Logger, Post } from '@nestjs/common';
+import { Controller, Headers, HttpCode, Inject, Logger, Post } from '@nestjs/common';
+import { CACHE_MANAGER } from '@nestjs/cache-manager';
+import type { Cache } from 'cache-manager';
 import { ChannelService } from '../channel/channel.service';
 import { GoogleCalendarUtil } from '../google/google-calendar.util';
 import { ScheduleService } from './schedule.service';
@@ -16,6 +18,7 @@ export class ScheduleWatchController {
     private readonly scheduleService: ScheduleService,
     private readonly channelService: ChannelService,
     private readonly notificationService: ScheduleNotificationService,
+    @Inject(CACHE_MANAGER) private readonly cache: Cache,
   ) {}
 
   @Post('webhook')
@@ -64,6 +67,13 @@ export class ScheduleWatchController {
 
     for (const event of events) {
       if (!event.id) continue;
+
+      // 슬랙 앱에서 생성한 이벤트 suppress 체크 (중복 알림 방지)
+      const groupId = event.extendedProperties?.private?.['groupId'];
+      if (groupId) {
+        const suppressed = await this.cache.get(`suppress:group:${groupId}`);
+        if (suppressed) continue;
+      }
 
       const key = `${schedule.id}:${event.id}`;
       const currentType = detectChangeType(event);

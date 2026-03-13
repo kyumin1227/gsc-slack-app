@@ -380,6 +380,70 @@ export class GoogleCalendarUtil {
     }
   }
 
+  // ========== 반복 일정 (서비스 계정 기반) ==========
+
+  // 서비스 계정으로 이벤트 생성 (groupId extendedProperties 포함)
+  static async createEventAsServiceAccount(
+    calendarId: string,
+    params: {
+      summary: string;
+      startDateTime: string; // ISO8601
+      endDateTime: string;
+      description?: string;
+      location?: string;
+      groupId: string;
+    },
+  ): Promise<string> {
+    const calendar = this.getCalendarClient();
+
+    const response = await calendar.events.insert({
+      calendarId,
+      sendUpdates: 'none',
+      requestBody: {
+        summary: params.summary,
+        description: params.description,
+        location: params.location,
+        start: { dateTime: params.startDateTime, timeZone: 'Asia/Seoul' },
+        end: { dateTime: params.endDateTime, timeZone: 'Asia/Seoul' },
+        extendedProperties: {
+          private: { groupId: params.groupId },
+        },
+      },
+    });
+
+    if (!response.data.id) {
+      throw new Error('Failed to create calendar event');
+    }
+
+    return response.data.id;
+  }
+
+  // groupId로 이벤트 목록 조회 (전체 삭제/수정용)
+  static async listEventsByGroupId(
+    calendarId: string,
+    groupId: string,
+  ): Promise<calendar_v3.Schema$Event[]> {
+    const calendar = this.getCalendarClient();
+    const events: calendar_v3.Schema$Event[] = [];
+    let pageToken: string | undefined;
+
+    do {
+      const response = await calendar.events.list({
+        calendarId,
+        privateExtendedProperty: [`groupId=${groupId}`],
+        showDeleted: false,
+        singleEvents: true,
+        maxResults: 2500,
+        ...(pageToken ? { pageToken } : {}),
+      });
+
+      events.push(...(response.data.items ?? []));
+      pageToken = response.data.nextPageToken ?? undefined;
+    } while (pageToken);
+
+    return events;
+  }
+
   // ========== 스터디룸 예약 ==========
 
   // 이벤트 생성 (참석자 포함, 메일 발송 없음)

@@ -1,6 +1,7 @@
 import { Module, forwardRef } from '@nestjs/common';
 import { TypeOrmModule } from '@nestjs/typeorm';
 import { Schedule } from './schedule.entity';
+import { RecurrenceGroup } from './recurrence-group.entity';
 import { ScheduleService } from './schedule.service';
 import { ScheduleController } from './schedule.controller';
 import { ScheduleCronService } from './schedule-cron.service';
@@ -13,7 +14,7 @@ import { ChannelModule } from '../channel/channel.module';
 
 @Module({
   imports: [
-    TypeOrmModule.forFeature([Schedule, Tag]),
+    TypeOrmModule.forFeature([Schedule, Tag, RecurrenceGroup]),
     forwardRef(() => UserModule),
     forwardRef(() => TagModule),
     ChannelModule,

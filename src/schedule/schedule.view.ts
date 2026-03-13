@@ -753,4 +753,147 @@ export class ScheduleView {
       blocks,
     };
   }
+
+  static createRecurringModal(
+    schedules: { id: number; name: string }[],
+  ): View {
+    return {
+      type: 'modal',
+      callback_id: 'schedule:modal:create_recurring',
+      title: { type: 'plain_text', text: '반복 일정 생성' },
+      submit: { type: 'plain_text', text: '생성' },
+      close: { type: 'plain_text', text: '취소' },
+      blocks: [
+        {
+          type: 'input',
+          block_id: 'schedule_block',
+          label: { type: 'plain_text', text: '시간표' },
+          element: {
+            type: 'static_select',
+            action_id: 'schedule_input',
+            placeholder: { type: 'plain_text', text: '시간표 선택' },
+            options: schedules.map((s) => ({
+              text: { type: 'plain_text', text: s.name },
+              value: String(s.id),
+            })),
+          },
+        },
+        {
+          type: 'input',
+          block_id: 'title_block',
+          label: { type: 'plain_text', text: '이벤트 제목' },
+          element: {
+            type: 'plain_text_input',
+            action_id: 'title_input',
+            placeholder: { type: 'plain_text', text: '예: 운영체제 강의' },
+          },
+        },
+        {
+          type: 'input',
+          block_id: 'description_block',
+          label: { type: 'plain_text', text: '설명' },
+          optional: true,
+          element: {
+            type: 'plain_text_input',
+            action_id: 'description_input',
+            multiline: true,
+          },
+        },
+        {
+          type: 'input',
+          block_id: 'location_block',
+          label: { type: 'plain_text', text: '장소' },
+          optional: true,
+          element: {
+            type: 'plain_text_input',
+            action_id: 'location_input',
+            placeholder: { type: 'plain_text', text: '예: 공학관 301호' },
+          },
+        },
+        {
+          type: 'input',
+          block_id: 'start_date_block',
+          label: { type: 'plain_text', text: '시작일' },
+          element: {
+            type: 'datepicker',
+            action_id: 'start_date_input',
+            placeholder: { type: 'plain_text', text: '시작일 선택' },
+          },
+        },
+        {
+          type: 'input',
+          block_id: 'end_date_block',
+          label: { type: 'plain_text', text: '종료일' },
+          element: {
+            type: 'datepicker',
+            action_id: 'end_date_input',
+            placeholder: { type: 'plain_text', text: '종료일 선택' },
+          },
+        },
+        {
+          type: 'input',
+          block_id: 'start_time_block',
+          label: { type: 'plain_text', text: '시작 시각' },
+          element: {
+            type: 'timepicker',
+            action_id: 'start_time_input',
+            placeholder: { type: 'plain_text', text: '시작 시각 선택' },
+          },
+        },
+        {
+          type: 'input',
+          block_id: 'end_time_block',
+          label: { type: 'plain_text', text: '종료 시각' },
+          element: {
+            type: 'timepicker',
+            action_id: 'end_time_input',
+            placeholder: { type: 'plain_text', text: '종료 시각 선택' },
+          },
+        },
+        {
+          type: 'input',
+          block_id: 'recurrence_block',
+          label: { type: 'plain_text', text: '반복 주기' },
+          element: {
+            type: 'static_select',
+            action_id: 'recurrence_input',
+            options: [
+              { text: { type: 'plain_text', text: '매주' }, value: 'weekly' },
+              {
+                text: { type: 'plain_text', text: '격주' },
+                value: 'biweekly',
+              },
+              {
+                text: { type: 'plain_text', text: '매월' },
+                value: 'monthly',
+              },
+            ],
+          },
+        },
+        {
+          type: 'input',
+          block_id: 'days_of_week_block',
+          label: {
+            type: 'plain_text',
+            text: '반복 요일 (매주/격주 선택 시)',
+          },
+          optional: true,
+          element: {
+            type: 'multi_static_select',
+            action_id: 'days_of_week_input',
+            placeholder: { type: 'plain_text', text: '요일 선택' },
+            options: [
+              { text: { type: 'plain_text', text: '월' }, value: '1' },
+              { text: { type: 'plain_text', text: '화' }, value: '2' },
+              { text: { type: 'plain_text', text: '수' }, value: '3' },
+              { text: { type: 'plain_text', text: '목' }, value: '4' },
+              { text: { type: 'plain_text', text: '금' }, value: '5' },
+              { text: { type: 'plain_text', text: '토' }, value: '6' },
+              { text: { type: 'plain_text', text: '일' }, value: '0' },
+            ],
+          },
+        },
+      ],
+    };
+  }
 }
