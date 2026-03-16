@@ -604,7 +604,7 @@ export class ScheduleView {
           action_id: 'tags_select',
           placeholder: {
             type: 'plain_text',
-            text: '원하는 태그를 모두 선택하세요 (미선택 시 전체 조회)',
+            text: '원하는 태그를 모두 선택하세요 (AND 조건)',
             emoji: true,
           },
           options: activeTagOptions,
