@@ -369,39 +369,39 @@ export class ScheduleController {
   private async buildSubscribeModal(
     page: number,
     tagIds: number[],
-    userEmail: string,
+    userRefreshToken: string,
   ) {
     const tagFilter = tagIds.length > 0 ? tagIds : undefined;
 
-    const [{ schedules, total }, displayActiveTags] = await Promise.all([
-      this.scheduleService.findSchedulesPaginated({
-        page,
-        pageSize: this.SCHEDULE_PAGE_SIZE,
-        status: 'active',
-        tagIds: tagFilter,
-      }),
-      this.tagService.findDisplayTags(true),
-    ]);
+    const [{ schedules, total }, displayActiveTags, subscribedIds] =
+      await Promise.all([
+        this.scheduleService.findSchedulesPaginated({
+          page,
+          pageSize: this.SCHEDULE_PAGE_SIZE,
+          status: 'active',
+          tagIds: tagFilter,
+        }),
+        this.tagService.findDisplayTags(true),
+        this.scheduleService.getSubscribedCalendarIds(userRefreshToken),
+      ]);
 
     const totalPages = Math.max(1, Math.ceil(total / this.SCHEDULE_PAGE_SIZE));
     const safePage = Math.min(page, totalPages - 1);
     const displayActiveTagMap = new Map(displayActiveTags.map((t) => [t.id, t.name]));
 
-    const schedulesWithSubscription = await Promise.all(
-      schedules.map(async (s) => ({
-        id: s.id,
-        name: s.name,
-        description: s.description,
-        calendarId: s.calendarId,
-        tags: s.tags.map((t) => ({
-          id: t.id,
-          name: displayActiveTagMap.get(t.id) ?? t.name,
-        })),
-        createdBy: { name: s.createdBy?.name ?? '알 수 없음' },
-        createdAt: s.createdAt,
-        isSubscribed: await this.scheduleService.isSubscribed(s.id, userEmail),
+    const schedulesWithSubscription = schedules.map((s) => ({
+      id: s.id,
+      name: s.name,
+      description: s.description,
+      calendarId: s.calendarId,
+      tags: s.tags.map((t) => ({
+        id: t.id,
+        name: displayActiveTagMap.get(t.id) ?? t.name,
       })),
-    );
+      createdBy: { name: s.createdBy?.name ?? '알 수 없음' },
+      createdAt: s.createdAt,
+      isSubscribed: subscribedIds.has(s.calendarId),
+    }));
 
     return ScheduleView.subscribeSearchModal(
       displayActiveTags,
@@ -436,9 +436,10 @@ export class ScheduleController {
         return;
       }
 
+      const refreshToken = this.userService.getDecryptedRefreshToken(user);
       await ack({
         response_action: 'update',
-        view: await this.buildSubscribeModal(0, tagIds, user.email),
+        view: await this.buildSubscribeModal(0, tagIds, refreshToken ?? ''),
       });
 
       logger.info(
@@ -473,12 +474,13 @@ export class ScheduleController {
       const user = await this.userService.findBySlackId(body.user.id);
       if (!user || !body.view?.id) return;
 
+      const refreshToken = this.userService.getDecryptedRefreshToken(user);
       await client.views.update({
         view_id: body.view.id,
         view: await this.buildSubscribeModal(
           page,
           meta.selectedTagIds ?? [],
-          user.email,
+          refreshToken ?? '',
         ),
       });
     } catch (error) {
@@ -879,18 +881,10 @@ export class ScheduleController {
 
       // 구독/구독해제 실행
       if (toggleAction === 'subscribe') {
-        await this.scheduleService.subscribe(
-          scheduleId,
-          user.email,
-          refreshToken,
-        );
+        await this.scheduleService.subscribe(scheduleId, refreshToken);
         logger.info(`User ${user.name} subscribed to schedule ${scheduleId}`);
       } else {
-        await this.scheduleService.unsubscribe(
-          scheduleId,
-          user.email,
-          refreshToken,
-        );
+        await this.scheduleService.unsubscribe(scheduleId, refreshToken);
         logger.info(
           `User ${user.name} unsubscribed from schedule ${scheduleId}`,
         );
@@ -908,7 +902,7 @@ export class ScheduleController {
           view: await this.buildSubscribeModal(
             meta.page ?? 0,
             meta.selectedTagIds ?? tagIds,
-            user.email,
+            refreshToken,
           ),
         });
       }
