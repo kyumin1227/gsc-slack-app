@@ -43,6 +43,11 @@ export class UserService {
     return this.userRepository.findOne({ where: { email } });
   }
 
+  async mapEmailsToSlackIds(emails: string[]): Promise<string[]> {
+    const users = await Promise.all(emails.map((e) => this.findByEmail(e)));
+    return users.filter((u): u is User => u !== null).map((u) => u.slackId);
+  }
+
   async findActiveByEmails(emails: string[]): Promise<User | null> {
     if (emails.length === 0) return null;
     return this.userRepository
