@@ -83,20 +83,26 @@ export class StudyRoomController {
   }
 
   @Command(CMD.예약)
+  @Action('home:open-booking')
   async openList({
     ack,
     client,
     body,
-  }: SlackCommandMiddlewareArgs & AllMiddlewareArgs) {
+  }: (SlackCommandMiddlewareArgs | SlackActionMiddlewareArgs<BlockAction>) &
+    AllMiddlewareArgs) {
     await ack();
 
-    const user = await this.userService.findBySlackId(body.user_id);
+    const userId = 'user_id' in body ? body.user_id : body.user.id;
+
+    const user = await this.userService.findBySlackId(userId);
     if (!user || user.status !== UserStatus.ACTIVE) {
-      await client.chat.postEphemeral({
-        channel: body.channel_id,
-        user: body.user_id,
-        text: '활성화된 사용자만 이용 가능합니다. 먼저 회원가입을 완료해주세요.',
-      });
+      if ('channel_id' in body) {
+        await client.chat.postEphemeral({
+          channel: body.channel_id,
+          user: userId,
+          text: '활성화된 사용자만 이용 가능합니다. 먼저 회원가입을 완료해주세요.',
+        });
+      }
       return;
     }
 
@@ -261,14 +267,17 @@ export class StudyRoomController {
   }
 
   @Command(CMD.내예약)
+  @Action('home:open-my-bookings')
   async openMyBookings({
     ack,
     client,
     body,
-  }: SlackCommandMiddlewareArgs & AllMiddlewareArgs) {
+  }: (SlackCommandMiddlewareArgs | SlackActionMiddlewareArgs<BlockAction>) &
+    AllMiddlewareArgs) {
     await ack();
 
-    const bookings = await this.studyRoomService.getMyBookings(body.user_id);
+    const userId = 'user_id' in body ? body.user_id : body.user.id;
+    const bookings = await this.studyRoomService.getMyBookings(userId);
     await client.views.open({
       trigger_id: body.trigger_id,
       view: StudyRoomView.myBookingsModal(bookings),

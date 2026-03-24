@@ -340,20 +340,27 @@ export class ScheduleController {
 
   // /구독 - 시간표 구독 (태그 선택)
   @Command(CMD.구독)
+  @Action('home:open-subscribe')
   async openSubscribeModal({
     ack,
     client,
     body,
-  }: SlackCommandMiddlewareArgs & AllMiddlewareArgs) {
+  }: (SlackCommandMiddlewareArgs | SlackActionMiddlewareArgs<BlockAction>) &
+    AllMiddlewareArgs) {
     await ack();
 
-    const { isActive, message } = await this.checkActiveUser(body.user_id);
+    const userId =
+      'user_id' in body ? body.user_id : body.user.id;
+
+    const { isActive, message } = await this.checkActiveUser(userId);
     if (!isActive) {
-      await client.chat.postEphemeral({
-        channel: body.channel_id,
-        user: body.user_id,
-        text: message!,
-      });
+      if ('channel_id' in body) {
+        await client.chat.postEphemeral({
+          channel: body.channel_id,
+          user: userId,
+          text: message!,
+        });
+      }
       return;
     }
 
@@ -387,7 +394,9 @@ export class ScheduleController {
 
     const totalPages = Math.max(1, Math.ceil(total / this.SCHEDULE_PAGE_SIZE));
     const safePage = Math.min(page, totalPages - 1);
-    const displayActiveTagMap = new Map(displayActiveTags.map((t) => [t.id, t.name]));
+    const displayActiveTagMap = new Map(
+      displayActiveTags.map((t) => [t.id, t.name]),
+    );
 
     const schedulesWithSubscription = schedules.map((s) => ({
       id: s.id,
@@ -612,11 +621,12 @@ export class ScheduleController {
       );
 
       // 수정자 diff 처리
-      const selectedEditorIds = (
-        values['editors_block']?.['editors_select'] as
-          | { selected_users?: string[] }
-          | undefined
-      )?.selected_users ?? [];
+      const selectedEditorIds =
+        (
+          values['editors_block']?.['editors_select'] as
+            | { selected_users?: string[] }
+            | undefined
+        )?.selected_users ?? [];
 
       const currentPermissions =
         await this.scheduleService.getCalendarPermissions(scheduleId);
@@ -783,16 +793,13 @@ export class ScheduleController {
     const title = values.title_block.title_input.value ?? '';
     const description =
       values.description_block?.description_input?.value ?? undefined;
-    const location =
-      values.location_block?.location_input?.value ?? undefined;
+    const location = values.location_block?.location_input?.value ?? undefined;
     const startDate =
       values.start_date_block.start_date_input.selected_date ?? '';
-    const endDate =
-      values.end_date_block.end_date_input.selected_date ?? '';
+    const endDate = values.end_date_block.end_date_input.selected_date ?? '';
     const startTime =
       values.start_time_block.start_time_input.selected_time ?? '';
-    const endTime =
-      values.end_time_block.end_time_input.selected_time ?? '';
+    const endTime = values.end_time_block.end_time_input.selected_time ?? '';
     const recurrenceType = (values.recurrence_block.recurrence_input
       .selected_option?.value ?? 'weekly') as 'weekly' | 'biweekly' | 'monthly';
     const selectedDays =
@@ -833,7 +840,9 @@ export class ScheduleController {
     if (recurrenceType !== 'monthly' && daysOfWeek.length === 0) {
       await ack({
         response_action: 'errors',
-        errors: { days_of_week_block: '매주/격주 반복 시 요일을 선택해주세요.' },
+        errors: {
+          days_of_week_block: '매주/격주 반복 시 요일을 선택해주세요.',
+        },
       });
       return;
     }
