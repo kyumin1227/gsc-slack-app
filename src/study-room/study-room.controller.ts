@@ -544,108 +544,68 @@ export class StudyRoomController {
     if (!room) return;
 
     const acl = await GoogleCalendarUtil.getCalendarAcl(calendarId);
-    const editors = acl.filter(
-      (e) => e.role === 'writer' || e.role === 'owner',
-    );
+    const editorEmails = acl
+      .filter((e) => e.role === 'writer')
+      .map((e) => e.email);
+    const initialEditorSlackIds =
+      await this.userService.mapEmailsToSlackIds(editorEmails);
 
     await client.views.push({
       trigger_id: body.trigger_id,
-      view: StudyRoomView.editorsModal(room, editors),
+      view: StudyRoomView.editorsModal(room, initialEditorSlackIds),
     });
   }
 
-  @Action('study-room:admin:open-add-editor')
-  async adminOpenAddEditor({
-    ack,
-    client,
-    body,
-    action,
-  }: SlackActionMiddlewareArgs<BlockAction> & AllMiddlewareArgs) {
-    await ack();
-    const { roomId } = JSON.parse((action as { value: string }).value) as {
-      roomId: number;
-    };
-    const room = await this.studyRoomService.findById(roomId);
-    if (!room) return;
-    await client.views.push({
-      trigger_id: body.trigger_id,
-      view: StudyRoomView.addEditorModal(room),
-    });
-  }
-
-  @View('study-room:modal:add-editor')
-  async submitAddEditor({
+  @View('study-room:modal:editors')
+  async submitEditors({
     ack,
     client,
     body,
   }: SlackViewMiddlewareArgs & AllMiddlewareArgs) {
     await ack();
     const values = body.view.state.values;
-    const { roomId, roomName } = JSON.parse(body.view.private_metadata) as {
+    const { roomId, calendarId } = JSON.parse(body.view.private_metadata) as {
       roomId: number;
-      roomName: string;
+      calendarId: string;
     };
-    const slackId = values.editor_block.editor_select.selected_user ?? '';
 
-    const user = await this.userService.findBySlackId(slackId);
-    if (!user) {
-      await client.chat.postMessage({
-        channel: body.user.id,
-        text: '❌ 해당 사용자를 시스템에서 찾을 수 없습니다.',
-      });
-      return;
-    }
+    const selectedIds =
+      values['editors_block']?.['editors_select']?.selected_users ?? [];
 
     try {
-      await this.studyRoomService.addEditor(roomId, user.email);
-      await client.chat.postMessage({
-        channel: body.user.id,
-        text: `✅ *${roomName}* 에 *${user.name}* (${user.email}) 수정자가 추가되었습니다.`,
-      });
-    } catch (error: unknown) {
-      const message =
-        error instanceof Error ? error.message : '추가 중 오류가 발생했습니다.';
-      this.logger.error(`Study room add-editor failed: ${message}`);
-      await client.chat.postMessage({
-        channel: body.user.id,
-        text: `❌ 수정자 추가에 실패했습니다: ${message}`,
-      });
-    }
-  }
-
-  @Action('study-room:admin:remove-editor')
-  async adminRemoveEditor({
-    ack,
-    client,
-    body,
-    action,
-  }: SlackActionMiddlewareArgs<BlockAction> & AllMiddlewareArgs) {
-    await ack();
-    const { roomId, calendarId, email } = JSON.parse(
-      (action as { value: string }).value,
-    ) as { roomId: number; calendarId: string; email: string };
-
-    try {
-      await this.studyRoomService.removeEditor(roomId, email);
-
-      // 수정자 목록 모달 갱신
-      const room = await this.studyRoomService.findById(roomId);
-      if (!room) return;
       const acl = await GoogleCalendarUtil.getCalendarAcl(calendarId);
-      const editors = acl.filter(
-        (e) => e.role === 'writer' || e.role === 'owner',
-      );
-      await client.views.update({
-        view_id: body.view?.id ?? '',
-        view: StudyRoomView.editorsModal(room, editors),
-      });
+      const currentEditorEmails = acl
+        .filter((e) => e.role === 'writer')
+        .map((e) => e.email);
+      const currentEditorSlackIds =
+        await this.userService.mapEmailsToSlackIds(currentEditorEmails);
+
+      const oldSet = new Set(currentEditorSlackIds);
+      const newSet = new Set(selectedIds);
+      const toAdd = selectedIds.filter((id) => !oldSet.has(id));
+      const toRemove = currentEditorSlackIds.filter((id) => !newSet.has(id));
+
+      await Promise.all([
+        ...toAdd.map(async (slackId) => {
+          const user = await this.userService.findBySlackId(slackId);
+          if (user?.email) {
+            await this.studyRoomService.addEditor(roomId, user.email);
+          }
+        }),
+        ...toRemove.map(async (slackId) => {
+          const user = await this.userService.findBySlackId(slackId);
+          if (user?.email) {
+            await this.studyRoomService.removeEditor(roomId, user.email);
+          }
+        }),
+      ]);
     } catch (error: unknown) {
       const message =
-        error instanceof Error ? error.message : '제거 중 오류가 발생했습니다.';
-      this.logger.error(`Study room remove-editor failed: ${message}`);
+        error instanceof Error ? error.message : '오류가 발생했습니다.';
+      this.logger.error(`Study room editors update failed: ${message}`);
       await client.chat.postMessage({
         channel: body.user.id,
-        text: `❌ 수정자 제거에 실패했습니다: ${message}`,
+        text: `❌ 수정자 변경에 실패했습니다: ${message}`,
       });
     }
   }

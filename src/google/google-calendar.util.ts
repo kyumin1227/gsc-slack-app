@@ -663,4 +663,25 @@ export class GoogleCalendarUtil {
       throw error;
     }
   }
+
+  static async getUserCalendarIds(
+    userRefreshToken: string,
+  ): Promise<Set<string>> {
+    const calendar = this.getUserCalendarClient(userRefreshToken);
+    const ids = new Set<string>();
+    let pageToken: string | undefined;
+
+    do {
+      const res = await calendar.calendarList.list({
+        maxResults: 250,
+        pageToken,
+      });
+      for (const item of res.data.items ?? []) {
+        if (item.id) ids.add(item.id);
+      }
+      pageToken = res.data.nextPageToken ?? undefined;
+    } while (pageToken);
+
+    return ids;
+  }
 }

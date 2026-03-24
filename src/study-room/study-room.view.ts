@@ -1,8 +1,8 @@
 import type { View } from '@slack/types';
 import { StudyRoom, StudyRoomStatus } from './study-room.entity';
 import { BookingItem } from './study-room.service';
-import { CalendarAclEntry } from '../google/google-calendar.util';
 import { toKST } from '../utils/date.util';
+import { multiUsersSelectBlock } from '../common/blocks';
 
 // Google Calendar 캘린더 색상
 const ROOM_COLORS = [
@@ -213,17 +213,13 @@ export class StudyRoomView {
             },
           ],
         },
-        {
-          type: 'input',
-          block_id: 'attendees_block',
-          label: { type: 'plain_text', text: '참석자' },
+        multiUsersSelectBlock({
+          blockId: 'attendees_block',
+          actionId: 'attendees_select',
+          label: '참석자',
+          placeholder: '참석자를 선택하세요',
           optional: true,
-          element: {
-            type: 'multi_users_select',
-            action_id: 'attendees_select',
-            placeholder: { type: 'plain_text', text: '참석자를 선택하세요' },
-          },
-        },
+        }),
       ],
     };
   }
@@ -400,20 +396,14 @@ export class StudyRoomView {
             },
           ],
         },
-        {
-          type: 'input',
-          block_id: 'attendees_block',
-          label: { type: 'plain_text', text: '참석자' },
+        multiUsersSelectBlock({
+          blockId: 'attendees_block',
+          actionId: 'attendees_select',
+          label: '참석자',
+          placeholder: '참석자를 선택하세요',
+          initialUsers: initialAttendeeSlackIds,
           optional: true,
-          element: {
-            type: 'multi_users_select',
-            action_id: 'attendees_select',
-            placeholder: { type: 'plain_text', text: '참석자를 선택하세요' },
-            ...(initialAttendeeSlackIds.length > 0 && {
-              initial_users: initialAttendeeSlackIds,
-            }),
-          },
-        },
+        }),
       ],
     };
   }
@@ -587,114 +577,29 @@ export class StudyRoomView {
     };
   }
 
-  static editorsModal(room: StudyRoom, editors: CalendarAclEntry[]): View {
-    const blocks: View['blocks'] = [
-      {
-        type: 'section',
-        text: { type: 'mrkdwn', text: `*${room.name}* 수정자 목록` },
-      },
-      { type: 'divider' },
-    ];
-
-    if (editors.length === 0) {
-      blocks.push({
-        type: 'section',
-        text: { type: 'mrkdwn', text: '수정자가 없습니다.' },
-      });
-    } else {
-      for (const editor of editors) {
-        blocks.push({
-          type: 'section',
-          text: { type: 'mrkdwn', text: editor.email },
-          accessory: {
-            type: 'button',
-            text: { type: 'plain_text', text: '제거' },
-            action_id: 'study-room:admin:remove-editor',
-            style: 'danger',
-            value: JSON.stringify({
-              roomId: room.id,
-              calendarId: room.calendarId,
-              email: editor.email,
-            }),
-            confirm: {
-              title: { type: 'plain_text', text: '수정자 제거' },
-              text: {
-                type: 'mrkdwn',
-                text: `*${editor.email}*의 수정 권한을 제거하시겠습니까?`,
-              },
-              confirm: { type: 'plain_text', text: '제거' },
-              deny: { type: 'plain_text', text: '취소' },
-              style: 'danger',
-            },
-          },
-        });
-      }
-    }
-
-    blocks.push(
-      { type: 'divider' },
-      {
-        type: 'actions',
-        elements: [
-          {
-            type: 'button',
-            text: { type: 'plain_text', text: '+ 수정자 추가' },
-            action_id: 'study-room:admin:open-add-editor',
-            style: 'primary',
-            value: JSON.stringify({
-              roomId: room.id,
-              roomName: room.name,
-              calendarId: room.calendarId,
-            }),
-          },
-        ],
-      },
-    );
-
+  static editorsModal(
+    room: StudyRoom,
+    initialEditorSlackIds: string[] = [],
+  ): View {
     return {
       type: 'modal',
       callback_id: 'study-room:modal:editors',
       title: { type: 'plain_text', text: '수정자 관리' },
-      close: { type: 'plain_text', text: '닫기' },
-      private_metadata: JSON.stringify({
-        roomId: room.id,
-        roomName: room.name,
-        calendarId: room.calendarId,
-      }),
-      blocks,
-    };
-  }
-
-  static addEditorModal(room: StudyRoom): View {
-    return {
-      type: 'modal',
-      callback_id: 'study-room:modal:add-editor',
-      title: { type: 'plain_text', text: '수정자 추가' },
-      submit: { type: 'plain_text', text: '추가' },
+      submit: { type: 'plain_text', text: '저장' },
       close: { type: 'plain_text', text: '취소' },
       private_metadata: JSON.stringify({
         roomId: room.id,
-        roomName: room.name,
         calendarId: room.calendarId,
       }),
       blocks: [
-        {
-          type: 'section',
-          text: {
-            type: 'mrkdwn',
-            text: `*${room.name}*에 수정자를 추가합니다.`,
-          },
-        },
-        {
-          type: 'input',
-          block_id: 'editor_block',
-          label: { type: 'plain_text', text: '추가할 사용자' },
-          element: {
-            type: 'users_select',
-            action_id: 'editor_select',
-            placeholder: { type: 'plain_text', text: '사용자를 선택하세요' },
-          },
-        },
+        multiUsersSelectBlock({
+          blockId: 'editors_block',
+          actionId: 'editors_select',
+          label: '수정자',
+          placeholder: '수정자를 선택하세요',
+          initialUsers: initialEditorSlackIds,
+          optional: true,
+        }),
       ],
     };
   }

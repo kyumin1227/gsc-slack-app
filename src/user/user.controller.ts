@@ -98,7 +98,12 @@ export class UserController {
             name: googleUser.name,
             email: googleUser.email,
             refreshToken,
-            classes: activeClasses.map((c) => ({ id: c.id, name: c.name })),
+            classes: activeClasses.map((c) => ({
+              id: c.id,
+              name: c.name,
+              admissionYear: c.admissionYear,
+              section: c.section,
+            })),
           }),
         });
         await this.userService.deleteViewId(slackUserId);

@@ -1,6 +1,7 @@
 import type { View } from '@slack/types';
 import { ScheduleStatus } from './schedule.entity';
 import { TagStatus } from '../tag/tag.entity';
+import { multiUsersSelectBlock } from '../common/blocks';
 
 export interface ScheduleListItem {
   id: number;
@@ -19,11 +20,6 @@ export interface EditScheduleItem {
   tags: { id: number; name: string }[];
 }
 
-export interface WriterItem {
-  email: string;
-  role: string;
-  name?: string; // DB에서 조회된 슬랙 이름
-}
 
 export interface SubscribeScheduleItem {
   id: number;
@@ -225,7 +221,7 @@ export class ScheduleView {
   static editModal(
     schedule: EditScheduleItem,
     tags: TagOption[],
-    writers: WriterItem[],
+    initialEditorSlackIds: string[] = [],
     notificationChannelIds: string[] = [],
   ): View {
     const activeTagOptions = tags
@@ -306,51 +302,15 @@ export class ScheduleView {
     // 편집자 관리 섹션
     blocks.push(
       { type: 'divider' },
-      {
-        type: 'section',
-        text: { type: 'mrkdwn', text: '*수정 권한 관리*' },
-        accessory: {
-          type: 'button',
-          text: { type: 'plain_text', text: '편집자 추가' },
-          action_id: 'schedule:manage:writer:open:add',
-          value: schedule.id.toString(),
-        },
-      },
+      multiUsersSelectBlock({
+        blockId: 'editors_block',
+        actionId: 'editors_select',
+        label: '수정자',
+        placeholder: '수정자를 선택하세요',
+        initialUsers: initialEditorSlackIds,
+        optional: true,
+      }),
     );
-
-    const editorList = writers.filter((w) => w.role === 'writer');
-    if (editorList.length === 0) {
-      blocks.push({
-        type: 'section',
-        text: { type: 'mrkdwn', text: '편집자가 없습니다.' },
-      });
-    } else {
-      for (const writer of editorList) {
-        const displayName = writer.name
-          ? `${writer.name} (${writer.email})`
-          : writer.email;
-        blocks.push({
-          type: 'section',
-          text: { type: 'mrkdwn', text: `✏️ ${displayName}` },
-          accessory: {
-            type: 'button',
-            text: { type: 'plain_text', text: '제거' },
-            action_id: `schedule:manage:writer:remove:${schedule.id}`,
-            value: writer.email,
-            style: 'danger',
-            confirm: {
-              title: { type: 'plain_text', text: '편집자 제거' },
-              text: {
-                type: 'mrkdwn',
-                text: `*${displayName}*의 수정 권한을 제거하시겠습니까?`,
-              },
-              confirm: { type: 'plain_text', text: '제거' },
-              deny: { type: 'plain_text', text: '취소' },
-            },
-          },
-        });
-      }
-    }
 
     return {
       type: 'modal',
@@ -360,33 +320,6 @@ export class ScheduleView {
       submit: { type: 'plain_text', text: '저장' },
       close: { type: 'plain_text', text: '취소' },
       blocks,
-    };
-  }
-
-  // 편집자 추가 모달 (슬랙 사용자 선택)
-  static addWriterModal(scheduleId: number, editViewId: string): View {
-    return {
-      type: 'modal',
-      callback_id: 'schedule:modal:add:writer',
-      private_metadata: JSON.stringify({ scheduleId, editViewId }),
-      title: { type: 'plain_text', text: '편집자 추가' },
-      submit: { type: 'plain_text', text: '추가' },
-      close: { type: 'plain_text', text: '취소' },
-      blocks: [
-        {
-          type: 'input',
-          block_id: 'user_block',
-          element: {
-            type: 'users_select',
-            action_id: 'user_input',
-            placeholder: {
-              type: 'plain_text',
-              text: '이름으로 검색하세요',
-            },
-          },
-          label: { type: 'plain_text', text: '편집자 선택' },
-        },
-      ],
     };
   }
 
@@ -604,7 +537,7 @@ export class ScheduleView {
           action_id: 'tags_select',
           placeholder: {
             type: 'plain_text',
-            text: '원하는 태그를 모두 선택하세요 (미선택 시 전체 조회)',
+            text: '원하는 태그를 모두 선택하세요 (AND 조건)',
             emoji: true,
           },
           options: activeTagOptions,
