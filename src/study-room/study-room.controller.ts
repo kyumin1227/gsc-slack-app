@@ -25,14 +25,17 @@ export class StudyRoomController {
   ) {}
 
   @Command(CMD.스터디룸생성)
+  @Action('home:open-create-study-room')
   async openCreateModal({
     ack,
     client,
     body,
-  }: SlackCommandMiddlewareArgs & AllMiddlewareArgs) {
+  }: (SlackCommandMiddlewareArgs | SlackActionMiddlewareArgs<BlockAction>) &
+    AllMiddlewareArgs) {
     await ack();
 
-    const user = await this.userService.findBySlackId(body.user_id);
+    const userId = 'user_id' in body ? body.user_id : body.user.id;
+    const user = await this.userService.findBySlackId(userId);
     // TODO 스케줄 서비스의 조교 이상 권한 확인 메소드랑 통합 필요
     const allowed = [UserRole.PROFESSOR, UserRole.TA];
     if (
@@ -40,11 +43,13 @@ export class StudyRoomController {
       user.status !== UserStatus.ACTIVE ||
       !allowed.includes(user.role)
     ) {
-      await client.chat.postEphemeral({
-        channel: body.channel_id,
-        user: body.user_id,
-        text: '조교 이상 권한이 필요합니다.',
-      });
+      if ('channel_id' in body) {
+        await client.chat.postEphemeral({
+          channel: body.channel_id,
+          user: userId,
+          text: '조교 이상 권한이 필요합니다.',
+        });
+      }
       return;
     }
 
@@ -83,20 +88,26 @@ export class StudyRoomController {
   }
 
   @Command(CMD.예약)
+  @Action('home:open-booking')
   async openList({
     ack,
     client,
     body,
-  }: SlackCommandMiddlewareArgs & AllMiddlewareArgs) {
+  }: (SlackCommandMiddlewareArgs | SlackActionMiddlewareArgs<BlockAction>) &
+    AllMiddlewareArgs) {
     await ack();
 
-    const user = await this.userService.findBySlackId(body.user_id);
+    const userId = 'user_id' in body ? body.user_id : body.user.id;
+
+    const user = await this.userService.findBySlackId(userId);
     if (!user || user.status !== UserStatus.ACTIVE) {
-      await client.chat.postEphemeral({
-        channel: body.channel_id,
-        user: body.user_id,
-        text: '활성화된 사용자만 이용 가능합니다. 먼저 회원가입을 완료해주세요.',
-      });
+      if ('channel_id' in body) {
+        await client.chat.postEphemeral({
+          channel: body.channel_id,
+          user: userId,
+          text: '활성화된 사용자만 이용 가능합니다. 먼저 회원가입을 완료해주세요.',
+        });
+      }
       return;
     }
 
@@ -261,14 +272,17 @@ export class StudyRoomController {
   }
 
   @Command(CMD.내예약)
+  @Action('home:open-my-bookings')
   async openMyBookings({
     ack,
     client,
     body,
-  }: SlackCommandMiddlewareArgs & AllMiddlewareArgs) {
+  }: (SlackCommandMiddlewareArgs | SlackActionMiddlewareArgs<BlockAction>) &
+    AllMiddlewareArgs) {
     await ack();
 
-    const bookings = await this.studyRoomService.getMyBookings(body.user_id);
+    const userId = 'user_id' in body ? body.user_id : body.user.id;
+    const bookings = await this.studyRoomService.getMyBookings(userId);
     await client.views.open({
       trigger_id: body.trigger_id,
       view: StudyRoomView.myBookingsModal(bookings),
@@ -415,44 +429,34 @@ export class StudyRoomController {
 
   // ========== 스터디룸 관리 (어드민) ==========
 
-  private async checkAdminPermission({
+
+  @Command(CMD.스터디룸)
+  @Action('home:open-study-room-manage')
+  async openManageModal({
     ack,
     client,
     body,
-  }: SlackCommandMiddlewareArgs & AllMiddlewareArgs): Promise<boolean> {
-    const user = await this.userService.findBySlackId(body.user_id);
+  }: (SlackCommandMiddlewareArgs | SlackActionMiddlewareArgs<BlockAction>) &
+    AllMiddlewareArgs) {
+    await ack();
+
+    const userId = 'user_id' in body ? body.user_id : body.user.id;
+    const user = await this.userService.findBySlackId(userId);
     const allowed = [UserRole.PROFESSOR, UserRole.TA];
     if (
       !user ||
       user.status !== UserStatus.ACTIVE ||
       !allowed.includes(user.role)
     ) {
-      await ack();
-      await client.chat.postEphemeral({
-        channel: body.channel_id,
-        user: body.user_id,
-        text: '조교 이상 권한이 필요합니다.',
-      });
-      return false;
+      if ('channel_id' in body) {
+        await client.chat.postEphemeral({
+          channel: body.channel_id,
+          user: userId,
+          text: '조교 이상 권한이 필요합니다.',
+        });
+      }
+      return;
     }
-    return true;
-  }
-
-  @Command(CMD.스터디룸)
-  async openManageModal({
-    ack,
-    client,
-    body,
-    ...rest
-  }: SlackCommandMiddlewareArgs & AllMiddlewareArgs) {
-    const allowed = await this.checkAdminPermission({
-      ack,
-      client,
-      body,
-      ...rest,
-    } as SlackCommandMiddlewareArgs & AllMiddlewareArgs);
-    if (!allowed) return;
-    await ack();
 
     const rooms = await this.studyRoomService.findAll();
     await client.views.open({

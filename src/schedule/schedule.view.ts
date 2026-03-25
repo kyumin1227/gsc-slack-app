@@ -20,7 +20,6 @@ export interface EditScheduleItem {
   tags: { id: number; name: string }[];
 }
 
-
 export interface SubscribeScheduleItem {
   id: number;
   name: string;
