@@ -105,22 +105,25 @@ export class ScheduleController {
 
   // /시간표 - 시간표 목록 조회
   @Command(CMD.시간표)
+  @Action('home:open-schedule-list')
   async listSchedules({
     ack,
     client,
     body,
-  }: SlackCommandMiddlewareArgs & AllMiddlewareArgs) {
+  }: (SlackCommandMiddlewareArgs | SlackActionMiddlewareArgs<BlockAction>) &
+    AllMiddlewareArgs) {
     await ack();
 
-    const { hasPermission, message } = await this.checkAdminPermission(
-      body.user_id,
-    );
+    const userId = 'user_id' in body ? body.user_id : body.user.id;
+    const { hasPermission, message } = await this.checkAdminPermission(userId);
     if (!hasPermission) {
-      await client.chat.postEphemeral({
-        channel: body.channel_id,
-        user: body.user_id,
-        text: message!,
-      });
+      if ('channel_id' in body) {
+        await client.chat.postEphemeral({
+          channel: body.channel_id,
+          user: userId,
+          text: message!,
+        });
+      }
       return;
     }
 
@@ -132,22 +135,25 @@ export class ScheduleController {
 
   // /시간표생성 - 시간표 생성 모달
   @Command(CMD.시간표생성)
+  @Action('home:open-create-schedule')
   async openCreateModal({
     ack,
     client,
     body,
-  }: SlackCommandMiddlewareArgs & AllMiddlewareArgs) {
+  }: (SlackCommandMiddlewareArgs | SlackActionMiddlewareArgs<BlockAction>) &
+    AllMiddlewareArgs) {
     await ack();
 
-    const { hasPermission, message } = await this.checkAdminPermission(
-      body.user_id,
-    );
+    const userId = 'user_id' in body ? body.user_id : body.user.id;
+    const { hasPermission, message } = await this.checkAdminPermission(userId);
     if (!hasPermission) {
-      await client.chat.postEphemeral({
-        channel: body.channel_id,
-        user: body.user_id,
-        text: message!,
-      });
+      if ('channel_id' in body) {
+        await client.chat.postEphemeral({
+          channel: body.channel_id,
+          user: userId,
+          text: message!,
+        });
+      }
       return;
     }
 
@@ -746,22 +752,25 @@ export class ScheduleController {
 
   // /반복일정생성 - 반복 일정 생성 모달
   @Command(CMD.반복일정생성)
+  @Action('home:open-create-recurrence')
   async openCreateRecurringModal({
     ack,
     client,
     body,
-  }: SlackCommandMiddlewareArgs & AllMiddlewareArgs) {
+  }: (SlackCommandMiddlewareArgs | SlackActionMiddlewareArgs<BlockAction>) &
+    AllMiddlewareArgs) {
     await ack();
 
-    const { hasPermission, message } = await this.checkAdminPermission(
-      body.user_id,
-    );
+    const userId = 'user_id' in body ? body.user_id : body.user.id;
+    const { hasPermission, message } = await this.checkAdminPermission(userId);
     if (!hasPermission) {
-      await client.chat.postEphemeral({
-        channel: body.channel_id,
-        user: body.user_id,
-        text: message!,
-      });
+      if ('channel_id' in body) {
+        await client.chat.postEphemeral({
+          channel: body.channel_id,
+          user: userId,
+          text: message!,
+        });
+      }
       return;
     }
 
@@ -879,33 +888,38 @@ export class ScheduleController {
 
   // /반복일정삭제 - 반복 일정 삭제 모달
   @Command(CMD.반복일정삭제)
+  @Action('home:open-delete-recurrence')
   async openDeleteRecurringModal({
     ack,
     client,
     body,
-  }: SlackCommandMiddlewareArgs & AllMiddlewareArgs) {
+  }: (SlackCommandMiddlewareArgs | SlackActionMiddlewareArgs<BlockAction>) &
+    AllMiddlewareArgs) {
     await ack();
 
-    const { hasPermission, message } = await this.checkAdminPermission(
-      body.user_id,
-    );
+    const userId = 'user_id' in body ? body.user_id : body.user.id;
+    const { hasPermission, message } = await this.checkAdminPermission(userId);
     if (!hasPermission) {
-      await client.chat.postEphemeral({
-        channel: body.channel_id,
-        user: body.user_id,
-        text: message!,
-      });
+      if ('channel_id' in body) {
+        await client.chat.postEphemeral({
+          channel: body.channel_id,
+          user: userId,
+          text: message!,
+        });
+      }
       return;
     }
 
     const groups = await this.scheduleService.findAllRecurrenceGroups();
 
     if (groups.length === 0) {
-      await client.chat.postEphemeral({
-        channel: body.channel_id,
-        user: body.user_id,
-        text: '삭제할 반복 일정이 없습니다.',
-      });
+      if ('channel_id' in body) {
+        await client.chat.postEphemeral({
+          channel: body.channel_id,
+          user: userId,
+          text: '삭제할 반복 일정이 없습니다.',
+        });
+      }
       return;
     }
 
@@ -953,33 +967,38 @@ export class ScheduleController {
 
   // /반복일정수정 - 반복 일정 수정 모달
   @Command(CMD.반복일정수정)
+  @Action('home:open-edit-recurrence')
   async openEditRecurringModal({
     ack,
     client,
     body,
-  }: SlackCommandMiddlewareArgs & AllMiddlewareArgs) {
+  }: (SlackCommandMiddlewareArgs | SlackActionMiddlewareArgs<BlockAction>) &
+    AllMiddlewareArgs) {
     await ack();
 
-    const { hasPermission, message } = await this.checkAdminPermission(
-      body.user_id,
-    );
+    const userId = 'user_id' in body ? body.user_id : body.user.id;
+    const { hasPermission, message } = await this.checkAdminPermission(userId);
     if (!hasPermission) {
-      await client.chat.postEphemeral({
-        channel: body.channel_id,
-        user: body.user_id,
-        text: message!,
-      });
+      if ('channel_id' in body) {
+        await client.chat.postEphemeral({
+          channel: body.channel_id,
+          user: userId,
+          text: message!,
+        });
+      }
       return;
     }
 
     const groups = await this.scheduleService.findAllRecurrenceGroups();
 
     if (groups.length === 0) {
-      await client.chat.postEphemeral({
-        channel: body.channel_id,
-        user: body.user_id,
-        text: '수정할 반복 일정이 없습니다.',
-      });
+      if ('channel_id' in body) {
+        await client.chat.postEphemeral({
+          channel: body.channel_id,
+          user: userId,
+          text: '수정할 반복 일정이 없습니다.',
+        });
+      }
       return;
     }
 

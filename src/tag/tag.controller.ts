@@ -38,20 +38,25 @@ export class TagController {
 
   // /태그 - 태그 목록 조회
   @Command(CMD.태그)
+  @Action('home:open-tags')
   async listTags({
     ack,
     client,
     body,
-  }: SlackCommandMiddlewareArgs & AllMiddlewareArgs) {
+  }: (SlackCommandMiddlewareArgs | SlackActionMiddlewareArgs<BlockAction>) &
+    AllMiddlewareArgs) {
     await ack();
 
-    const { hasPermission, message } = await this.checkPermission(body.user_id);
+    const userId = 'user_id' in body ? body.user_id : body.user.id;
+    const { hasPermission, message } = await this.checkPermission(userId);
     if (!hasPermission) {
-      await client.chat.postEphemeral({
-        channel: body.channel_id,
-        user: body.user_id,
-        text: message!,
-      });
+      if ('channel_id' in body) {
+        await client.chat.postEphemeral({
+          channel: body.channel_id,
+          user: userId,
+          text: message!,
+        });
+      }
       return;
     }
 
@@ -65,20 +70,25 @@ export class TagController {
 
   // /태그생성 - 태그 생성 모달
   @Command(CMD.태그생성)
+  @Action('home:open-create-tag')
   async openCreateModal({
     ack,
     client,
     body,
-  }: SlackCommandMiddlewareArgs & AllMiddlewareArgs) {
+  }: (SlackCommandMiddlewareArgs | SlackActionMiddlewareArgs<BlockAction>) &
+    AllMiddlewareArgs) {
     await ack();
 
-    const { hasPermission, message } = await this.checkPermission(body.user_id);
+    const userId = 'user_id' in body ? body.user_id : body.user.id;
+    const { hasPermission, message } = await this.checkPermission(userId);
     if (!hasPermission) {
-      await client.chat.postEphemeral({
-        channel: body.channel_id,
-        user: body.user_id,
-        text: message!,
-      });
+      if ('channel_id' in body) {
+        await client.chat.postEphemeral({
+          channel: body.channel_id,
+          user: userId,
+          text: message!,
+        });
+      }
       return;
     }
 

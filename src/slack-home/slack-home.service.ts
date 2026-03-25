@@ -21,6 +21,9 @@ export class SlackHomeService {
           case UserRole.KEY_KEEPER:
           case UserRole.CLASS_REP:
             return HomeView.activeStudent(user);
+          case UserRole.PROFESSOR:
+          case UserRole.TA:
+            return HomeView.activeStaff(user);
           default:
             return HomeView.registered();
         }

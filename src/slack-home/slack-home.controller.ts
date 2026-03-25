@@ -15,6 +15,7 @@ export class SlackHomeController {
   @Action('home:external-calendar')
   @Action('home:user-guide')
   @Action('home:report-bug')
+  @Action('home:google-calendar')
   async ackLinkButtons({ ack }: SlackActionMiddlewareArgs<BlockAction> & AllMiddlewareArgs) {
     await ack();
   }
