@@ -25,14 +25,17 @@ export class StudyRoomController {
   ) {}
 
   @Command(CMD.스터디룸생성)
+  @Action('home:open-create-study-room')
   async openCreateModal({
     ack,
     client,
     body,
-  }: SlackCommandMiddlewareArgs & AllMiddlewareArgs) {
+  }: (SlackCommandMiddlewareArgs | SlackActionMiddlewareArgs<BlockAction>) &
+    AllMiddlewareArgs) {
     await ack();
 
-    const user = await this.userService.findBySlackId(body.user_id);
+    const userId = 'user_id' in body ? body.user_id : body.user.id;
+    const user = await this.userService.findBySlackId(userId);
     // TODO 스케줄 서비스의 조교 이상 권한 확인 메소드랑 통합 필요
     const allowed = [UserRole.PROFESSOR, UserRole.TA];
     if (
@@ -40,11 +43,13 @@ export class StudyRoomController {
       user.status !== UserStatus.ACTIVE ||
       !allowed.includes(user.role)
     ) {
-      await client.chat.postEphemeral({
-        channel: body.channel_id,
-        user: body.user_id,
-        text: '조교 이상 권한이 필요합니다.',
-      });
+      if ('channel_id' in body) {
+        await client.chat.postEphemeral({
+          channel: body.channel_id,
+          user: userId,
+          text: '조교 이상 권한이 필요합니다.',
+        });
+      }
       return;
     }
 
@@ -83,20 +88,26 @@ export class StudyRoomController {
   }
 
   @Command(CMD.예약)
+  @Action('home:open-booking')
   async openList({
     ack,
     client,
     body,
-  }: SlackCommandMiddlewareArgs & AllMiddlewareArgs) {
+  }: (SlackCommandMiddlewareArgs | SlackActionMiddlewareArgs<BlockAction>) &
+    AllMiddlewareArgs) {
     await ack();
 
-    const user = await this.userService.findBySlackId(body.user_id);
+    const userId = 'user_id' in body ? body.user_id : body.user.id;
+
+    const user = await this.userService.findBySlackId(userId);
     if (!user || user.status !== UserStatus.ACTIVE) {
-      await client.chat.postEphemeral({
-        channel: body.channel_id,
-        user: body.user_id,
-        text: '활성화된 사용자만 이용 가능합니다. 먼저 회원가입을 완료해주세요.',
-      });
+      if ('channel_id' in body) {
+        await client.chat.postEphemeral({
+          channel: body.channel_id,
+          user: userId,
+          text: '활성화된 사용자만 이용 가능합니다. 먼저 회원가입을 완료해주세요.',
+        });
+      }
       return;
     }
 
@@ -261,14 +272,17 @@ export class StudyRoomController {
   }
 
   @Command(CMD.내예약)
+  @Action('home:open-my-bookings')
   async openMyBookings({
     ack,
     client,
     body,
-  }: SlackCommandMiddlewareArgs & AllMiddlewareArgs) {
+  }: (SlackCommandMiddlewareArgs | SlackActionMiddlewareArgs<BlockAction>) &
+    AllMiddlewareArgs) {
     await ack();
 
-    const bookings = await this.studyRoomService.getMyBookings(body.user_id);
+    const userId = 'user_id' in body ? body.user_id : body.user.id;
+    const bookings = await this.studyRoomService.getMyBookings(userId);
     await client.views.open({
       trigger_id: body.trigger_id,
       view: StudyRoomView.myBookingsModal(bookings),
@@ -415,44 +429,34 @@ export class StudyRoomController {
 
   // ========== 스터디룸 관리 (어드민) ==========
 
-  private async checkAdminPermission({
+
+  @Command(CMD.스터디룸)
+  @Action('home:open-study-room-manage')
+  async openManageModal({
     ack,
     client,
     body,
-  }: SlackCommandMiddlewareArgs & AllMiddlewareArgs): Promise<boolean> {
-    const user = await this.userService.findBySlackId(body.user_id);
+  }: (SlackCommandMiddlewareArgs | SlackActionMiddlewareArgs<BlockAction>) &
+    AllMiddlewareArgs) {
+    await ack();
+
+    const userId = 'user_id' in body ? body.user_id : body.user.id;
+    const user = await this.userService.findBySlackId(userId);
     const allowed = [UserRole.PROFESSOR, UserRole.TA];
     if (
       !user ||
       user.status !== UserStatus.ACTIVE ||
       !allowed.includes(user.role)
     ) {
-      await ack();
-      await client.chat.postEphemeral({
-        channel: body.channel_id,
-        user: body.user_id,
-        text: '조교 이상 권한이 필요합니다.',
-      });
-      return false;
+      if ('channel_id' in body) {
+        await client.chat.postEphemeral({
+          channel: body.channel_id,
+          user: userId,
+          text: '조교 이상 권한이 필요합니다.',
+        });
+      }
+      return;
     }
-    return true;
-  }
-
-  @Command(CMD.스터디룸)
-  async openManageModal({
-    ack,
-    client,
-    body,
-    ...rest
-  }: SlackCommandMiddlewareArgs & AllMiddlewareArgs) {
-    const allowed = await this.checkAdminPermission({
-      ack,
-      client,
-      body,
-      ...rest,
-    } as SlackCommandMiddlewareArgs & AllMiddlewareArgs);
-    if (!allowed) return;
-    await ack();
 
     const rooms = await this.studyRoomService.findAll();
     await client.views.open({
@@ -544,108 +548,68 @@ export class StudyRoomController {
     if (!room) return;
 
     const acl = await GoogleCalendarUtil.getCalendarAcl(calendarId);
-    const editors = acl.filter(
-      (e) => e.role === 'writer' || e.role === 'owner',
-    );
+    const editorEmails = acl
+      .filter((e) => e.role === 'writer')
+      .map((e) => e.email);
+    const initialEditorSlackIds =
+      await this.userService.mapEmailsToSlackIds(editorEmails);
 
     await client.views.push({
       trigger_id: body.trigger_id,
-      view: StudyRoomView.editorsModal(room, editors),
+      view: StudyRoomView.editorsModal(room, initialEditorSlackIds),
     });
   }
 
-  @Action('study-room:admin:open-add-editor')
-  async adminOpenAddEditor({
-    ack,
-    client,
-    body,
-    action,
-  }: SlackActionMiddlewareArgs<BlockAction> & AllMiddlewareArgs) {
-    await ack();
-    const { roomId } = JSON.parse((action as { value: string }).value) as {
-      roomId: number;
-    };
-    const room = await this.studyRoomService.findById(roomId);
-    if (!room) return;
-    await client.views.push({
-      trigger_id: body.trigger_id,
-      view: StudyRoomView.addEditorModal(room),
-    });
-  }
-
-  @View('study-room:modal:add-editor')
-  async submitAddEditor({
+  @View('study-room:modal:editors')
+  async submitEditors({
     ack,
     client,
     body,
   }: SlackViewMiddlewareArgs & AllMiddlewareArgs) {
     await ack();
     const values = body.view.state.values;
-    const { roomId, roomName } = JSON.parse(body.view.private_metadata) as {
+    const { roomId, calendarId } = JSON.parse(body.view.private_metadata) as {
       roomId: number;
-      roomName: string;
+      calendarId: string;
     };
-    const slackId = values.editor_block.editor_select.selected_user ?? '';
 
-    const user = await this.userService.findBySlackId(slackId);
-    if (!user) {
-      await client.chat.postMessage({
-        channel: body.user.id,
-        text: '❌ 해당 사용자를 시스템에서 찾을 수 없습니다.',
-      });
-      return;
-    }
+    const selectedIds =
+      values['editors_block']?.['editors_select']?.selected_users ?? [];
 
     try {
-      await this.studyRoomService.addEditor(roomId, user.email);
-      await client.chat.postMessage({
-        channel: body.user.id,
-        text: `✅ *${roomName}* 에 *${user.name}* (${user.email}) 수정자가 추가되었습니다.`,
-      });
-    } catch (error: unknown) {
-      const message =
-        error instanceof Error ? error.message : '추가 중 오류가 발생했습니다.';
-      this.logger.error(`Study room add-editor failed: ${message}`);
-      await client.chat.postMessage({
-        channel: body.user.id,
-        text: `❌ 수정자 추가에 실패했습니다: ${message}`,
-      });
-    }
-  }
-
-  @Action('study-room:admin:remove-editor')
-  async adminRemoveEditor({
-    ack,
-    client,
-    body,
-    action,
-  }: SlackActionMiddlewareArgs<BlockAction> & AllMiddlewareArgs) {
-    await ack();
-    const { roomId, calendarId, email } = JSON.parse(
-      (action as { value: string }).value,
-    ) as { roomId: number; calendarId: string; email: string };
-
-    try {
-      await this.studyRoomService.removeEditor(roomId, email);
-
-      // 수정자 목록 모달 갱신
-      const room = await this.studyRoomService.findById(roomId);
-      if (!room) return;
       const acl = await GoogleCalendarUtil.getCalendarAcl(calendarId);
-      const editors = acl.filter(
-        (e) => e.role === 'writer' || e.role === 'owner',
-      );
-      await client.views.update({
-        view_id: body.view?.id ?? '',
-        view: StudyRoomView.editorsModal(room, editors),
-      });
+      const currentEditorEmails = acl
+        .filter((e) => e.role === 'writer')
+        .map((e) => e.email);
+      const currentEditorSlackIds =
+        await this.userService.mapEmailsToSlackIds(currentEditorEmails);
+
+      const oldSet = new Set(currentEditorSlackIds);
+      const newSet = new Set(selectedIds);
+      const toAdd = selectedIds.filter((id) => !oldSet.has(id));
+      const toRemove = currentEditorSlackIds.filter((id) => !newSet.has(id));
+
+      await Promise.all([
+        ...toAdd.map(async (slackId) => {
+          const user = await this.userService.findBySlackId(slackId);
+          if (user?.email) {
+            await this.studyRoomService.addEditor(roomId, user.email);
+          }
+        }),
+        ...toRemove.map(async (slackId) => {
+          const user = await this.userService.findBySlackId(slackId);
+          if (user?.email) {
+            await this.studyRoomService.removeEditor(roomId, user.email);
+          }
+        }),
+      ]);
     } catch (error: unknown) {
       const message =
-        error instanceof Error ? error.message : '제거 중 오류가 발생했습니다.';
-      this.logger.error(`Study room remove-editor failed: ${message}`);
+        error instanceof Error ? error.message : '오류가 발생했습니다.';
+      this.logger.error(`Study room editors update failed: ${message}`);
       await client.chat.postMessage({
         channel: body.user.id,
-        text: `❌ 수정자 제거에 실패했습니다: ${message}`,
+        text: `❌ 수정자 변경에 실패했습니다: ${message}`,
       });
     }
   }

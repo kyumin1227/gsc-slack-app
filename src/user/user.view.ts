@@ -4,6 +4,8 @@ import { UserRole } from './user.entity';
 export interface ClassOption {
   id: number;
   name: string;
+  admissionYear: number;
+  section: string;
 }
 
 export interface RegisterFormPrefill {
@@ -184,13 +186,17 @@ export class UserView {
             },
             options:
               prefill.classes.length > 0
-                ? prefill.classes.map((cls) => ({
-                    text: {
-                      type: 'plain_text' as const,
-                      text: cls.name,
-                    },
-                    value: String(cls.id),
-                  }))
+                ? prefill.classes.map((cls) => {
+                    const grade =
+                      new Date().getFullYear() - cls.admissionYear + 1;
+                    return {
+                      text: {
+                        type: 'plain_text' as const,
+                        text: `${grade}학년 ${cls.section}반`,
+                      },
+                      value: String(cls.id),
+                    };
+                  })
                 : [
                     {
                       text: {
