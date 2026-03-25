@@ -14,6 +14,7 @@ import { TagModule } from './tag/tag.module';
 import { ScheduleModule } from './schedule/schedule.module';
 import { ChannelModule } from './channel/channel.module';
 import { StudyRoomModule } from './study-room/study-room.module';
+import { httpReceiver } from './slack-receiver';
 
 @Module({
   imports: [
@@ -39,12 +40,16 @@ import { StudyRoomModule } from './study-room/study-room.module';
       autoLoadEntities: true,
       synchronize: process.env.DB_SYNCHRONIZE === 'true',
     }),
-    SlackModule.forRoot({
-      token: process.env.SLACK_BOT_TOKEN,
-      socketMode: process.env.SLACK_SOCKET_MODE !== 'false',
-      appToken: process.env.SLACK_APP_TOKEN,
-      signingSecret: process.env.SLACK_SIGNING_SECRET,
-    }),
+    SlackModule.forRoot(
+      httpReceiver
+        ? { token: process.env.SLACK_BOT_TOKEN, receiver: httpReceiver, socketMode: false }
+        : {
+            token: process.env.SLACK_BOT_TOKEN,
+            socketMode: true,
+            appToken: process.env.SLACK_APP_TOKEN,
+            signingSecret: process.env.SLACK_SIGNING_SECRET,
+          },
+    ),
     SlackHomeModule,
     UserModule,
     StudentClassModule,
