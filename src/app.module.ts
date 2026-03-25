@@ -41,8 +41,9 @@ import { StudyRoomModule } from './study-room/study-room.module';
     }),
     SlackModule.forRoot({
       token: process.env.SLACK_BOT_TOKEN,
-      socketMode: true,
+      socketMode: process.env.SLACK_SOCKET_MODE !== 'false',
       appToken: process.env.SLACK_APP_TOKEN,
+      signingSecret: process.env.SLACK_SIGNING_SECRET,
     }),
     SlackHomeModule,
     UserModule,
