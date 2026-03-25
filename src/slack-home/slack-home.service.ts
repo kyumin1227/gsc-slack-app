@@ -16,8 +16,14 @@ export class SlackHomeService {
       case UserStatus.PENDING_APPROVAL:
         return HomeView.pendingApproval();
       case UserStatus.ACTIVE:
-        if (user.role === UserRole.STUDENT) return HomeView.activeStudent(user);
-        return HomeView.registered();
+        switch (user.role) {
+          case UserRole.STUDENT:
+          case UserRole.KEY_KEEPER:
+          case UserRole.CLASS_REP:
+            return HomeView.activeStudent(user);
+          default:
+            return HomeView.registered();
+        }
       case UserStatus.INACTIVE:
         return HomeView.inactive();
       default:

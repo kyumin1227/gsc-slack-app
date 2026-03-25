@@ -92,6 +92,7 @@ export class HomeView {
             action_id: 'home:open-subscribe',
           },
         },
+        { type: 'divider' },
         {
           type: 'section',
           text: {
@@ -105,6 +106,7 @@ export class HomeView {
             action_id: 'home:open-booking',
           },
         },
+        { type: 'divider' },
         {
           type: 'section',
           text: {
@@ -113,10 +115,40 @@ export class HomeView {
           },
           accessory: {
             type: 'button',
-            text: { type: 'plain_text', text: '내 예약 보기' },
+            text: { type: 'plain_text', text: '예약보기' },
             style: 'primary',
             action_id: 'home:open-my-bookings',
           },
+        },
+        { type: 'divider' },
+        {
+          type: 'actions',
+          elements: [
+            {
+              type: 'button',
+              text: { type: 'plain_text', text: '🗓️ 캘린더' },
+              action_id: 'home:google-calendar',
+              url: 'https://calendar.google.com',
+            },
+            {
+              type: 'button',
+              text: { type: 'plain_text', text: '🔗 외부 캘린더 연동' },
+              action_id: 'home:external-calendar',
+              url: 'https://www.google.com/calendar/syncselect',
+            },
+            {
+              type: 'button',
+              text: { type: 'plain_text', text: '📖 사용 가이드' },
+              action_id: 'home:user-guide',
+              url: 'https://www.kyumin.dev/ko/posts/bannote-slack/user-guide',
+            },
+            {
+              type: 'button',
+              text: { type: 'plain_text', text: '🐛 버그 제보' },
+              action_id: 'home:report-bug',
+              url: 'https://github.com/kyumin1227/gsc-slack-app/issues/new?labels=bug',
+            },
+          ],
         },
       ],
     };
