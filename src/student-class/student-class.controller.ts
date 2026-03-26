@@ -10,9 +10,9 @@ import type {
 import { StudentClassService } from './student-class.service';
 import { StudentClassView } from './student-class.view';
 import { UserService } from '../user/user.service';
-import { UserRole } from '../user/user.entity';
 import { ClassSection } from './student-class.entity';
 import { CMD } from '../common/slack-commands';
+import { requireAdmin } from '../common/slack-permission';
 
 @Controller()
 export class StudentClassController {
@@ -20,22 +20,6 @@ export class StudentClassController {
     private readonly studentClassService: StudentClassService,
     private readonly userService: UserService,
   ) {}
-
-  // 권한 확인 헬퍼
-  private async checkPermission(
-    slackUserId: string,
-  ): Promise<{ hasPermission: boolean; message?: string }> {
-    const user = await this.userService.findBySlackId(slackUserId);
-    const allowedRoles = [UserRole.PROFESSOR, UserRole.TA];
-
-    if (!user || !allowedRoles.includes(user.role)) {
-      return {
-        hasPermission: false,
-        message: '이 명령어는 조교 이상 권한이 필요합니다.',
-      };
-    }
-    return { hasPermission: true };
-  }
 
   // /반 - 반 목록 조회
   @Command(CMD.반)
@@ -46,15 +30,15 @@ export class StudentClassController {
   }: SlackCommandMiddlewareArgs & AllMiddlewareArgs) {
     await ack();
 
-    const { hasPermission, message } = await this.checkPermission(body.user_id);
-    if (!hasPermission) {
-      await client.chat.postEphemeral({
-        channel: body.channel_id,
-        user: body.user_id,
-        text: message!,
-      });
+    if (
+      !(await requireAdmin(
+        this.userService,
+        body.user_id,
+        client,
+        body.channel_id,
+      ))
+    )
       return;
-    }
 
     const classes = await this.studentClassService.findAllClasses();
 
@@ -82,15 +66,15 @@ export class StudentClassController {
   }: SlackCommandMiddlewareArgs & AllMiddlewareArgs) {
     await ack();
 
-    const { hasPermission, message } = await this.checkPermission(body.user_id);
-    if (!hasPermission) {
-      await client.chat.postEphemeral({
-        channel: body.channel_id,
-        user: body.user_id,
-        text: message!,
-      });
+    if (
+      !(await requireAdmin(
+        this.userService,
+        body.user_id,
+        client,
+        body.channel_id,
+      ))
+    )
       return;
-    }
 
     await client.views.open({
       trigger_id: body.trigger_id,
