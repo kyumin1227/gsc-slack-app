@@ -10,8 +10,8 @@ import type {
 import { TagService } from './tag.service';
 import { TagView } from './tag.view';
 import { UserService } from '../user/user.service';
-import { UserRole } from '../user/user.entity';
 import { CMD } from '../common/slack-commands';
+import { requireAdmin } from '../common/slack-permission';
 
 @Controller()
 export class TagController {
@@ -19,22 +19,6 @@ export class TagController {
     private readonly tagService: TagService,
     private readonly userService: UserService,
   ) {}
-
-  // 권한 확인 헬퍼
-  private async checkPermission(
-    slackUserId: string,
-  ): Promise<{ hasPermission: boolean; message?: string }> {
-    const user = await this.userService.findBySlackId(slackUserId);
-    const allowedRoles = [UserRole.PROFESSOR, UserRole.TA];
-
-    if (!user || !allowedRoles.includes(user.role)) {
-      return {
-        hasPermission: false,
-        message: '이 명령어는 조교 이상 권한이 필요합니다.',
-      };
-    }
-    return { hasPermission: true };
-  }
 
   // /태그 - 태그 목록 조회
   @Command(CMD.태그)
@@ -48,17 +32,7 @@ export class TagController {
     await ack();
 
     const userId = 'user_id' in body ? body.user_id : body.user.id;
-    const { hasPermission, message } = await this.checkPermission(userId);
-    if (!hasPermission) {
-      if ('channel_id' in body) {
-        await client.chat.postEphemeral({
-          channel: body.channel_id,
-          user: userId,
-          text: message!,
-        });
-      }
-      return;
-    }
+    if (!await requireAdmin(this.userService, userId, client, 'channel_id' in body ? body.channel_id : undefined)) return;
 
     const tags = await this.tagService.findDisplayTags();
 
@@ -80,17 +54,7 @@ export class TagController {
     await ack();
 
     const userId = 'user_id' in body ? body.user_id : body.user.id;
-    const { hasPermission, message } = await this.checkPermission(userId);
-    if (!hasPermission) {
-      if ('channel_id' in body) {
-        await client.chat.postEphemeral({
-          channel: body.channel_id,
-          user: userId,
-          text: message!,
-        });
-      }
-      return;
-    }
+    if (!await requireAdmin(this.userService, userId, client, 'channel_id' in body ? body.channel_id : undefined)) return;
 
     await client.views.open({
       trigger_id: body.trigger_id,

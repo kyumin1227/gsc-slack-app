@@ -43,6 +43,14 @@ export class UserService {
     return this.userRepository.findOne({ where: { email } });
   }
 
+  async isAdmin(slackUserId: string): Promise<boolean> {
+    const user = await this.findBySlackId(slackUserId);
+    const allowed = [UserRole.PROFESSOR, UserRole.TA];
+    return (
+      !!user && user.status === UserStatus.ACTIVE && allowed.includes(user.role)
+    );
+  }
+
   async mapEmailsToSlackIds(emails: string[]): Promise<string[]> {
     const users = await Promise.all(emails.map((e) => this.findByEmail(e)));
     return users.filter((u): u is User => u !== null).map((u) => u.slackId);

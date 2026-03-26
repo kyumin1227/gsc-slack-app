@@ -12,8 +12,9 @@ import { ScheduleView } from './schedule.view';
 import { UserService } from '../user/user.service';
 import { TagService } from '../tag/tag.service';
 import { ChannelService } from '../channel/channel.service';
-import { UserRole, UserStatus, User } from '../user/user.entity';
+import { UserStatus, User } from '../user/user.entity';
 import { CMD } from '../common/slack-commands';
+import { requireAdmin } from '../common/slack-permission';
 
 @Controller()
 export class ScheduleController {
@@ -23,22 +24,6 @@ export class ScheduleController {
     private readonly tagService: TagService,
     private readonly channelService: ChannelService,
   ) {}
-
-  // 조교 이상 권한 확인 헬퍼
-  private async checkAdminPermission(
-    slackUserId: string,
-  ): Promise<{ hasPermission: boolean; user?: User; message?: string }> {
-    const user = await this.userService.findBySlackId(slackUserId);
-    const allowedRoles = [UserRole.PROFESSOR, UserRole.TA];
-
-    if (!user || !allowedRoles.includes(user.role)) {
-      return {
-        hasPermission: false,
-        message: '이 명령어는 조교 이상 권한이 필요합니다.',
-      };
-    }
-    return { hasPermission: true, user };
-  }
 
   // 활성 사용자 확인 헬퍼
   private async checkActiveUser(
@@ -115,17 +100,15 @@ export class ScheduleController {
     await ack();
 
     const userId = 'user_id' in body ? body.user_id : body.user.id;
-    const { hasPermission, message } = await this.checkAdminPermission(userId);
-    if (!hasPermission) {
-      if ('channel_id' in body) {
-        await client.chat.postEphemeral({
-          channel: body.channel_id,
-          user: userId,
-          text: message!,
-        });
-      }
+    if (
+      !(await requireAdmin(
+        this.userService,
+        userId,
+        client,
+        'channel_id' in body ? body.channel_id : undefined,
+      ))
+    )
       return;
-    }
 
     await client.views.open({
       trigger_id: body.trigger_id,
@@ -145,17 +128,15 @@ export class ScheduleController {
     await ack();
 
     const userId = 'user_id' in body ? body.user_id : body.user.id;
-    const { hasPermission, message } = await this.checkAdminPermission(userId);
-    if (!hasPermission) {
-      if ('channel_id' in body) {
-        await client.chat.postEphemeral({
-          channel: body.channel_id,
-          user: userId,
-          text: message!,
-        });
-      }
+    if (
+      !(await requireAdmin(
+        this.userService,
+        userId,
+        client,
+        'channel_id' in body ? body.channel_id : undefined,
+      ))
+    )
       return;
-    }
 
     const tags = await this.tagService.findDisplayTags();
 
@@ -355,8 +336,7 @@ export class ScheduleController {
     AllMiddlewareArgs) {
     await ack();
 
-    const userId =
-      'user_id' in body ? body.user_id : body.user.id;
+    const userId = 'user_id' in body ? body.user_id : body.user.id;
 
     const { isActive, message } = await this.checkActiveUser(userId);
     if (!isActive) {
@@ -762,17 +742,15 @@ export class ScheduleController {
     await ack();
 
     const userId = 'user_id' in body ? body.user_id : body.user.id;
-    const { hasPermission, message } = await this.checkAdminPermission(userId);
-    if (!hasPermission) {
-      if ('channel_id' in body) {
-        await client.chat.postEphemeral({
-          channel: body.channel_id,
-          user: userId,
-          text: message!,
-        });
-      }
+    if (
+      !(await requireAdmin(
+        this.userService,
+        userId,
+        client,
+        'channel_id' in body ? body.channel_id : undefined,
+      ))
+    )
       return;
-    }
 
     const schedules = await this.scheduleService.findActiveSchedules();
 
@@ -898,17 +876,15 @@ export class ScheduleController {
     await ack();
 
     const userId = 'user_id' in body ? body.user_id : body.user.id;
-    const { hasPermission, message } = await this.checkAdminPermission(userId);
-    if (!hasPermission) {
-      if ('channel_id' in body) {
-        await client.chat.postEphemeral({
-          channel: body.channel_id,
-          user: userId,
-          text: message!,
-        });
-      }
+    if (
+      !(await requireAdmin(
+        this.userService,
+        userId,
+        client,
+        'channel_id' in body ? body.channel_id : undefined,
+      ))
+    )
       return;
-    }
 
     const groups = await this.scheduleService.findAllRecurrenceGroups();
 
@@ -977,17 +953,15 @@ export class ScheduleController {
     await ack();
 
     const userId = 'user_id' in body ? body.user_id : body.user.id;
-    const { hasPermission, message } = await this.checkAdminPermission(userId);
-    if (!hasPermission) {
-      if ('channel_id' in body) {
-        await client.chat.postEphemeral({
-          channel: body.channel_id,
-          user: userId,
-          text: message!,
-        });
-      }
+    if (
+      !(await requireAdmin(
+        this.userService,
+        userId,
+        client,
+        'channel_id' in body ? body.channel_id : undefined,
+      ))
+    )
       return;
-    }
 
     const groups = await this.scheduleService.findAllRecurrenceGroups();
 
