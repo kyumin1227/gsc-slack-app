@@ -1,7 +1,8 @@
-import { Module } from '@nestjs/common';
+import { Module, OnModuleInit } from '@nestjs/common';
 import { AppController } from './app.controller';
 import { AppService } from './app.service';
 import { SlackModule } from 'nestjs-slack-bolt';
+import { SlackService } from 'nestjs-slack-bolt';
 import { ConfigModule } from '@nestjs/config';
 import { TypeOrmModule } from '@nestjs/typeorm';
 import { CacheModule } from '@nestjs/cache-manager';
@@ -15,6 +16,7 @@ import { ScheduleModule } from './schedule/schedule.module';
 import { ChannelModule } from './channel/channel.module';
 import { StudyRoomModule } from './study-room/study-room.module';
 import { httpReceiver } from './slack-receiver';
+import { slackErrorMiddleware } from './common/slack-error.middleware';
 
 @Module({
   imports: [
@@ -42,7 +44,11 @@ import { httpReceiver } from './slack-receiver';
     }),
     SlackModule.forRoot(
       httpReceiver
-        ? { token: process.env.SLACK_BOT_TOKEN, receiver: httpReceiver, socketMode: false }
+        ? {
+            token: process.env.SLACK_BOT_TOKEN,
+            receiver: httpReceiver,
+            socketMode: false,
+          }
         : {
             token: process.env.SLACK_BOT_TOKEN,
             socketMode: true,
@@ -61,4 +67,10 @@ import { httpReceiver } from './slack-receiver';
   controllers: [AppController],
   providers: [AppService],
 })
-export class AppModule {}
+export class AppModule implements OnModuleInit {
+  constructor(private readonly slackService: SlackService) {}
+
+  onModuleInit() {
+    this.slackService.app.use(slackErrorMiddleware);
+  }
+}
