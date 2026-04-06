@@ -9,15 +9,14 @@ import type {
 } from '@slack/bolt';
 import { TagService } from './tag.service';
 import { TagView } from './tag.view';
-import { UserService } from '../user/user.service';
 import { CMD } from '../common/slack-commands';
-import { requireAdmin } from '../common/slack-permission';
+import { PermissionService } from '../user/permission.service';
 
 @Controller()
 export class TagController {
   constructor(
     private readonly tagService: TagService,
-    private readonly userService: UserService,
+    private readonly permissionService: PermissionService,
   ) {}
 
   // /태그 - 태그 목록 조회
@@ -32,7 +31,7 @@ export class TagController {
     await ack();
 
     const userId = 'user_id' in body ? body.user_id : body.user.id;
-    if (!await requireAdmin(this.userService, userId, client, 'channel_id' in body ? body.channel_id : undefined)) return;
+    await this.permissionService.requireAdmin(userId);
 
     const tags = await this.tagService.findDisplayTags();
 
@@ -54,7 +53,7 @@ export class TagController {
     await ack();
 
     const userId = 'user_id' in body ? body.user_id : body.user.id;
-    if (!await requireAdmin(this.userService, userId, client, 'channel_id' in body ? body.channel_id : undefined)) return;
+    await this.permissionService.requireAdmin(userId);
 
     await client.views.open({
       trigger_id: body.trigger_id,

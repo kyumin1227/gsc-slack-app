@@ -14,7 +14,7 @@ import { OAuthUtil } from './google-oauth.util';
 import { UserRole } from './user.entity';
 import { StudentClassService } from '../student-class/student-class.service';
 import { CMD } from '../common/slack-commands';
-import { requireAdmin } from '../common/slack-permission';
+import { PermissionService } from './permission.service';
 
 @Controller()
 export class UserController {
@@ -24,6 +24,7 @@ export class UserController {
     private readonly userService: UserService,
     private readonly slackService: SlackService,
     private readonly studentClassService: StudentClassService,
+    private readonly permissionService: PermissionService,
   ) {}
 
   // 회원가입 모달 열기
@@ -217,15 +218,7 @@ export class UserController {
 
       const userId = 'user_id' in body ? body.user_id : body.user.id;
 
-      if (
-        !(await requireAdmin(
-          this.userService,
-          userId,
-          client,
-          'channel_id' in body ? body.channel_id : undefined,
-        ))
-      )
-        return;
+      await this.permissionService.requireAdmin(userId);
 
       // 승인 대기 유저 목록 조회
       const pendingUsers = await this.userService.findPendingApproval();
