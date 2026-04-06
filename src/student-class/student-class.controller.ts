@@ -9,16 +9,15 @@ import type {
 } from '@slack/bolt';
 import { StudentClassService } from './student-class.service';
 import { StudentClassView } from './student-class.view';
-import { UserService } from '../user/user.service';
 import { ClassSection } from './student-class.entity';
 import { CMD } from '../common/slack-commands';
-import { requireAdmin } from '../common/slack-permission';
+import { PermissionService } from '../user/permission.service';
 
 @Controller()
 export class StudentClassController {
   constructor(
     private readonly studentClassService: StudentClassService,
-    private readonly userService: UserService,
+    private readonly permissionService: PermissionService,
   ) {}
 
   // /반 - 반 목록 조회
@@ -30,15 +29,7 @@ export class StudentClassController {
   }: SlackCommandMiddlewareArgs & AllMiddlewareArgs) {
     await ack();
 
-    if (
-      !(await requireAdmin(
-        this.userService,
-        body.user_id,
-        client,
-        body.channel_id,
-      ))
-    )
-      return;
+    await this.permissionService.requireAdmin(body.user_id);
 
     const classes = await this.studentClassService.findAllClasses();
 
@@ -66,15 +57,7 @@ export class StudentClassController {
   }: SlackCommandMiddlewareArgs & AllMiddlewareArgs) {
     await ack();
 
-    if (
-      !(await requireAdmin(
-        this.userService,
-        body.user_id,
-        client,
-        body.channel_id,
-      ))
-    )
-      return;
+    await this.permissionService.requireAdmin(body.user_id);
 
     await client.views.open({
       trigger_id: body.trigger_id,

@@ -14,7 +14,7 @@ import { TagService } from '../tag/tag.service';
 import { ChannelService } from '../channel/channel.service';
 import { UserStatus, User } from '../user/user.entity';
 import { CMD } from '../common/slack-commands';
-import { requireAdmin } from '../common/slack-permission';
+import { PermissionService } from '../user/permission.service';
 
 @Controller()
 export class ScheduleController {
@@ -23,6 +23,7 @@ export class ScheduleController {
     private readonly userService: UserService,
     private readonly tagService: TagService,
     private readonly channelService: ChannelService,
+    private readonly permissionService: PermissionService,
   ) {}
 
   // 활성 사용자 확인 헬퍼
@@ -100,15 +101,7 @@ export class ScheduleController {
     await ack();
 
     const userId = 'user_id' in body ? body.user_id : body.user.id;
-    if (
-      !(await requireAdmin(
-        this.userService,
-        userId,
-        client,
-        'channel_id' in body ? body.channel_id : undefined,
-      ))
-    )
-      return;
+    await this.permissionService.requireAdmin(userId);
 
     await client.views.open({
       trigger_id: body.trigger_id,
@@ -128,15 +121,7 @@ export class ScheduleController {
     await ack();
 
     const userId = 'user_id' in body ? body.user_id : body.user.id;
-    if (
-      !(await requireAdmin(
-        this.userService,
-        userId,
-        client,
-        'channel_id' in body ? body.channel_id : undefined,
-      ))
-    )
-      return;
+    await this.permissionService.requireAdmin(userId);
 
     const tags = await this.tagService.findDisplayTags();
 
@@ -182,44 +167,33 @@ export class ScheduleController {
     // 3초 제한 내에 ack 처리 — 이후 작업은 DM으로 결과 전달
     await ack();
 
-    try {
-      const tagIds = selectedTags.map((opt: { value: string }) =>
-        parseInt(opt.value, 10),
-      );
+    const tagIds = selectedTags.map((opt: { value: string }) =>
+      parseInt(opt.value, 10),
+    );
 
-      const creatorRefreshToken =
-        this.userService.getDecryptedRefreshToken(user);
+    const creatorRefreshToken = this.userService.getDecryptedRefreshToken(user);
 
-      const created = await this.scheduleService.createSchedule({
-        name: name.trim(),
-        description: description?.trim(),
-        tagIds,
-        createdById: user.id,
-        creatorEmail: user.email,
-        creatorRefreshToken: creatorRefreshToken ?? undefined,
-      });
+    const created = await this.scheduleService.createSchedule({
+      name: name.trim(),
+      description: description?.trim(),
+      tagIds,
+      createdById: user.id,
+      creatorEmail: user.email,
+      creatorRefreshToken: creatorRefreshToken ?? undefined,
+    });
 
-      // 학반 태그 기반 알림 채널 자동 등록
-      const studentClassIds = (created.tags ?? [])
-        .filter((t) => t.studentClassId)
-        .map((t) => t.studentClassId!);
-      await this.channelService.syncClassChannels(created.id, studentClassIds);
+    // 학반 태그 기반 알림 채널 자동 등록
+    const studentClassIds = (created.tags ?? [])
+      .filter((t) => t.studentClassId)
+      .map((t) => t.studentClassId!);
+    await this.channelService.syncClassChannels(created.id, studentClassIds);
 
-      await client.chat.postMessage({
-        channel: body.user.id,
-        text: `시간표 "${name}"이(가) 생성되었습니다. Google Calendar가 함께 생성되었습니다.`,
-      });
+    await client.chat.postMessage({
+      channel: body.user.id,
+      text: `시간표 "${name}"이(가) 생성되었습니다. Google Calendar가 함께 생성되었습니다.`,
+    });
 
-      logger.info(`Schedule created: ${name} by ${user.name}`);
-    } catch (error) {
-      logger.error('Create schedule error:', error);
-
-      const err = error as { message?: string };
-      await client.chat.postMessage({
-        channel: body.user.id,
-        text: `시간표 생성 중 오류가 발생했습니다: ${err.message ?? '알 수 없는 오류'}`,
-      });
-    }
+    logger.info(`Schedule created: ${name} by ${user.name}`);
   }
 
   // 시간표 상태 토글 (활성화/비활성화)
@@ -232,38 +206,34 @@ export class ScheduleController {
   }: SlackActionMiddlewareArgs<BlockAction> & AllMiddlewareArgs) {
     await ack();
 
-    try {
-      const action = body.actions[0] as { action_id: string; value: string };
-      const scheduleId = parseInt(action.action_id.split(':').pop()!, 10);
-      const toggleAction = action.value;
+    const action = body.actions[0] as { action_id: string; value: string };
+    const scheduleId = parseInt(action.action_id.split(':').pop()!, 10);
+    const toggleAction = action.value;
 
-      if (toggleAction === 'deactivate') {
-        await this.scheduleService.deactivateSchedule(scheduleId);
-      } else if (toggleAction === 'activate') {
-        await this.scheduleService.activateSchedule(scheduleId);
-      }
-
-      // 현재 필터/페이지 유지하며 목록 새로고침
-      if (body.view?.id) {
-        const meta = JSON.parse(body.view.private_metadata || '{}') as {
-          page?: number;
-          status?: string;
-          tagIds?: number[];
-        };
-        await client.views.update({
-          view_id: body.view.id,
-          view: await this.buildListModal(
-            meta.page ?? 0,
-            meta.status ?? 'all',
-            meta.tagIds ?? [],
-          ),
-        });
-      }
-
-      logger.info(`Schedule ${scheduleId} toggled to ${toggleAction}`);
-    } catch (error) {
-      logger.error('Toggle schedule error:', error);
+    if (toggleAction === 'deactivate') {
+      await this.scheduleService.deactivateSchedule(scheduleId);
+    } else if (toggleAction === 'activate') {
+      await this.scheduleService.activateSchedule(scheduleId);
     }
+
+    // 현재 필터/페이지 유지하며 목록 새로고침
+    if (body.view?.id) {
+      const meta = JSON.parse(body.view.private_metadata || '{}') as {
+        page?: number;
+        status?: string;
+        tagIds?: number[];
+      };
+      await client.views.update({
+        view_id: body.view.id,
+        view: await this.buildListModal(
+          meta.page ?? 0,
+          meta.status ?? 'all',
+          meta.tagIds ?? [],
+        ),
+      });
+    }
+
+    logger.info(`Schedule ${scheduleId} toggled to ${toggleAction}`);
   }
 
   // 조회 버튼(submit) → 필터 적용, 모달 유지
@@ -271,25 +241,19 @@ export class ScheduleController {
   async handleSearch({
     ack,
     view,
-    logger,
   }: SlackViewMiddlewareArgs & AllMiddlewareArgs) {
-    try {
-      const values = view.state.values;
-      const status =
-        values['status_block']?.['status_select']?.selected_option?.value ??
-        'all';
-      const tagIds = (
-        values['tags_block']?.['tags_select']?.selected_options ?? []
-      ).map((opt: { value: string }) => parseInt(opt.value, 10));
+    const values = view.state.values;
+    const status =
+      values['status_block']?.['status_select']?.selected_option?.value ??
+      'all';
+    const tagIds = (
+      values['tags_block']?.['tags_select']?.selected_options ?? []
+    ).map((opt: { value: string }) => parseInt(opt.value, 10));
 
-      await ack({
-        response_action: 'update',
-        view: await this.buildListModal(0, status, tagIds),
-      });
-    } catch (error) {
-      logger.error('Search schedule error:', error);
-      await ack();
-    }
+    await ack({
+      response_action: 'update',
+      view: await this.buildListModal(0, status, tagIds),
+    });
   }
 
   // 페이지 이동 버튼
@@ -298,30 +262,25 @@ export class ScheduleController {
     ack,
     body,
     client,
-    logger,
   }: SlackActionMiddlewareArgs<BlockAction> & AllMiddlewareArgs) {
     await ack();
 
-    try {
-      const action = body.actions[0] as { value: string };
-      const page = parseInt(action.value, 10);
-      const meta = JSON.parse(body.view?.private_metadata || '{}') as {
-        status?: string;
-        tagIds?: number[];
-      };
+    const action = body.actions[0] as { value: string };
+    const page = parseInt(action.value, 10);
+    const meta = JSON.parse(body.view?.private_metadata || '{}') as {
+      status?: string;
+      tagIds?: number[];
+    };
 
-      if (body.view?.id) {
-        await client.views.update({
-          view_id: body.view.id,
-          view: await this.buildListModal(
-            page,
-            meta.status ?? 'all',
-            meta.tagIds ?? [],
-          ),
-        });
-      }
-    } catch (error) {
-      logger.error('Page change error:', error);
+    if (body.view?.id) {
+      await client.views.update({
+        view_id: body.view.id,
+        view: await this.buildListModal(
+          page,
+          meta.status ?? 'all',
+          meta.tagIds ?? [],
+        ),
+      });
     }
   }
 
@@ -414,39 +373,30 @@ export class ScheduleController {
     view,
     logger,
   }: SlackViewMiddlewareArgs & AllMiddlewareArgs) {
-    try {
-      const values = view.state.values;
-      const selectedTags =
-        values.tags_block?.tags_select?.selected_options ?? [];
-      const tagIds = selectedTags.map((opt: { value: string }) =>
-        parseInt(opt.value, 10),
-      );
+    const values = view.state.values;
+    const selectedTags = values.tags_block?.tags_select?.selected_options ?? [];
+    const tagIds = selectedTags.map((opt: { value: string }) =>
+      parseInt(opt.value, 10),
+    );
 
-      const user = await this.userService.findBySlackId(body.user.id);
-      if (!user) {
-        await ack({
-          response_action: 'errors',
-          errors: { tags_block: '사용자 정보를 찾을 수 없습니다.' },
-        });
-        return;
-      }
-
-      const refreshToken = this.userService.getDecryptedRefreshToken(user);
-      await ack({
-        response_action: 'update',
-        view: await this.buildSubscribeModal(0, tagIds, refreshToken ?? ''),
-      });
-
-      logger.info(
-        `User ${user.name} searched schedules for tags: ${tagIds.join(', ') || '전체'}`,
-      );
-    } catch (error) {
-      logger.error('Tag search error:', error);
+    const user = await this.userService.findBySlackId(body.user.id);
+    if (!user) {
       await ack({
         response_action: 'errors',
-        errors: { tags_block: '검색 중 오류가 발생했습니다.' },
+        errors: { tags_block: '사용자 정보를 찾을 수 없습니다.' },
       });
+      return;
     }
+
+    const refreshToken = this.userService.getDecryptedRefreshToken(user);
+    await ack({
+      response_action: 'update',
+      view: await this.buildSubscribeModal(0, tagIds, refreshToken ?? ''),
+    });
+
+    logger.info(
+      `User ${user.name} searched schedules for tags: ${tagIds.join(', ') || '전체'}`,
+    );
   }
 
   // 구독 페이지 이동 버튼
@@ -455,32 +405,27 @@ export class ScheduleController {
     ack,
     body,
     client,
-    logger,
   }: SlackActionMiddlewareArgs<BlockAction> & AllMiddlewareArgs) {
     await ack();
 
-    try {
-      const action = body.actions[0] as { value: string };
-      const page = parseInt(action.value, 10);
-      const meta = JSON.parse(body.view?.private_metadata || '{}') as {
-        selectedTagIds?: number[];
-      };
+    const action = body.actions[0] as { value: string };
+    const page = parseInt(action.value, 10);
+    const meta = JSON.parse(body.view?.private_metadata || '{}') as {
+      selectedTagIds?: number[];
+    };
 
-      const user = await this.userService.findBySlackId(body.user.id);
-      if (!user || !body.view?.id) return;
+    const user = await this.userService.findBySlackId(body.user.id);
+    if (!user || !body.view?.id) return;
 
-      const refreshToken = this.userService.getDecryptedRefreshToken(user);
-      await client.views.update({
-        view_id: body.view.id,
-        view: await this.buildSubscribeModal(
-          page,
-          meta.selectedTagIds ?? [],
-          refreshToken ?? '',
-        ),
-      });
-    } catch (error) {
-      logger.error('Subscribe page change error:', error);
-    }
+    const refreshToken = this.userService.getDecryptedRefreshToken(user);
+    await client.views.update({
+      view_id: body.view.id,
+      view: await this.buildSubscribeModal(
+        page,
+        meta.selectedTagIds ?? [],
+        refreshToken ?? '',
+      ),
+    });
   }
 
   // 수정/관리 버튼 → 수정 모달 열기
@@ -489,47 +434,42 @@ export class ScheduleController {
     ack,
     body,
     client,
-    logger,
   }: SlackActionMiddlewareArgs<BlockAction> & AllMiddlewareArgs) {
     await ack();
 
-    try {
-      const action = body.actions[0] as { action_id: string };
-      const scheduleId = parseInt(action.action_id.split(':').pop()!, 10);
+    const action = body.actions[0] as { action_id: string };
+    const scheduleId = parseInt(action.action_id.split(':').pop()!, 10);
 
-      const [schedule, displayTags, permissions, notifChannelIds] =
-        await Promise.all([
-          this.scheduleService.findById(scheduleId),
-          this.tagService.findDisplayTags(),
-          this.scheduleService.getCalendarPermissions(scheduleId),
-          this.channelService.getSlackChannelIds(scheduleId),
-        ]);
+    const [schedule, displayTags, permissions, notifChannelIds] =
+      await Promise.all([
+        this.scheduleService.findById(scheduleId),
+        this.tagService.findDisplayTags(),
+        this.scheduleService.getCalendarPermissions(scheduleId),
+        this.channelService.getSlackChannelIds(scheduleId),
+      ]);
 
-      if (!schedule) return;
+    if (!schedule) return;
 
-      const editorEmails = (permissions ?? [])
-        .filter((p) => p.role === 'writer')
-        .map((p) => p.email);
-      const initialEditorSlackIds =
-        await this.userService.mapEmailsToSlackIds(editorEmails);
+    const editorEmails = (permissions ?? [])
+      .filter((p) => p.role === 'writer')
+      .map((p) => p.email);
+    const initialEditorSlackIds =
+      await this.userService.mapEmailsToSlackIds(editorEmails);
 
-      await client.views.push({
-        trigger_id: body.trigger_id,
-        view: ScheduleView.editModal(
-          {
-            id: schedule.id,
-            name: schedule.name,
-            description: schedule.description,
-            tags: schedule.tags,
-          },
-          displayTags,
-          initialEditorSlackIds,
-          notifChannelIds,
-        ),
-      });
-    } catch (error) {
-      logger.error('Open edit modal error:', error);
-    }
+    await client.views.push({
+      trigger_id: body.trigger_id,
+      view: ScheduleView.editModal(
+        {
+          id: schedule.id,
+          name: schedule.name,
+          description: schedule.description,
+          tags: schedule.tags,
+        },
+        displayTags,
+        initialEditorSlackIds,
+        notifChannelIds,
+      ),
+    });
   }
 
   // 수정 모달 제출 → 시간표 정보 업데이트
@@ -558,108 +498,95 @@ export class ScheduleController {
 
     await ack();
 
-    try {
-      const tagIds = selectedTags.map((opt: { value: string }) =>
-        parseInt(opt.value, 10),
-      );
+    const tagIds = selectedTags.map((opt: { value: string }) =>
+      parseInt(opt.value, 10),
+    );
 
-      // 태그 교체 전에 기존 반 태그의 studentClassId 파악
-      const beforeSchedule = await this.scheduleService.findById(scheduleId);
-      const oldStudentClassIds = (beforeSchedule?.tags ?? [])
-        .filter((t) => t.studentClassId)
-        .map((t) => t.studentClassId!);
+    // 태그 교체 전에 기존 반 태그의 studentClassId 파악
+    const beforeSchedule = await this.scheduleService.findById(scheduleId);
+    const oldStudentClassIds = (beforeSchedule?.tags ?? [])
+      .filter((t) => t.studentClassId)
+      .map((t) => t.studentClassId!);
 
-      const updated = await this.scheduleService.updateSchedule(scheduleId, {
-        name: name.trim(),
-        description: description?.trim(),
-        tagIds,
-      });
+    const updated = await this.scheduleService.updateSchedule(scheduleId, {
+      name: name.trim(),
+      description: description?.trim(),
+      tagIds,
+    });
 
-      // 알림 채널 저장: 제거된 반 채널 제외 후 교체, 신규 반 채널 동기화
-      const selectedChannelIds =
-        (
-          values['notification_channels_block']?.['channels_select'] as
-            | { selected_channels?: string[] }
-            | undefined
-        )?.selected_channels ?? [];
+    // 알림 채널 저장: 제거된 반 채널 제외 후 교체, 신규 반 채널 동기화
+    const selectedChannelIds =
+      (
+        values['notification_channels_block']?.['channels_select'] as
+          | { selected_channels?: string[] }
+          | undefined
+      )?.selected_channels ?? [];
 
-      const newStudentClassIds = (updated?.tags ?? [])
-        .filter((t) => t.studentClassId)
-        .map((t) => t.studentClassId!);
-      const removedStudentClassIds = oldStudentClassIds.filter(
-        (id) => !newStudentClassIds.includes(id),
-      );
-      const removedChannelIds =
-        await this.channelService.getClassSlackChannelIds(
-          removedStudentClassIds,
-        );
-      const filteredChannelIds = selectedChannelIds.filter(
-        (id) => !removedChannelIds.includes(id),
-      );
+    const newStudentClassIds = (updated?.tags ?? [])
+      .filter((t) => t.studentClassId)
+      .map((t) => t.studentClassId!);
+    const removedStudentClassIds = oldStudentClassIds.filter(
+      (id) => !newStudentClassIds.includes(id),
+    );
+    const removedChannelIds = await this.channelService.getClassSlackChannelIds(
+      removedStudentClassIds,
+    );
+    const filteredChannelIds = selectedChannelIds.filter(
+      (id) => !removedChannelIds.includes(id),
+    );
 
-      await this.channelService.setScheduleChannels(
-        scheduleId,
-        filteredChannelIds,
-      );
-      await this.channelService.syncClassChannels(
-        scheduleId,
-        newStudentClassIds,
-      );
+    await this.channelService.setScheduleChannels(
+      scheduleId,
+      filteredChannelIds,
+    );
+    await this.channelService.syncClassChannels(scheduleId, newStudentClassIds);
 
-      // 수정자 diff 처리
-      const selectedEditorIds =
-        (
-          values['editors_block']?.['editors_select'] as
-            | { selected_users?: string[] }
-            | undefined
-        )?.selected_users ?? [];
+    // 수정자 diff 처리
+    const selectedEditorIds =
+      (
+        values['editors_block']?.['editors_select'] as
+          | { selected_users?: string[] }
+          | undefined
+      )?.selected_users ?? [];
 
-      const currentPermissions =
-        await this.scheduleService.getCalendarPermissions(scheduleId);
-      const currentEditorEmails = (currentPermissions ?? [])
-        .filter((p) => p.role === 'writer')
-        .map((p) => p.email);
-      const currentEditorSlackIds =
-        await this.userService.mapEmailsToSlackIds(currentEditorEmails);
+    const currentPermissions =
+      await this.scheduleService.getCalendarPermissions(scheduleId);
+    const currentEditorEmails = (currentPermissions ?? [])
+      .filter((p) => p.role === 'writer')
+      .map((p) => p.email);
+    const currentEditorSlackIds =
+      await this.userService.mapEmailsToSlackIds(currentEditorEmails);
 
-      const oldSet = new Set(currentEditorSlackIds);
-      const newSet = new Set(selectedEditorIds);
-      const toAdd = selectedEditorIds.filter((id) => !oldSet.has(id));
-      const toRemove = currentEditorSlackIds.filter((id) => !newSet.has(id));
+    const oldSet = new Set(currentEditorSlackIds);
+    const newSet = new Set(selectedEditorIds);
+    const toAdd = selectedEditorIds.filter((id) => !oldSet.has(id));
+    const toRemove = currentEditorSlackIds.filter((id) => !newSet.has(id));
 
-      await Promise.all([
-        ...toAdd.map(async (slackId) => {
-          const user = await this.userService.findBySlackId(slackId);
-          if (user?.email) {
-            await this.scheduleService.shareCalendar(
-              scheduleId,
-              user.email,
-              'writer',
-            );
-          }
-        }),
-        ...toRemove.map(async (slackId) => {
-          const user = await this.userService.findBySlackId(slackId);
-          if (user?.email) {
-            await this.scheduleService.unshareCalendar(scheduleId, user.email);
-          }
-        }),
-      ]);
+    await Promise.all([
+      ...toAdd.map(async (slackId) => {
+        const user = await this.userService.findBySlackId(slackId);
+        if (user?.email) {
+          await this.scheduleService.shareCalendar(
+            scheduleId,
+            user.email,
+            'writer',
+          );
+        }
+      }),
+      ...toRemove.map(async (slackId) => {
+        const user = await this.userService.findBySlackId(slackId);
+        if (user?.email) {
+          await this.scheduleService.unshareCalendar(scheduleId, user.email);
+        }
+      }),
+    ]);
 
-      await client.chat.postMessage({
-        channel: body.user.id,
-        text: `시간표 "${name}"이(가) 수정되었습니다.`,
-      });
+    await client.chat.postMessage({
+      channel: body.user.id,
+      text: `시간표 "${name}"이(가) 수정되었습니다.`,
+    });
 
-      logger.info(`Schedule ${scheduleId} updated by ${body.user.id}`);
-    } catch (error) {
-      logger.error('Update schedule error:', error);
-      const err = error as { message?: string };
-      await client.chat.postMessage({
-        channel: body.user.id,
-        text: `시간표 수정 중 오류가 발생했습니다: ${err.message ?? '알 수 없는 오류'}`,
-      });
-    }
+    logger.info(`Schedule ${scheduleId} updated by ${body.user.id}`);
   }
 
   // 구독/구독해제 토글
@@ -672,61 +599,55 @@ export class ScheduleController {
   }: SlackActionMiddlewareArgs<BlockAction> & AllMiddlewareArgs) {
     await ack();
 
-    try {
-      const action = body.actions[0] as { action_id: string; value: string };
-      const scheduleId = parseInt(action.action_id.split(':').pop()!, 10);
-      const { action: toggleAction, tagIds } = JSON.parse(action.value) as {
-        action: string;
-        tagIds: number[];
-      };
+    const action = body.actions[0] as { action_id: string; value: string };
+    const scheduleId = parseInt(action.action_id.split(':').pop()!, 10);
+    const { action: toggleAction, tagIds } = JSON.parse(action.value) as {
+      action: string;
+      tagIds: number[];
+    };
 
-      // 사용자 정보 조회
-      const user = await this.userService.findBySlackId(body.user.id);
-      if (!user) {
-        logger.error('User not found for subscribe toggle');
-        return;
-      }
+    // 사용자 정보 조회
+    const user = await this.userService.findBySlackId(body.user.id);
+    if (!user) {
+      logger.error('User not found for subscribe toggle');
+      return;
+    }
 
-      // refresh token 확인 및 복호화
-      const refreshToken = this.userService.getDecryptedRefreshToken(user);
-      if (!refreshToken) {
-        logger.error('User has no valid refresh token for subscribe toggle');
-        await client.chat.postMessage({
-          channel: body.user.id,
-          text: '구독 기능을 사용하려면 Google 계정 재연동이 필요합니다. 회원정보를 다시 등록해주세요.',
-        });
-        return;
-      }
+    // refresh token 확인 및 복호화
+    const refreshToken = this.userService.getDecryptedRefreshToken(user);
+    if (!refreshToken) {
+      logger.error('User has no valid refresh token for subscribe toggle');
+      await client.chat.postMessage({
+        channel: body.user.id,
+        text: '구독 기능을 사용하려면 Google 계정 재연동이 필요합니다. 회원정보를 다시 등록해주세요.',
+      });
+      return;
+    }
 
-      // 구독/구독해제 실행
-      if (toggleAction === 'subscribe') {
-        await this.scheduleService.subscribe(scheduleId, refreshToken);
-        logger.info(`User ${user.name} subscribed to schedule ${scheduleId}`);
-      } else {
-        await this.scheduleService.unsubscribe(scheduleId, refreshToken);
-        logger.info(
-          `User ${user.name} unsubscribed from schedule ${scheduleId}`,
-        );
-      }
+    // 구독/구독해제 실행
+    if (toggleAction === 'subscribe') {
+      await this.scheduleService.subscribe(scheduleId, refreshToken);
+      logger.info(`User ${user.name} subscribed to schedule ${scheduleId}`);
+    } else {
+      await this.scheduleService.unsubscribe(scheduleId, refreshToken);
+      logger.info(`User ${user.name} unsubscribed from schedule ${scheduleId}`);
+    }
 
-      // 현재 페이지/태그 필터 유지하며 목록 새로고침
-      const meta = JSON.parse(body.view?.private_metadata || '{}') as {
-        selectedTagIds?: number[];
-        page?: number;
-      };
+    // 현재 페이지/태그 필터 유지하며 목록 새로고침
+    const meta = JSON.parse(body.view?.private_metadata || '{}') as {
+      selectedTagIds?: number[];
+      page?: number;
+    };
 
-      if (body.view?.id) {
-        await client.views.update({
-          view_id: body.view.id,
-          view: await this.buildSubscribeModal(
-            meta.page ?? 0,
-            meta.selectedTagIds ?? tagIds,
-            refreshToken,
-          ),
-        });
-      }
-    } catch (error) {
-      logger.error('Subscribe toggle error:', error);
+    if (body.view?.id) {
+      await client.views.update({
+        view_id: body.view.id,
+        view: await this.buildSubscribeModal(
+          meta.page ?? 0,
+          meta.selectedTagIds ?? tagIds,
+          refreshToken,
+        ),
+      });
     }
   }
 
@@ -742,15 +663,7 @@ export class ScheduleController {
     await ack();
 
     const userId = 'user_id' in body ? body.user_id : body.user.id;
-    if (
-      !(await requireAdmin(
-        this.userService,
-        userId,
-        client,
-        'channel_id' in body ? body.channel_id : undefined,
-      ))
-    )
-      return;
+    await this.permissionService.requireAdmin(userId);
 
     const schedules = await this.scheduleService.findActiveSchedules();
 
@@ -769,7 +682,6 @@ export class ScheduleController {
     body,
     view,
     client,
-    logger,
   }: SlackViewMiddlewareArgs & AllMiddlewareArgs) {
     const values = view.state.values;
 
@@ -836,32 +748,23 @@ export class ScheduleController {
 
     await ack();
 
-    try {
-      await this.scheduleService.createRecurringEvents({
-        scheduleId,
-        title: title.trim(),
-        description: description?.trim(),
-        location: location?.trim(),
-        startDate,
-        endDate,
-        startTime,
-        endTime,
-        recurrenceType,
-        daysOfWeek: recurrenceType !== 'monthly' ? daysOfWeek : undefined,
-      });
+    await this.scheduleService.createRecurringEvents({
+      scheduleId,
+      title: title.trim(),
+      description: description?.trim(),
+      location: location?.trim(),
+      startDate,
+      endDate,
+      startTime,
+      endTime,
+      recurrenceType,
+      daysOfWeek: recurrenceType !== 'monthly' ? daysOfWeek : undefined,
+    });
 
-      await client.chat.postMessage({
-        channel: body.user.id,
-        text: `"${title}" 반복 일정 생성이 완료되었습니다.`,
-      });
-    } catch (error) {
-      logger.error('Create recurring events error:', error);
-      const err = error as { message?: string };
-      await client.chat.postMessage({
-        channel: body.user.id,
-        text: `반복 일정 생성 중 오류가 발생했습니다: ${err.message ?? '알 수 없는 오류'}`,
-      });
-    }
+    await client.chat.postMessage({
+      channel: body.user.id,
+      text: `"${title}" 반복 일정 생성이 완료되었습니다.`,
+    });
   }
 
   // /반복일정삭제 - 반복 일정 삭제 모달
@@ -876,15 +779,7 @@ export class ScheduleController {
     await ack();
 
     const userId = 'user_id' in body ? body.user_id : body.user.id;
-    if (
-      !(await requireAdmin(
-        this.userService,
-        userId,
-        client,
-        'channel_id' in body ? body.channel_id : undefined,
-      ))
-    )
-      return;
+    await this.permissionService.requireAdmin(userId);
 
     const groups = await this.scheduleService.findAllRecurrenceGroups();
 
@@ -912,7 +807,6 @@ export class ScheduleController {
     body,
     view,
     client,
-    logger,
   }: SlackViewMiddlewareArgs & AllMiddlewareArgs) {
     const values = view.state.values;
     const groupDbId = parseInt(
@@ -924,21 +818,14 @@ export class ScheduleController {
 
     await ack();
 
-    try {
-      const { deleted, total } =
-        await this.scheduleService.deleteRecurringGroup(groupDbId, scope);
-      await client.chat.postMessage({
-        channel: body.user.id,
-        text: `반복 일정 삭제 완료: ${deleted}/${total}개`,
-      });
-    } catch (error) {
-      logger.error('Delete recurring events error:', error);
-      const err = error as { message?: string };
-      await client.chat.postMessage({
-        channel: body.user.id,
-        text: `반복 일정 삭제 중 오류가 발생했습니다: ${err.message ?? '알 수 없는 오류'}`,
-      });
-    }
+    const { deleted, total } = await this.scheduleService.deleteRecurringGroup(
+      groupDbId,
+      scope,
+    );
+    await client.chat.postMessage({
+      channel: body.user.id,
+      text: `반복 일정 삭제 완료: ${deleted}/${total}개`,
+    });
   }
 
   // /반복일정수정 - 반복 일정 수정 모달
@@ -953,15 +840,7 @@ export class ScheduleController {
     await ack();
 
     const userId = 'user_id' in body ? body.user_id : body.user.id;
-    if (
-      !(await requireAdmin(
-        this.userService,
-        userId,
-        client,
-        'channel_id' in body ? body.channel_id : undefined,
-      ))
-    )
-      return;
+    await this.permissionService.requireAdmin(userId);
 
     const groups = await this.scheduleService.findAllRecurrenceGroups();
 
@@ -989,7 +868,6 @@ export class ScheduleController {
     body,
     view,
     client,
-    logger,
   }: SlackViewMiddlewareArgs & AllMiddlewareArgs) {
     const values = view.state.values;
     const groupDbId = parseInt(
@@ -1024,24 +902,14 @@ export class ScheduleController {
 
     await ack();
 
-    try {
-      const { updated, total } =
-        await this.scheduleService.updateRecurringGroup(
-          groupDbId,
-          { title, description, location, startTime, endTime },
-          scope,
-        );
-      await client.chat.postMessage({
-        channel: body.user.id,
-        text: `반복 일정 수정 완료: ${updated}/${total}개`,
-      });
-    } catch (error) {
-      logger.error('Edit recurring events error:', error);
-      const err = error as { message?: string };
-      await client.chat.postMessage({
-        channel: body.user.id,
-        text: `반복 일정 수정 중 오류가 발생했습니다: ${err.message ?? '알 수 없는 오류'}`,
-      });
-    }
+    const { updated, total } = await this.scheduleService.updateRecurringGroup(
+      groupDbId,
+      { title, description, location, startTime, endTime },
+      scope,
+    );
+    await client.chat.postMessage({
+      channel: body.user.id,
+      text: `반복 일정 수정 완료: ${updated}/${total}개`,
+    });
   }
 }

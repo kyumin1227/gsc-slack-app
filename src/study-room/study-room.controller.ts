@@ -14,7 +14,7 @@ import { UserService } from '../user/user.service';
 import { UserStatus } from '../user/user.entity';
 import { GoogleCalendarUtil } from '../google/google-calendar.util';
 import { CMD } from '../common/slack-commands';
-import { requireAdmin } from '../common/slack-permission';
+import { PermissionService } from '../user/permission.service';
 
 @Controller()
 export class StudyRoomController {
@@ -23,6 +23,7 @@ export class StudyRoomController {
   constructor(
     private readonly studyRoomService: StudyRoomService,
     private readonly userService: UserService,
+    private readonly permissionService: PermissionService,
   ) {}
 
   @Command(CMD.스터디룸생성)
@@ -36,15 +37,7 @@ export class StudyRoomController {
     await ack();
 
     const userId = 'user_id' in body ? body.user_id : body.user.id;
-    if (
-      !(await requireAdmin(
-        this.userService,
-        userId,
-        client,
-        'channel_id' in body ? body.channel_id : undefined,
-      ))
-    )
-      return;
+    await this.permissionService.requireAdmin(userId);
 
     await client.views.open({
       trigger_id: body.trigger_id,
@@ -433,15 +426,7 @@ export class StudyRoomController {
     await ack();
 
     const userId = 'user_id' in body ? body.user_id : body.user.id;
-    if (
-      !(await requireAdmin(
-        this.userService,
-        userId,
-        client,
-        'channel_id' in body ? body.channel_id : undefined,
-      ))
-    )
-      return;
+    await this.permissionService.requireAdmin(userId);
 
     const rooms = await this.studyRoomService.findAll();
     await client.views.open({
