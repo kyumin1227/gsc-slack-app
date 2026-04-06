@@ -4,6 +4,7 @@ import { Repository } from 'typeorm';
 import { StudyRoom, StudyRoomStatus } from './study-room.entity';
 import { GoogleCalendarUtil } from '../google/google-calendar.util';
 import { UserService } from '../user/user.service';
+import { BusinessError, ErrorCode } from '../common/errors';
 
 export interface CreateStudyRoomDto {
   name: string;
@@ -68,7 +69,7 @@ export class StudyRoomService {
 
   async bookStudyRoom(dto: BookStudyRoomDto): Promise<string> {
     const room = await this.findById(dto.studyRoomId);
-    if (!room) throw new Error('스터디룸을 찾을 수 없습니다.');
+    if (!room) throw new BusinessError(ErrorCode.STUDY_ROOM_NOT_FOUND);
 
     console.log(dto.attendeeSlackIds);
 
@@ -80,12 +81,12 @@ export class StudyRoomService {
 
     const editor = await this.userService.findActiveByEmails(editorEmails);
     if (!editor) {
-      throw new Error('캘린더 수정 권한을 가진 활성 유저를 찾을 수 없습니다.');
+      throw new BusinessError(ErrorCode.CALENDAR_WRITER_NOT_FOUND);
     }
 
     const refreshToken = this.userService.getDecryptedRefreshToken(editor);
     if (!refreshToken) {
-      throw new Error('캘린더 수정 권한자의 인증 정보가 없습니다.');
+      throw new BusinessError(ErrorCode.CALENDAR_WRITER_NO_TOKEN);
     }
 
     // 2. 중복 예약 체크
@@ -96,7 +97,7 @@ export class StudyRoomService {
       dto.endTime,
     );
     if (isBusy) {
-      throw new Error('해당 시간대에 이미 예약이 있습니다.');
+      throw new BusinessError(ErrorCode.BOOKING_CONFLICT);
     }
 
     // 3. 참석자 정보 조회 (예약자 포함)
@@ -147,12 +148,11 @@ export class StudyRoomService {
       .map((e) => e.email);
 
     const editor = await this.userService.findActiveByEmails(editorEmails);
-    if (!editor)
-      throw new Error('캘린더 수정 권한을 가진 활성 유저를 찾을 수 없습니다.');
+    if (!editor) throw new BusinessError(ErrorCode.CALENDAR_WRITER_NOT_FOUND);
 
     const refreshToken = this.userService.getDecryptedRefreshToken(editor);
     if (!refreshToken)
-      throw new Error('캘린더 수정 권한자의 인증 정보가 없습니다.');
+      throw new BusinessError(ErrorCode.CALENDAR_WRITER_NO_TOKEN);
 
     return refreshToken;
   }
@@ -185,7 +185,7 @@ export class StudyRoomService {
 
   async rename(id: number, name: string): Promise<void> {
     const room = await this.findById(id);
-    if (!room) throw new Error('스터디룸을 찾을 수 없습니다.');
+    if (!room) throw new BusinessError(ErrorCode.STUDY_ROOM_NOT_FOUND);
     await GoogleCalendarUtil.updateCalendar(room.calendarId, name);
     await this.studyRoomRepository.update(id, { name });
   }
@@ -199,7 +199,7 @@ export class StudyRoomService {
 
   async addEditor(id: number, email: string): Promise<void> {
     const room = await this.findById(id);
-    if (!room) throw new Error('스터디룸을 찾을 수 없습니다.');
+    if (!room) throw new BusinessError(ErrorCode.STUDY_ROOM_NOT_FOUND);
     await GoogleCalendarUtil.shareCalendar({
       calendarId: room.calendarId,
       email,
@@ -209,13 +209,13 @@ export class StudyRoomService {
 
   async removeEditor(id: number, email: string): Promise<void> {
     const room = await this.findById(id);
-    if (!room) throw new Error('스터디룸을 찾을 수 없습니다.');
+    if (!room) throw new BusinessError(ErrorCode.STUDY_ROOM_NOT_FOUND);
     await GoogleCalendarUtil.unshareCalendar(room.calendarId, email);
   }
 
   async remove(id: number): Promise<void> {
     const room = await this.findById(id);
-    if (!room) throw new Error('스터디룸을 찾을 수 없습니다.');
+    if (!room) throw new BusinessError(ErrorCode.STUDY_ROOM_NOT_FOUND);
     await GoogleCalendarUtil.deleteCalendar(room.calendarId);
     await this.studyRoomRepository.softDelete(id);
   }
