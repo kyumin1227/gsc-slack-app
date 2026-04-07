@@ -9,33 +9,16 @@ import type {
 } from '@slack/bolt';
 import { StudentClassService } from './student-class.service';
 import { StudentClassView } from './student-class.view';
-import { UserService } from '../user/user.service';
-import { UserRole } from '../user/user.entity';
 import { ClassSection } from './student-class.entity';
 import { CMD } from '../common/slack-commands';
+import { PermissionService } from '../user/permission.service';
 
 @Controller()
 export class StudentClassController {
   constructor(
     private readonly studentClassService: StudentClassService,
-    private readonly userService: UserService,
+    private readonly permissionService: PermissionService,
   ) {}
-
-  // 권한 확인 헬퍼
-  private async checkPermission(
-    slackUserId: string,
-  ): Promise<{ hasPermission: boolean; message?: string }> {
-    const user = await this.userService.findBySlackId(slackUserId);
-    const allowedRoles = [UserRole.PROFESSOR, UserRole.TA];
-
-    if (!user || !allowedRoles.includes(user.role)) {
-      return {
-        hasPermission: false,
-        message: '이 명령어는 조교 이상 권한이 필요합니다.',
-      };
-    }
-    return { hasPermission: true };
-  }
 
   // /반 - 반 목록 조회
   @Command(CMD.반)
@@ -46,15 +29,7 @@ export class StudentClassController {
   }: SlackCommandMiddlewareArgs & AllMiddlewareArgs) {
     await ack();
 
-    const { hasPermission, message } = await this.checkPermission(body.user_id);
-    if (!hasPermission) {
-      await client.chat.postEphemeral({
-        channel: body.channel_id,
-        user: body.user_id,
-        text: message!,
-      });
-      return;
-    }
+    await this.permissionService.requireAdmin(body.user_id);
 
     const classes = await this.studentClassService.findAllClasses();
 
@@ -82,15 +57,7 @@ export class StudentClassController {
   }: SlackCommandMiddlewareArgs & AllMiddlewareArgs) {
     await ack();
 
-    const { hasPermission, message } = await this.checkPermission(body.user_id);
-    if (!hasPermission) {
-      await client.chat.postEphemeral({
-        channel: body.channel_id,
-        user: body.user_id,
-        text: message!,
-      });
-      return;
-    }
+    await this.permissionService.requireAdmin(body.user_id);
 
     await client.views.open({
       trigger_id: body.trigger_id,

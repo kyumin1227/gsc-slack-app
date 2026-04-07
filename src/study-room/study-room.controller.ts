@@ -11,9 +11,10 @@ import { StudyRoomService } from './study-room.service';
 import { StudyRoomView } from './study-room.view';
 import { StudyRoomStatus } from './study-room.entity';
 import { UserService } from '../user/user.service';
-import { UserRole, UserStatus } from '../user/user.entity';
+import { UserStatus } from '../user/user.entity';
 import { GoogleCalendarUtil } from '../google/google-calendar.util';
 import { CMD } from '../common/slack-commands';
+import { PermissionService } from '../user/permission.service';
 
 @Controller()
 export class StudyRoomController {
@@ -22,6 +23,7 @@ export class StudyRoomController {
   constructor(
     private readonly studyRoomService: StudyRoomService,
     private readonly userService: UserService,
+    private readonly permissionService: PermissionService,
   ) {}
 
   @Command(CMD.스터디룸생성)
@@ -35,23 +37,7 @@ export class StudyRoomController {
     await ack();
 
     const userId = 'user_id' in body ? body.user_id : body.user.id;
-    const user = await this.userService.findBySlackId(userId);
-    // TODO 스케줄 서비스의 조교 이상 권한 확인 메소드랑 통합 필요
-    const allowed = [UserRole.PROFESSOR, UserRole.TA];
-    if (
-      !user ||
-      user.status !== UserStatus.ACTIVE ||
-      !allowed.includes(user.role)
-    ) {
-      if ('channel_id' in body) {
-        await client.chat.postEphemeral({
-          channel: body.channel_id,
-          user: userId,
-          text: '조교 이상 권한이 필요합니다.',
-        });
-      }
-      return;
-    }
+    await this.permissionService.requireAdmin(userId);
 
     await client.views.open({
       trigger_id: body.trigger_id,
@@ -429,7 +415,6 @@ export class StudyRoomController {
 
   // ========== 스터디룸 관리 (어드민) ==========
 
-
   @Command(CMD.스터디룸)
   @Action('home:open-study-room-manage')
   async openManageModal({
@@ -441,22 +426,7 @@ export class StudyRoomController {
     await ack();
 
     const userId = 'user_id' in body ? body.user_id : body.user.id;
-    const user = await this.userService.findBySlackId(userId);
-    const allowed = [UserRole.PROFESSOR, UserRole.TA];
-    if (
-      !user ||
-      user.status !== UserStatus.ACTIVE ||
-      !allowed.includes(user.role)
-    ) {
-      if ('channel_id' in body) {
-        await client.chat.postEphemeral({
-          channel: body.channel_id,
-          user: userId,
-          text: '조교 이상 권한이 필요합니다.',
-        });
-      }
-      return;
-    }
+    await this.permissionService.requireAdmin(userId);
 
     const rooms = await this.studyRoomService.findAll();
     await client.views.open({

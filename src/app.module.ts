@@ -1,7 +1,8 @@
-import { Module } from '@nestjs/common';
+import { Module, OnModuleInit } from '@nestjs/common';
 import { AppController } from './app.controller';
 import { AppService } from './app.service';
 import { SlackModule } from 'nestjs-slack-bolt';
+import { SlackService } from 'nestjs-slack-bolt';
 import { ConfigModule } from '@nestjs/config';
 import { TypeOrmModule } from '@nestjs/typeorm';
 import { CacheModule } from '@nestjs/cache-manager';
@@ -14,6 +15,8 @@ import { TagModule } from './tag/tag.module';
 import { ScheduleModule } from './schedule/schedule.module';
 import { ChannelModule } from './channel/channel.module';
 import { StudyRoomModule } from './study-room/study-room.module';
+import { httpReceiver } from './slack-receiver';
+import { slackErrorMiddleware } from './common/slack-error.middleware';
 
 @Module({
   imports: [
@@ -39,11 +42,20 @@ import { StudyRoomModule } from './study-room/study-room.module';
       autoLoadEntities: true,
       synchronize: process.env.DB_SYNCHRONIZE === 'true',
     }),
-    SlackModule.forRoot({
-      token: process.env.SLACK_BOT_TOKEN,
-      socketMode: true,
-      appToken: process.env.SLACK_APP_TOKEN,
-    }),
+    SlackModule.forRoot(
+      httpReceiver
+        ? {
+            token: process.env.SLACK_BOT_TOKEN,
+            receiver: httpReceiver,
+            socketMode: false,
+          }
+        : {
+            token: process.env.SLACK_BOT_TOKEN,
+            socketMode: true,
+            appToken: process.env.SLACK_APP_TOKEN,
+            signingSecret: process.env.SLACK_SIGNING_SECRET,
+          },
+    ),
     SlackHomeModule,
     UserModule,
     StudentClassModule,
@@ -55,4 +67,10 @@ import { StudyRoomModule } from './study-room/study-room.module';
   controllers: [AppController],
   providers: [AppService],
 })
-export class AppModule {}
+export class AppModule implements OnModuleInit {
+  constructor(private readonly slackService: SlackService) {}
+
+  onModuleInit() {
+    this.slackService.app.use(slackErrorMiddleware);
+  }
+}

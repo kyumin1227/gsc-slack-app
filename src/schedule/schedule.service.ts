@@ -1,4 +1,5 @@
 import { Inject, Injectable, Logger } from '@nestjs/common';
+import { BusinessError, ErrorCode } from '../common/errors';
 import { CACHE_MANAGER } from '@nestjs/cache-manager';
 import type { Cache } from 'cache-manager';
 import { InjectRepository } from '@nestjs/typeorm';
@@ -414,7 +415,7 @@ export class ScheduleService {
     role: 'reader' | 'writer' | 'owner',
   ): Promise<void> {
     const schedule = await this.findById(id);
-    if (!schedule) throw new Error('Schedule not found');
+    if (!schedule) throw new BusinessError(ErrorCode.SCHEDULE_NOT_FOUND);
 
     await GoogleCalendarUtil.shareCalendar({
       calendarId: schedule.calendarId,
@@ -426,7 +427,7 @@ export class ScheduleService {
   // 캘린더 권한 제거
   async unshareCalendar(id: number, email: string): Promise<void> {
     const schedule = await this.findById(id);
-    if (!schedule) throw new Error('Schedule not found');
+    if (!schedule) throw new BusinessError(ErrorCode.SCHEDULE_NOT_FOUND);
 
     await GoogleCalendarUtil.unshareCalendar(schedule.calendarId, email);
   }
@@ -434,7 +435,7 @@ export class ScheduleService {
   // 구독 (사용자 캘린더 목록에 추가)
   async subscribe(id: number, userRefreshToken: string): Promise<void> {
     const schedule = await this.findById(id);
-    if (!schedule) throw new Error('Schedule not found');
+    if (!schedule) throw new BusinessError(ErrorCode.SCHEDULE_NOT_FOUND);
 
     await GoogleCalendarUtil.addCalendarToUserList(
       schedule.calendarId,
@@ -445,7 +446,7 @@ export class ScheduleService {
   // 구독 해제 (사용자 캘린더 목록에서 제거)
   async unsubscribe(id: number, userRefreshToken: string): Promise<void> {
     const schedule = await this.findById(id);
-    if (!schedule) throw new Error('Schedule not found');
+    if (!schedule) throw new BusinessError(ErrorCode.SCHEDULE_NOT_FOUND);
 
     await GoogleCalendarUtil.removeCalendarFromUserList(
       schedule.calendarId,
@@ -464,11 +465,12 @@ export class ScheduleService {
 
   async createRecurringEvents(dto: CreateRecurringEventsDto): Promise<void> {
     const schedule = await this.findById(dto.scheduleId);
-    if (!schedule) throw new Error('Schedule not found');
+    if (!schedule) throw new BusinessError(ErrorCode.SCHEDULE_NOT_FOUND);
 
     // 1. 날짜 배열 계산
     const dates = expandRecurringDates(dto);
-    if (dates.length === 0) throw new Error('생성할 일정이 없습니다.');
+    if (dates.length === 0)
+      throw new BusinessError(ErrorCode.NO_EVENTS_TO_CREATE);
 
     // 2. groupId 생성 + Redis suppress 등록 (이벤트 생성 전)
     const groupId = randomUUID();
@@ -571,10 +573,10 @@ export class ScheduleService {
     const group = await this.recurrenceGroupRepository.findOne({
       where: { id: groupDbId },
     });
-    if (!group) throw new Error('반복 그룹을 찾을 수 없습니다.');
+    if (!group) throw new BusinessError(ErrorCode.RECURRENCE_GROUP_NOT_FOUND);
 
     const schedule = await this.findById(group.scheduleId);
-    if (!schedule) throw new Error('시간표를 찾을 수 없습니다.');
+    if (!schedule) throw new BusinessError(ErrorCode.SCHEDULE_NOT_FOUND);
 
     await this.cache.set(
       `suppress:group:${group.groupId}`,
@@ -647,10 +649,10 @@ export class ScheduleService {
     const group = await this.recurrenceGroupRepository.findOne({
       where: { id: groupDbId },
     });
-    if (!group) throw new Error('반복 그룹을 찾을 수 없습니다.');
+    if (!group) throw new BusinessError(ErrorCode.RECURRENCE_GROUP_NOT_FOUND);
 
     const schedule = await this.findById(group.scheduleId);
-    if (!schedule) throw new Error('시간표를 찾을 수 없습니다.');
+    if (!schedule) throw new BusinessError(ErrorCode.SCHEDULE_NOT_FOUND);
 
     await this.cache.set(
       `suppress:group:${group.groupId}`,
