@@ -80,45 +80,58 @@ export class HomeView {
         },
         { type: 'divider' },
         {
-          type: 'section',
-          text: {
-            type: 'mrkdwn',
-            text: '*📅 시간표 구독*\n시간표를 구독하면 Google Calendar에서 수업 일정을 받아볼 수 있어요.',
-          },
-          accessory: {
-            type: 'button',
-            text: { type: 'plain_text', text: '구독하기' },
-            style: 'primary',
-            action_id: 'home:open-subscribe',
-          },
+          type: 'header',
+          text: { type: 'plain_text', text: '📅 시간표 구독', emoji: true },
+        },
+        {
+          type: 'context',
+          elements: [
+            {
+              type: 'mrkdwn',
+              text: '구독하면 *Google Calendar* 에서 수업 일정을 자동으로 받아볼 수 있어요.',
+            },
+          ],
+        },
+        {
+          type: 'actions',
+          elements: [
+            {
+              type: 'button',
+              text: { type: 'plain_text', text: '구독하기' },
+              style: 'primary',
+              action_id: 'home:open-subscribe',
+            },
+          ],
         },
         { type: 'divider' },
         {
-          type: 'section',
-          text: {
-            type: 'mrkdwn',
-            text: '*📚 스터디룸 예약*\n스터디룸의 일정을 확인하고 예약할 수 있어요.',
-          },
-          accessory: {
-            type: 'button',
-            text: { type: 'plain_text', text: '예약하기' },
-            style: 'primary',
-            action_id: 'home:open-booking',
-          },
+          type: 'header',
+          text: { type: 'plain_text', text: '📚 스터디룸', emoji: true },
         },
-        { type: 'divider' },
         {
-          type: 'section',
-          text: {
-            type: 'mrkdwn',
-            text: '*📋 내 예약*\n참석자로 등록된 스터디룸 일정을 확인하고 수정·취소할 수 있어요.',
-          },
-          accessory: {
-            type: 'button',
-            text: { type: 'plain_text', text: '예약보기' },
-            style: 'primary',
-            action_id: 'home:open-my-bookings',
-          },
+          type: 'context',
+          elements: [
+            {
+              type: 'mrkdwn',
+              text: '스터디룸 일정을 확인하고 *예약* 할 수 있어요. 내 예약을 확인하고 *수정·취소* 도 가능해요.',
+            },
+          ],
+        },
+        {
+          type: 'actions',
+          elements: [
+            {
+              type: 'button',
+              text: { type: 'plain_text', text: '예약하기' },
+              style: 'primary',
+              action_id: 'home:open-booking',
+            },
+            {
+              type: 'button',
+              text: { type: 'plain_text', text: '예약 수정' },
+              action_id: 'home:open-my-bookings',
+            },
+          ],
         },
         { type: 'divider' },
         {
@@ -173,11 +186,17 @@ export class HomeView {
         },
         { type: 'divider' },
         {
-          type: 'section',
-          text: {
-            type: 'mrkdwn',
-            text: '*📅 시간표*\n시간표를 구독하거나 생성·수정할 수 있어요.',
-          },
+          type: 'header',
+          text: { type: 'plain_text', text: '📅 시간표', emoji: true },
+        },
+        {
+          type: 'context',
+          elements: [
+            {
+              type: 'mrkdwn',
+              text: '시간표를 *구독* 하거나 *생성·수정* 할 수 있어요.',
+            },
+          ],
         },
         {
           type: 'actions',
@@ -203,11 +222,17 @@ export class HomeView {
         },
         { type: 'divider' },
         {
-          type: 'section',
-          text: {
-            type: 'mrkdwn',
-            text: '*🔄 반복일정 관리*\n반복 수업 일정을 생성하거나 수정·삭제할 수 있어요.',
-          },
+          type: 'header',
+          text: { type: 'plain_text', text: '🔄 반복일정 관리', emoji: true },
+        },
+        {
+          type: 'context',
+          elements: [
+            {
+              type: 'mrkdwn',
+              text: '반복 수업 일정을 *생성* 하거나 *수정·삭제* 할 수 있어요.',
+            },
+          ],
         },
         {
           type: 'actions',
@@ -233,24 +258,41 @@ export class HomeView {
         },
         { type: 'divider' },
         {
-          type: 'section',
-          text: {
-            type: 'mrkdwn',
-            text: '*✅ 회원 승인*\n가입 신청한 회원을 승인하거나 거절할 수 있어요.',
-          },
-          accessory: {
-            type: 'button',
-            text: { type: 'plain_text', text: '승인하기' },
-            action_id: 'home:open-approval',
-          },
+          type: 'header',
+          text: { type: 'plain_text', text: '✅ 회원 승인', emoji: true },
+        },
+        {
+          type: 'context',
+          elements: [
+            {
+              type: 'mrkdwn',
+              text: '가입 신청한 회원을 *승인* 하거나 *거절* 할 수 있어요.',
+            },
+          ],
+        },
+        {
+          type: 'actions',
+          elements: [
+            {
+              type: 'button',
+              text: { type: 'plain_text', text: '승인하기' },
+              action_id: 'home:open-approval',
+            },
+          ],
         },
         { type: 'divider' },
         {
-          type: 'section',
-          text: {
-            type: 'mrkdwn',
-            text: '*🏷️ 태그 관리*\n시간표 분류에 사용할 태그를 조회하고 생성할 수 있어요.',
-          },
+          type: 'header',
+          text: { type: 'plain_text', text: '🏷️ 태그 관리', emoji: true },
+        },
+        {
+          type: 'context',
+          elements: [
+            {
+              type: 'mrkdwn',
+              text: '시간표 분류에 사용할 태그를 *조회* 하고 *생성* 할 수 있어요.',
+            },
+          ],
         },
         {
           type: 'actions',
@@ -270,11 +312,17 @@ export class HomeView {
         },
         { type: 'divider' },
         {
-          type: 'section',
-          text: {
-            type: 'mrkdwn',
-            text: '*🏠 스터디룸*\n스터디룸을 예약하거나 생성·수정할 수 있어요.',
-          },
+          type: 'header',
+          text: { type: 'plain_text', text: '🏠 스터디룸', emoji: true },
+        },
+        {
+          type: 'context',
+          elements: [
+            {
+              type: 'mrkdwn',
+              text: '스터디룸을 *예약* 하거나 *생성·수정* 할 수 있어요. 내 예약을 확인하고 *수정·취소* 도 가능해요.',
+            },
+          ],
         },
         {
           type: 'actions',
@@ -284,6 +332,11 @@ export class HomeView {
               text: { type: 'plain_text', text: '예약하기' },
               style: 'primary',
               action_id: 'home:open-booking',
+            },
+            {
+              type: 'button',
+              text: { type: 'plain_text', text: '예약 수정' },
+              action_id: 'home:open-my-bookings',
             },
             {
               type: 'button',
@@ -297,19 +350,6 @@ export class HomeView {
               action_id: 'home:open-study-room-manage',
             },
           ],
-        },
-        { type: 'divider' },
-        {
-          type: 'section',
-          text: {
-            type: 'mrkdwn',
-            text: '*📋 내 예약*\n참석자로 등록된 스터디룸 일정을 확인하고 수정·취소할 수 있어요.',
-          },
-          accessory: {
-            type: 'button',
-            text: { type: 'plain_text', text: '내 예약 보기' },
-            action_id: 'home:open-my-bookings',
-          },
         },
         { type: 'divider' },
         {
