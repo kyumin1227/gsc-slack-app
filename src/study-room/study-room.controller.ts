@@ -389,26 +389,27 @@ export class StudyRoomController {
     const startTime = new Date(`${date}T${startTimeStr}:00+09:00`);
     const endTime = new Date(startTime.getTime() + durationMinutes * 60 * 1000);
 
-    try {
-      await this.studyRoomService.modifyBooking(calendarId, eventId, {
+    const result = await this.studyRoomService.modifyBooking(
+      calendarId,
+      eventId,
+      {
         title,
         startTime,
         endTime,
         attendeeSlackIds,
         roomName,
-      });
+      },
+    );
 
+    if (result === 'cancelled') {
+      await client.chat.postMessage({
+        channel: body.user.id,
+        text: `🗑️ 참석자가 없어 *${roomName}* 예약이 취소되었습니다.\n${date} ${startTimeStr} (${durationMinutes}분)`,
+      });
+    } else {
       await client.chat.postMessage({
         channel: body.user.id,
         text: `✅ *${roomName}* 예약이 수정되었습니다.\n${date} ${startTimeStr} (${durationMinutes}분)`,
-      });
-    } catch (error: unknown) {
-      const message =
-        error instanceof Error ? error.message : '수정 중 오류가 발생했습니다.';
-      this.logger.error(`Study room modify failed: ${message}`);
-      await client.chat.postMessage({
-        channel: body.user.id,
-        text: `❌ 예약 수정에 실패했습니다: ${message}`,
       });
     }
   }
