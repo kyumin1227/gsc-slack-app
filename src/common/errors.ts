@@ -28,9 +28,9 @@ export const ERROR_MESSAGES: Record<ErrorCode, string> = {
     '구독 기능을 사용하려면 Google 계정 재연동이 필요합니다. 회원정보를 다시 등록해주세요.',
   [ErrorCode.BOOKING_CONFLICT]: '해당 시간대에 이미 예약이 있습니다.',
   [ErrorCode.CALENDAR_WRITER_NOT_FOUND]:
-    '캘린더 수정 권한을 가진 활성 유저를 찾을 수 없습니다.',
+    '캘린더 수정 권한을 가진 활성 유저를 찾을 수 없습니다. \n관리자에게 문의해주세요.',
   [ErrorCode.CALENDAR_WRITER_NO_TOKEN]:
-    '캘린더 수정 권한자의 인증 정보가 없습니다.',
+    '캘린더 수정 권한자의 인증 정보가 없습니다. \n관리자에게 문의해주세요.',
 };
 
 export class BusinessError extends Error {
