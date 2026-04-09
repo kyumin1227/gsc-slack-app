@@ -388,6 +388,32 @@ export class SpaceController {
     }
   }
 
+  // URL 링크 버튼 — Slack 경고 방지용 ack (study-room:action:view-calendar 포함)
+  @Action(/^space:action:view-|^study-room:action:view-calendar$/)
+  async ackViewLinkButtons({
+    ack,
+  }: SlackActionMiddlewareArgs<BlockAction> & AllMiddlewareArgs) {
+    await ack();
+  }
+
+  @Action('home:open-classroom-schedule')
+  async openClassroomSchedule({
+    ack,
+    client,
+    body,
+  }: SlackActionMiddlewareArgs<BlockAction> & AllMiddlewareArgs) {
+    await ack();
+
+    const classrooms = await this.spaceService.findAllByType(
+      SpaceType.CLASSROOM,
+      true,
+    );
+    await client.views.open({
+      trigger_id: body.trigger_id,
+      view: SpaceView.classroomScheduleModal(classrooms),
+    });
+  }
+
   // ========== 공간 관리 (어드민) ==========
 
   @Command(CMD.스터디룸)
