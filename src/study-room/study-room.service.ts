@@ -229,7 +229,12 @@ export class StudyRoomService {
     calendarId: string,
     eventId: string,
     dto: ModifyBookingDto,
-  ): Promise<void> {
+  ): Promise<'cancelled' | 'modified'> {
+    if (dto.attendeeSlackIds.length === 0) {
+      await this.cancelBooking(calendarId, eventId);
+      return 'cancelled';
+    }
+
     const refreshToken = await this.getEditorRefreshToken(calendarId);
 
     const attendees = (
@@ -260,5 +265,7 @@ export class StudyRoomService {
       location: dto.roomName,
       description,
     });
+
+    return 'modified';
   }
 }

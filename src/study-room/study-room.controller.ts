@@ -1,4 +1,4 @@
-import { Controller, Logger } from '@nestjs/common';
+import { Controller } from '@nestjs/common';
 import { Action, Command, View } from 'nestjs-slack-bolt';
 import type {
   AllMiddlewareArgs,
@@ -18,8 +18,6 @@ import { PermissionService } from '../user/permission.service';
 
 @Controller()
 export class StudyRoomController {
-  private readonly logger = new Logger(StudyRoomController.name);
-
   constructor(
     private readonly studyRoomService: StudyRoomService,
     private readonly userService: UserService,
@@ -56,21 +54,11 @@ export class StudyRoomController {
     const values = body.view.state.values;
     const name = values.name_block.name_input.value ?? '';
 
-    try {
-      const room = await this.studyRoomService.create({ name });
-      await client.chat.postMessage({
-        channel: body.user.id,
-        text: `✅ 스터디룸이 등록되었습니다.\n*${room.name}*`,
-      });
-    } catch (error: unknown) {
-      const message =
-        error instanceof Error ? error.message : '등록 중 오류가 발생했습니다.';
-      this.logger.error(`Study room create failed: ${message}`);
-      await client.chat.postMessage({
-        channel: body.user.id,
-        text: `❌ 등록에 실패했습니다: ${message}`,
-      });
-    }
+    const room = await this.studyRoomService.create({ name });
+    await client.chat.postMessage({
+      channel: body.user.id,
+      text: `✅ 스터디룸이 등록되었습니다.\n*${room.name}*`,
+    });
   }
 
   @Command(CMD.예약)
@@ -231,30 +219,19 @@ export class StudyRoomController {
     const startTime = new Date(`${date}T${startTimeStr}:00+09:00`);
     const endTime = new Date(startTime.getTime() + durationMinutes * 60 * 1000);
 
-    try {
-      await this.studyRoomService.bookStudyRoom({
-        studyRoomId: roomId,
-        title,
-        startTime,
-        endTime,
-        bookerSlackId: body.user.id,
-        attendeeSlackIds,
-      });
+    await this.studyRoomService.bookStudyRoom({
+      studyRoomId: roomId,
+      title,
+      startTime,
+      endTime,
+      bookerSlackId: body.user.id,
+      attendeeSlackIds,
+    });
 
-      await client.chat.postMessage({
-        channel: body.user.id,
-        text: `✅ 예약이 완료되었습니다.\n*${title}* | ${date} ${startTimeStr} (${durationMinutes}분)`,
-      });
-    } catch (error: unknown) {
-      const message =
-        error instanceof Error ? error.message : '예약 중 오류가 발생했습니다.';
-      this.logger.error(`Study room booking failed: ${message}`);
-
-      await client.chat.postMessage({
-        channel: body.user.id,
-        text: `❌ 예약에 실패했습니다: ${message}`,
-      });
-    }
+    await client.chat.postMessage({
+      channel: body.user.id,
+      text: `✅ 예약이 완료되었습니다.\n*${title}* | ${date} ${startTimeStr} (${durationMinutes}분)`,
+    });
   }
 
   @Command(CMD.내예약)
@@ -288,21 +265,11 @@ export class StudyRoomController {
       (action as { value: string }).value,
     ) as { calendarId: string; eventId: string; roomName: string };
 
-    try {
-      await this.studyRoomService.cancelBooking(calendarId, eventId);
-      await client.chat.postMessage({
-        channel: body.user.id,
-        text: `✅ *${roomName}* 예약이 취소되었습니다.`,
-      });
-    } catch (error: unknown) {
-      const message =
-        error instanceof Error ? error.message : '취소 중 오류가 발생했습니다.';
-      this.logger.error(`Study room cancel failed: ${message}`);
-      await client.chat.postMessage({
-        channel: body.user.id,
-        text: `❌ 예약 취소에 실패했습니다: ${message}`,
-      });
-    }
+    await this.studyRoomService.cancelBooking(calendarId, eventId);
+    await client.chat.postMessage({
+      channel: body.user.id,
+      text: `✅ *${roomName}* 예약이 취소되었습니다.`,
+    });
   }
 
   @Action('study-room:action:modify')
@@ -389,26 +356,27 @@ export class StudyRoomController {
     const startTime = new Date(`${date}T${startTimeStr}:00+09:00`);
     const endTime = new Date(startTime.getTime() + durationMinutes * 60 * 1000);
 
-    try {
-      await this.studyRoomService.modifyBooking(calendarId, eventId, {
+    const result = await this.studyRoomService.modifyBooking(
+      calendarId,
+      eventId,
+      {
         title,
         startTime,
         endTime,
         attendeeSlackIds,
         roomName,
-      });
+      },
+    );
 
+    if (result === 'cancelled') {
+      await client.chat.postMessage({
+        channel: body.user.id,
+        text: `🗑️ 참석자가 없어 *${roomName}* 예약이 취소되었습니다.\n${date} ${startTimeStr} (${durationMinutes}분)`,
+      });
+    } else {
       await client.chat.postMessage({
         channel: body.user.id,
         text: `✅ *${roomName}* 예약이 수정되었습니다.\n${date} ${startTimeStr} (${durationMinutes}분)`,
-      });
-    } catch (error: unknown) {
-      const message =
-        error instanceof Error ? error.message : '수정 중 오류가 발생했습니다.';
-      this.logger.error(`Study room modify failed: ${message}`);
-      await client.chat.postMessage({
-        channel: body.user.id,
-        text: `❌ 예약 수정에 실패했습니다: ${message}`,
       });
     }
   }
@@ -484,22 +452,12 @@ export class StudyRoomController {
     const status = values.status_block.status_select.selected_option
       ?.value as import('./study-room.entity').StudyRoomStatus;
 
-    try {
-      await this.studyRoomService.rename(roomId, name);
-      await this.studyRoomService.updateInfo(roomId, { description, status });
-      await client.chat.postMessage({
-        channel: body.user.id,
-        text: `✅ *${name}* 정보가 수정되었습니다.`,
-      });
-    } catch (error: unknown) {
-      const message =
-        error instanceof Error ? error.message : '수정 중 오류가 발생했습니다.';
-      this.logger.error(`Study room edit failed: ${message}`);
-      await client.chat.postMessage({
-        channel: body.user.id,
-        text: `❌ 수정에 실패했습니다: ${message}`,
-      });
-    }
+    await this.studyRoomService.rename(roomId, name);
+    await this.studyRoomService.updateInfo(roomId, { description, status });
+    await client.chat.postMessage({
+      channel: body.user.id,
+      text: `✅ *${name}* 정보가 수정되었습니다.`,
+    });
   }
 
   @Action('study-room:admin:open-editors')
@@ -533,7 +491,6 @@ export class StudyRoomController {
   @View('study-room:modal:editors')
   async submitEditors({
     ack,
-    client,
     body,
   }: SlackViewMiddlewareArgs & AllMiddlewareArgs) {
     await ack();
@@ -546,42 +503,32 @@ export class StudyRoomController {
     const selectedIds =
       values['editors_block']?.['editors_select']?.selected_users ?? [];
 
-    try {
-      const acl = await GoogleCalendarUtil.getCalendarAcl(calendarId);
-      const currentEditorEmails = acl
-        .filter((e) => e.role === 'writer')
-        .map((e) => e.email);
-      const currentEditorSlackIds =
-        await this.userService.mapEmailsToSlackIds(currentEditorEmails);
+    const acl = await GoogleCalendarUtil.getCalendarAcl(calendarId);
+    const currentEditorEmails = acl
+      .filter((e) => e.role === 'writer')
+      .map((e) => e.email);
+    const currentEditorSlackIds =
+      await this.userService.mapEmailsToSlackIds(currentEditorEmails);
 
-      const oldSet = new Set(currentEditorSlackIds);
-      const newSet = new Set(selectedIds);
-      const toAdd = selectedIds.filter((id) => !oldSet.has(id));
-      const toRemove = currentEditorSlackIds.filter((id) => !newSet.has(id));
+    const oldSet = new Set(currentEditorSlackIds);
+    const newSet = new Set(selectedIds);
+    const toAdd = selectedIds.filter((id) => !oldSet.has(id));
+    const toRemove = currentEditorSlackIds.filter((id) => !newSet.has(id));
 
-      await Promise.all([
-        ...toAdd.map(async (slackId) => {
-          const user = await this.userService.findBySlackId(slackId);
-          if (user?.email) {
-            await this.studyRoomService.addEditor(roomId, user.email);
-          }
-        }),
-        ...toRemove.map(async (slackId) => {
-          const user = await this.userService.findBySlackId(slackId);
-          if (user?.email) {
-            await this.studyRoomService.removeEditor(roomId, user.email);
-          }
-        }),
-      ]);
-    } catch (error: unknown) {
-      const message =
-        error instanceof Error ? error.message : '오류가 발생했습니다.';
-      this.logger.error(`Study room editors update failed: ${message}`);
-      await client.chat.postMessage({
-        channel: body.user.id,
-        text: `❌ 수정자 변경에 실패했습니다: ${message}`,
-      });
-    }
+    await Promise.all([
+      ...toAdd.map(async (slackId) => {
+        const user = await this.userService.findBySlackId(slackId);
+        if (user?.email) {
+          await this.studyRoomService.addEditor(roomId, user.email);
+        }
+      }),
+      ...toRemove.map(async (slackId) => {
+        const user = await this.userService.findBySlackId(slackId);
+        if (user?.email) {
+          await this.studyRoomService.removeEditor(roomId, user.email);
+        }
+      }),
+    ]);
   }
 
   @Action('study-room:admin:toggle-status')
@@ -604,30 +551,17 @@ export class StudyRoomController {
         ? StudyRoomStatus.INACTIVE
         : StudyRoomStatus.ACTIVE;
 
-    try {
-      await this.studyRoomService.updateInfo(roomId, { status: newStatus });
+    await this.studyRoomService.updateInfo(roomId, { status: newStatus });
 
-      const rooms = await this.studyRoomService.findAll();
-      await client.views.update({
-        view_id: body.view?.id ?? '',
-        view: StudyRoomView.manageModal(rooms),
-      });
-      const label =
-        newStatus === StudyRoomStatus.ACTIVE ? '활성화' : '비활성화';
-      await client.chat.postMessage({
-        channel: body.user.id,
-        text: `✅ *${roomName}* 이 ${label}되었습니다.`,
-      });
-    } catch (error: unknown) {
-      const message =
-        error instanceof Error
-          ? error.message
-          : '상태 변경 중 오류가 발생했습니다.';
-      this.logger.error(`Study room toggle-status failed: ${message}`);
-      await client.chat.postMessage({
-        channel: body.user.id,
-        text: `❌ 상태 변경에 실패했습니다: ${message}`,
-      });
-    }
+    const rooms = await this.studyRoomService.findAll();
+    await client.views.update({
+      view_id: body.view?.id ?? '',
+      view: StudyRoomView.manageModal(rooms),
+    });
+    const label = newStatus === StudyRoomStatus.ACTIVE ? '활성화' : '비활성화';
+    await client.chat.postMessage({
+      channel: body.user.id,
+      text: `✅ *${roomName}* 이 ${label}되었습니다.`,
+    });
   }
 }

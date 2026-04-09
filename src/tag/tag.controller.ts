@@ -70,46 +70,29 @@ export class TagController {
     client,
     logger,
   }: SlackViewMiddlewareArgs & AllMiddlewareArgs) {
-    try {
-      const values = view.state.values;
-      const name = values.name_block.name_input.value ?? '';
+    const values = view.state.values;
+    const name = values.name_block.name_input.value ?? '';
 
-      // 유효성 검사
-      if (!name.trim()) {
-        await ack({
-          response_action: 'errors',
-          errors: { name_block: '태그 이름을 입력해주세요.' },
-        });
-        return;
-      }
-
-      await this.tagService.createTag({ name: name.trim() });
-
-      await ack();
-
-      // 생성 완료 메시지
-      await client.chat.postMessage({
-        channel: body.user.id,
-        text: `태그 "${name}"이(가) 생성되었습니다.`,
+    // 유효성 검사
+    if (!name.trim()) {
+      await ack({
+        response_action: 'errors',
+        errors: { name_block: '태그 이름을 입력해주세요.' },
       });
-
-      logger.info(`Tag created: ${name}`);
-    } catch (error: any) {
-      logger.error('Create tag error:', error);
-
-      if (error.code === '23505') {
-        // unique violation
-        await ack({
-          response_action: 'errors',
-          errors: { name_block: '이미 존재하는 태그 이름입니다.' },
-        });
-      } else {
-        await ack({
-          response_action: 'errors',
-          errors: { name_block: '태그 생성 중 오류가 발생했습니다.' },
-        });
-      }
+      return;
     }
+
+    await this.tagService.createTag({ name: name.trim() });
+
+    await ack();
+
+    // 생성 완료 메시지
+    await client.chat.postMessage({
+      channel: body.user.id,
+      text: `태그 "${name}"이(가) 생성되었습니다.`,
+    });
+
+    logger.info(`Tag created: ${name}`);
   }
 
   // 태그 상태 토글 (활성화/비활성화)
@@ -122,30 +105,26 @@ export class TagController {
   }: SlackActionMiddlewareArgs<BlockAction> & AllMiddlewareArgs) {
     await ack();
 
-    try {
-      const action = body.actions[0] as { action_id: string; value: string };
-      const tagId = parseInt(action.action_id.split(':').pop()!, 10);
-      const toggleAction = action.value;
+    const action = body.actions[0] as { action_id: string; value: string };
+    const tagId = parseInt(action.action_id.split(':').pop()!, 10);
+    const toggleAction = action.value;
 
-      if (toggleAction === 'deactivate') {
-        await this.tagService.deactivateTag(tagId);
-      } else if (toggleAction === 'activate') {
-        await this.tagService.activateTag(tagId);
-      }
-
-      // 목록 새로고침
-      const tags = await this.tagService.findDisplayTags();
-
-      if (body.view?.id) {
-        await client.views.update({
-          view_id: body.view.id,
-          view: TagView.listModal(tags),
-        });
-      }
-
-      logger.info(`Tag ${tagId} toggled to ${toggleAction}`);
-    } catch (error) {
-      logger.error('Toggle tag error:', error);
+    if (toggleAction === 'deactivate') {
+      await this.tagService.deactivateTag(tagId);
+    } else if (toggleAction === 'activate') {
+      await this.tagService.activateTag(tagId);
     }
+
+    // 목록 새로고침
+    const tags = await this.tagService.findDisplayTags();
+
+    if (body.view?.id) {
+      await client.views.update({
+        view_id: body.view.id,
+        view: TagView.listModal(tags),
+      });
+    }
+
+    logger.info(`Tag ${tagId} toggled to ${toggleAction}`);
   }
 }
