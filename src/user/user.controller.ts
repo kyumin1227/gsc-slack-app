@@ -33,28 +33,23 @@ export class UserController {
     ack,
     client,
     body,
-    logger,
   }: SlackActionMiddlewareArgs<BlockAction> & AllMiddlewareArgs) {
-    try {
-      await ack();
+    await ack();
 
-      const slackUserId = body.user.id;
+    const slackUserId = body.user.id;
 
-      // Google OAuth URL 생성
-      const state = OAuthUtil.createOAuthState(slackUserId);
-      const googleAuthUrl = OAuthUtil.getGoogleAuthUrl(state);
+    // Google OAuth URL 생성
+    const state = OAuthUtil.createOAuthState(slackUserId);
+    const googleAuthUrl = OAuthUtil.getGoogleAuthUrl(state);
 
-      const result = await client.views.open({
-        trigger_id: body.trigger_id,
-        view: UserView.registerModal(googleAuthUrl),
-      });
+    const result = await client.views.open({
+      trigger_id: body.trigger_id,
+      view: UserView.registerModal(googleAuthUrl),
+    });
 
-      // view_id 저장 (모달 업데이트용)
-      if (result.view?.id) {
-        await this.userService.saveViewId(slackUserId, result.view.id);
-      }
-    } catch (error) {
-      logger.error(error);
+    // view_id 저장 (모달 업데이트용)
+    if (result.view?.id) {
+      await this.userService.saveViewId(slackUserId, result.view.id);
     }
   }
 
@@ -210,21 +205,78 @@ export class UserController {
     ack,
     client,
     body,
-    logger,
   }: (SlackCommandMiddlewareArgs | SlackActionMiddlewareArgs<BlockAction>) &
     AllMiddlewareArgs) {
-    try {
-      await ack();
+    await ack();
 
-      const userId = 'user_id' in body ? body.user_id : body.user.id;
+    const userId = 'user_id' in body ? body.user_id : body.user.id;
 
-      await this.permissionService.requireAdmin(userId);
+    await this.permissionService.requireAdmin(userId);
 
-      // 승인 대기 유저 목록 조회
+    // 승인 대기 유저 목록 조회
+    const pendingUsers = await this.userService.findPendingApproval();
+
+    await client.views.open({
+      trigger_id: body.trigger_id,
+      view: UserView.pendingApprovalModal(
+        pendingUsers.map((u) => ({
+          slackId: u.slackId,
+          name: u.name,
+          email: u.email,
+          code: u.code,
+          role: u.role,
+          className: u.studentClass?.name,
+        })),
+      ),
+    });
+  }
+
+  // 관리자: 승인/거절 액션 처리
+  @Action(/^user:admin:overflow:/)
+  async handleApprovalAction({
+    ack,
+    body,
+    client,
+    logger,
+  }: SlackActionMiddlewareArgs<BlockAction> & AllMiddlewareArgs) {
+    await ack();
+
+    const action = body.actions[0] as { selected_option: { value: string } };
+    const [actionType, targetSlackId] = action.selected_option.value.split(':');
+
+    if (actionType === 'approve') {
+      await this.userService.approveUser(targetSlackId);
+
+      const approvedUser = await this.userService.findBySlackId(targetSlackId);
+      await this.inviteToClassChannel(
+        targetSlackId,
+        approvedUser?.studentClassId,
+      );
+
+      // 승인된 유저에게 알림
+      await client.chat.postMessage({
+        channel: targetSlackId,
+        text: '가입이 승인되었습니다! 이제 서비스를 이용할 수 있습니다.',
+      });
+
+      logger.info(`User approved: ${targetSlackId}`);
+    } else if (actionType === 'reject') {
+      await this.userService.rejectUser(targetSlackId);
+
+      // 거절된 유저에게 알림
+      await client.chat.postMessage({
+        channel: targetSlackId,
+        text: '가입 신청이 거절되었습니다. 문의사항이 있으면 관리자에게 연락해주세요.',
+      });
+
+      logger.info(`User rejected: ${targetSlackId}`);
+    }
+
+    // 모달 업데이트 (목록 새로고침)
+    if (body.view?.id) {
       const pendingUsers = await this.userService.findPendingApproval();
-
-      await client.views.open({
-        trigger_id: body.trigger_id,
+      await client.views.update({
+        view_id: body.view.id,
         view: UserView.pendingApprovalModal(
           pendingUsers.map((u) => ({
             slackId: u.slackId,
@@ -236,74 +288,6 @@ export class UserController {
           })),
         ),
       });
-    } catch (error) {
-      logger.error('Open approval modal error:', error);
-    }
-  }
-
-  // 관리자: 승인/거절 액션 처리
-  @Action(/^user:admin:overflow:/)
-  async handleApprovalAction({
-    ack,
-    body,
-    client,
-    logger,
-  }: SlackActionMiddlewareArgs<BlockAction> & AllMiddlewareArgs) {
-    try {
-      await ack();
-
-      const action = body.actions[0] as { selected_option: { value: string } };
-      const [actionType, targetSlackId] =
-        action.selected_option.value.split(':');
-
-      if (actionType === 'approve') {
-        await this.userService.approveUser(targetSlackId);
-
-        const approvedUser =
-          await this.userService.findBySlackId(targetSlackId);
-        await this.inviteToClassChannel(
-          targetSlackId,
-          approvedUser?.studentClassId,
-        );
-
-        // 승인된 유저에게 알림
-        await client.chat.postMessage({
-          channel: targetSlackId,
-          text: '가입이 승인되었습니다! 이제 서비스를 이용할 수 있습니다.',
-        });
-
-        logger.info(`User approved: ${targetSlackId}`);
-      } else if (actionType === 'reject') {
-        await this.userService.rejectUser(targetSlackId);
-
-        // 거절된 유저에게 알림
-        await client.chat.postMessage({
-          channel: targetSlackId,
-          text: '가입 신청이 거절되었습니다. 문의사항이 있으면 관리자에게 연락해주세요.',
-        });
-
-        logger.info(`User rejected: ${targetSlackId}`);
-      }
-
-      // 모달 업데이트 (목록 새로고침)
-      if (body.view?.id) {
-        const pendingUsers = await this.userService.findPendingApproval();
-        await client.views.update({
-          view_id: body.view.id,
-          view: UserView.pendingApprovalModal(
-            pendingUsers.map((u) => ({
-              slackId: u.slackId,
-              name: u.name,
-              email: u.email,
-              code: u.code,
-              role: u.role,
-              className: u.studentClass?.name,
-            })),
-          ),
-        });
-      }
-    } catch (error) {
-      logger.error('Approval action error:', error);
     }
   }
 
