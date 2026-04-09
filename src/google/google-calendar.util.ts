@@ -482,6 +482,23 @@ export class GoogleCalendarUtil {
     });
   }
 
+  // 서비스 계정으로 이벤트의 private extendedProperties 일부 패치
+  static async patchEventPrivateExtendedProperty(
+    calendarId: string,
+    eventId: string,
+    privateProps: Record<string, string>,
+  ): Promise<void> {
+    const calendar = this.getCalendarClient();
+    await calendar.events.patch({
+      calendarId,
+      eventId,
+      sendUpdates: 'none',
+      requestBody: {
+        extendedProperties: { private: privateProps },
+      },
+    });
+  }
+
   // extendedProperties.private 필터로 이벤트 검색 (미러 이벤트 추적용)
   static async searchByExtendedProperty(
     calendarId: string,

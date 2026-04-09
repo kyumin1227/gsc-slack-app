@@ -1,4 +1,11 @@
-import { Controller, Headers, HttpCode, Inject, Logger, Post } from '@nestjs/common';
+import {
+  Controller,
+  Headers,
+  HttpCode,
+  Inject,
+  Logger,
+  Post,
+} from '@nestjs/common';
 import { CACHE_MANAGER } from '@nestjs/cache-manager';
 import type { Cache } from 'cache-manager';
 import { ChannelService } from '../channel/channel.service';
@@ -81,7 +88,7 @@ export class ScheduleWatchController {
       if (this.spaceMirrorService.isMirroredEvent(event)) continue;
 
       // 공간 미러링 — 즉시 실행 (알림 debounce와 독립)
-      await this.spaceMirrorService.mirrorEvent(event).catch((err: Error) => {
+      await this.spaceMirrorService.mirrorEvent(event, schedule.calendarId).catch((err: Error) => {
         this.logger.warn(
           `Space mirror failed for event ${event.id}: ${err.message}`,
         );
