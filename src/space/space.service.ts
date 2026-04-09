@@ -1,17 +1,20 @@
 import { Injectable, Logger } from '@nestjs/common';
 import { InjectRepository } from '@nestjs/typeorm';
 import { Repository } from 'typeorm';
-import { StudyRoom, StudyRoomStatus } from './study-room.entity';
+import { Space, SpaceStatus, SpaceType } from './space.entity';
 import { GoogleCalendarUtil } from '../google/google-calendar.util';
 import { UserService } from '../user/user.service';
 import { BusinessError, ErrorCode } from '../common/errors';
 
-export interface CreateStudyRoomDto {
+export interface CreateSpaceDto {
   name: string;
+  type?: SpaceType;
+  aliases?: string[];
+  description?: string;
 }
 
-export interface BookStudyRoomDto {
-  studyRoomId: number;
+export interface BookSpaceDto {
+  spaceId: number;
   title: string;
   startTime: Date;
   endTime: Date;
@@ -22,7 +25,7 @@ export interface BookStudyRoomDto {
 export interface BookingItem {
   calendarId: string;
   eventId: string;
-  roomName: string;
+  spaceName: string;
   summary: string;
   startTime: Date;
   endTime: Date;
@@ -33,48 +36,71 @@ export interface ModifyBookingDto {
   startTime: Date;
   endTime: Date;
   attendeeSlackIds: string[];
-  roomName: string;
+  spaceName: string;
 }
 
 @Injectable()
-export class StudyRoomService {
-  private readonly logger = new Logger(StudyRoomService.name);
+export class SpaceService {
+  private readonly logger = new Logger(SpaceService.name);
 
   constructor(
-    @InjectRepository(StudyRoom)
-    private studyRoomRepository: Repository<StudyRoom>,
+    @InjectRepository(Space)
+    private readonly spaceRepository: Repository<Space>,
     private readonly userService: UserService,
   ) {}
 
-  async create(dto: CreateStudyRoomDto): Promise<StudyRoom> {
+  async create(dto: CreateSpaceDto): Promise<Space> {
     const { calendarId } = await GoogleCalendarUtil.createCalendar(dto.name);
     await GoogleCalendarUtil.makeCalendarPublic(calendarId);
-    const room = this.studyRoomRepository.create({
+
+    const space = this.spaceRepository.create({
       name: dto.name,
       calendarId,
+      type: dto.type ?? SpaceType.STUDY_ROOM,
+      aliases: dto.aliases ?? [],
+      description: dto.description,
     });
-    return this.studyRoomRepository.save(room);
+    return this.spaceRepository.save(space);
   }
 
-  async findAll(onlyActive = false): Promise<StudyRoom[]> {
-    return this.studyRoomRepository.find({
-      where: onlyActive ? { status: StudyRoomStatus.ACTIVE } : {},
+  async findAll(onlyActive = false): Promise<Space[]> {
+    return this.spaceRepository.find({
+      where: onlyActive ? { status: SpaceStatus.ACTIVE } : {},
       order: { name: 'ASC' },
     });
   }
 
-  async findById(id: number): Promise<StudyRoom | null> {
-    return this.studyRoomRepository.findOne({ where: { id } });
+  async findAllByType(type: SpaceType, onlyActive = false): Promise<Space[]> {
+    return this.spaceRepository.find({
+      where: {
+        type,
+        ...(onlyActive ? { status: SpaceStatus.ACTIVE } : {}),
+      },
+      order: { name: 'ASC' },
+    });
   }
 
-  async bookStudyRoom(dto: BookStudyRoomDto): Promise<string> {
-    const room = await this.findById(dto.studyRoomId);
-    if (!room) throw new BusinessError(ErrorCode.STUDY_ROOM_NOT_FOUND);
+  async findById(id: number): Promise<Space | null> {
+    return this.spaceRepository.findOne({ where: { id } });
+  }
 
-    console.log(dto.attendeeSlackIds);
+  // location 문자열이 어떤 공간의 alias와 일치하면 해당 공간 반환
+  async findByAlias(location: string): Promise<Space | null> {
+    const lower = location.toLowerCase();
+    const spaces = await this.spaceRepository.find({
+      where: { status: SpaceStatus.ACTIVE },
+    });
+    return (
+      spaces.find((s) => s.aliases?.some((a) => a.toLowerCase() === lower)) ??
+      null
+    );
+  }
 
-    // 1. 캘린더 수정 권한이 있는 유저 토큰 조회
-    const acl = await GoogleCalendarUtil.getCalendarAcl(room.calendarId);
+  async bookSpace(dto: BookSpaceDto): Promise<string> {
+    const space = await this.findById(dto.spaceId);
+    if (!space) throw new BusinessError(ErrorCode.STUDY_ROOM_NOT_FOUND);
+
+    const acl = await GoogleCalendarUtil.getCalendarAcl(space.calendarId);
     const editorEmails = acl
       .filter((e) => e.role === 'writer' || e.role === 'owner')
       .map((e) => e.email);
@@ -89,9 +115,8 @@ export class StudyRoomService {
       throw new BusinessError(ErrorCode.CALENDAR_WRITER_NO_TOKEN);
     }
 
-    // 2. 중복 예약 체크
     const isBusy = await GoogleCalendarUtil.isTimeSlotBusy(
-      room.calendarId,
+      space.calendarId,
       refreshToken,
       dto.startTime,
       dto.endTime,
@@ -100,7 +125,6 @@ export class StudyRoomService {
       throw new BusinessError(ErrorCode.BOOKING_CONFLICT);
     }
 
-    // 3. 참석자 정보 조회 (예약자 포함)
     const allSlackIds = [dto.bookerSlackId, ...dto.attendeeSlackIds];
     const attendees = (
       await Promise.all(
@@ -120,22 +144,21 @@ export class StudyRoomService {
       })
       .join('\n');
 
-    // 4. 구글 캘린더 이벤트 생성
     const eventId = await GoogleCalendarUtil.createEvent(
-      room.calendarId,
+      space.calendarId,
       refreshToken,
       {
         summary: dto.title,
         startTime: dto.startTime,
         endTime: dto.endTime,
         attendeeEmails,
-        location: room.name,
+        location: space.name,
         description,
       },
     );
 
     this.logger.log(
-      `Study room booked: ${room.name} (${dto.startTime.toISOString()} ~ ${dto.endTime.toISOString()}), eventId: ${eventId}`,
+      `Space booked: ${space.name} (${dto.startTime.toISOString()} ~ ${dto.endTime.toISOString()}), eventId: ${eventId}`,
     );
 
     return eventId;
@@ -157,12 +180,11 @@ export class StudyRoomService {
     return refreshToken;
   }
 
-  // TODO 토큰 절약을 위해 추후 Redis 캐싱 예정
   async getMyBookings(slackId: string): Promise<BookingItem[]> {
     const user = await this.userService.findBySlackId(slackId);
     if (!user) return [];
 
-    const rooms = await this.findAll();
+    const rooms = await this.findAllByType(SpaceType.STUDY_ROOM);
     if (rooms.length === 0) return [];
 
     const calendarIds = rooms.map((r) => r.calendarId);
@@ -176,7 +198,7 @@ export class StudyRoomService {
     return rawBookings.map(({ calendarId, event }) => ({
       calendarId,
       eventId: event.id!,
-      roomName: roomMap.get(calendarId) ?? calendarId,
+      spaceName: roomMap.get(calendarId) ?? calendarId,
       summary: event.summary ?? '(제목 없음)',
       startTime: new Date(event.start!.dateTime!),
       endTime: new Date(event.end!.dateTime!),
@@ -184,40 +206,40 @@ export class StudyRoomService {
   }
 
   async rename(id: number, name: string): Promise<void> {
-    const room = await this.findById(id);
-    if (!room) throw new BusinessError(ErrorCode.STUDY_ROOM_NOT_FOUND);
-    await GoogleCalendarUtil.updateCalendar(room.calendarId, name);
-    await this.studyRoomRepository.update(id, { name });
+    const space = await this.findById(id);
+    if (!space) throw new BusinessError(ErrorCode.STUDY_ROOM_NOT_FOUND);
+    await GoogleCalendarUtil.updateCalendar(space.calendarId, name);
+    await this.spaceRepository.update(id, { name });
   }
 
   async updateInfo(
     id: number,
-    dto: { description?: string | null; status?: StudyRoomStatus },
+    dto: { description?: string | null; status?: SpaceStatus; aliases?: string[]; type?: SpaceType },
   ): Promise<void> {
-    await this.studyRoomRepository.update(id, dto as any);
+    await this.spaceRepository.update(id, dto as any);
   }
 
   async addEditor(id: number, email: string): Promise<void> {
-    const room = await this.findById(id);
-    if (!room) throw new BusinessError(ErrorCode.STUDY_ROOM_NOT_FOUND);
+    const space = await this.findById(id);
+    if (!space) throw new BusinessError(ErrorCode.STUDY_ROOM_NOT_FOUND);
     await GoogleCalendarUtil.shareCalendar({
-      calendarId: room.calendarId,
+      calendarId: space.calendarId,
       email,
       role: 'writer',
     });
   }
 
   async removeEditor(id: number, email: string): Promise<void> {
-    const room = await this.findById(id);
-    if (!room) throw new BusinessError(ErrorCode.STUDY_ROOM_NOT_FOUND);
-    await GoogleCalendarUtil.unshareCalendar(room.calendarId, email);
+    const space = await this.findById(id);
+    if (!space) throw new BusinessError(ErrorCode.STUDY_ROOM_NOT_FOUND);
+    await GoogleCalendarUtil.unshareCalendar(space.calendarId, email);
   }
 
   async remove(id: number): Promise<void> {
-    const room = await this.findById(id);
-    if (!room) throw new BusinessError(ErrorCode.STUDY_ROOM_NOT_FOUND);
-    await GoogleCalendarUtil.deleteCalendar(room.calendarId);
-    await this.studyRoomRepository.softDelete(id);
+    const space = await this.findById(id);
+    if (!space) throw new BusinessError(ErrorCode.STUDY_ROOM_NOT_FOUND);
+    await GoogleCalendarUtil.deleteCalendar(space.calendarId);
+    await this.spaceRepository.softDelete(id);
   }
 
   async cancelBooking(calendarId: string, eventId: string): Promise<void> {
@@ -262,7 +284,7 @@ export class StudyRoomService {
       startTime: dto.startTime,
       endTime: dto.endTime,
       attendeeEmails,
-      location: dto.roomName,
+      location: dto.spaceName,
       description,
     });
 

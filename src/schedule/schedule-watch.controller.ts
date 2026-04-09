@@ -9,6 +9,7 @@ import {
   DebounceEntry,
 } from './schedule-notification.service';
 import { detectChangeType } from './schedule-watch.view';
+import { SpaceMirrorService } from '../space/space-mirror.service';
 
 @Controller('google/calendar')
 export class ScheduleWatchController {
@@ -18,6 +19,7 @@ export class ScheduleWatchController {
     private readonly scheduleService: ScheduleService,
     private readonly channelService: ChannelService,
     private readonly notificationService: ScheduleNotificationService,
+    private readonly spaceMirrorService: SpaceMirrorService,
     @Inject(CACHE_MANAGER) private readonly cache: Cache,
   ) {}
 
@@ -74,6 +76,16 @@ export class ScheduleWatchController {
         const suppressed = await this.cache.get(`suppress:group:${groupId}`);
         if (suppressed) continue;
       }
+
+      // 미러 이벤트 suppress (방어 코드 — Space 캘린더엔 watch 미등록으로 실제론 불필요)
+      if (this.spaceMirrorService.isMirroredEvent(event)) continue;
+
+      // 공간 미러링 — 즉시 실행 (알림 debounce와 독립)
+      await this.spaceMirrorService.mirrorEvent(event).catch((err: Error) => {
+        this.logger.warn(
+          `Space mirror failed for event ${event.id}: ${err.message}`,
+        );
+      });
 
       const key = `${schedule.id}:${event.id}`;
       const currentType = detectChangeType(event);
