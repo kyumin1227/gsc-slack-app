@@ -3,6 +3,13 @@ import { calendar_v3 } from 'googleapis';
 
 export type EventChangeType = 'cancelled' | 'added' | 'updated';
 
+export interface EventSnapshot {
+  summary?: string | null;
+  startDateTime?: string | null;
+  endDateTime?: string | null;
+  location?: string | null;
+}
+
 export function detectChangeType(
   event: calendar_v3.Schema$Event,
 ): EventChangeType {
@@ -42,10 +49,62 @@ function formatUpdated(dt: string): string {
   });
 }
 
+function formatDateTimeFromEvent(event: calendar_v3.Schema$Event): string {
+  const startDt = event.start?.dateTime ?? event.start?.date;
+  const endDt = event.end?.dateTime ?? event.end?.date;
+  if (!startDt || !endDt) return '날짜 정보 없음';
+  if (!event.start?.dateTime) return `${formatDate(startDt)} (종일)`;
+  return `${formatDate(startDt)} ${formatTime(startDt)} ~ ${formatTime(endDt)}`;
+}
+
+function formatDateTimeFromSnapshot(snapshot: EventSnapshot): string {
+  const { startDateTime, endDateTime } = snapshot;
+  if (!startDateTime || !endDateTime) return '날짜 정보 없음';
+  return `${formatDate(startDateTime)} ${formatTime(startDateTime)} ~ ${formatTime(endDateTime)}`;
+}
+
+function buildDiffBlock(
+  before: EventSnapshot,
+  after: calendar_v3.Schema$Event,
+): KnownBlock | null {
+  const lines: string[] = [];
+
+  const beforeTitle = before.summary ?? '';
+  const afterTitle = after.summary ?? '';
+  if (beforeTitle !== afterTitle) {
+    lines.push(`📌 *제목* : ~${beforeTitle || '(없음)'}~ → *${afterTitle || '(없음)'}*`);
+  }
+
+  const beforeTime = formatDateTimeFromSnapshot(before);
+  const afterTime = formatDateTimeFromEvent(after);
+  if (beforeTime !== afterTime) {
+    lines.push(`🗓️ *일시* : ~${beforeTime}~ → *${afterTime}*`);
+  }
+
+  const beforeLocation = before.location ?? '';
+  const afterLocation = after.location ?? '';
+  if (beforeLocation !== afterLocation) {
+    lines.push(
+      `📍 *장소* : ~${beforeLocation || '미지정'}~ → *${afterLocation || '미지정'}*`,
+    );
+  }
+
+  if (lines.length === 0) return null;
+
+  return {
+    type: 'section',
+    text: {
+      type: 'mrkdwn',
+      text: `*변경 내용*\n${lines.join('\n')}`,
+    },
+  } as KnownBlock;
+}
+
 export function buildCalendarNotificationBlocks(
   scheduleName: string,
   event: calendar_v3.Schema$Event,
   changeType: EventChangeType,
+  beforeEvent?: EventSnapshot,
 ): KnownBlock[] {
   const headerMap: Record<EventChangeType, string> = {
     cancelled: `🚫 [${scheduleName}] 일정 취소 안내`,
@@ -66,6 +125,11 @@ export function buildCalendarNotificationBlocks(
     dateTimeText = `🗓️ *일시*\n${formatDate(startDt)} *${formatTime(startDt)} ~ ${formatTime(endDt)}*`;
   }
 
+  const diffBlock =
+    changeType === 'updated' && beforeEvent
+      ? buildDiffBlock(beforeEvent, event)
+      : null;
+
   return [
     {
       type: 'header',
@@ -76,6 +140,7 @@ export function buildCalendarNotificationBlocks(
       },
     },
     { type: 'divider' },
+    ...(diffBlock ? [diffBlock, { type: 'divider' } as KnownBlock] : []),
     {
       type: 'section',
       text: {

@@ -17,6 +17,7 @@ import {
 } from './schedule-notification.service';
 import { detectChangeType } from './schedule-watch.view';
 import { SpaceMirrorService } from '../space/space-mirror.service';
+import { EventSnapshot } from './schedule-notification.service';
 
 @Controller('google/calendar')
 export class ScheduleWatchController {
@@ -87,18 +88,36 @@ export class ScheduleWatchController {
       // 미러 이벤트 suppress (방어 코드 — Space 캘린더엔 watch 미등록으로 실제론 불필요)
       if (this.spaceMirrorService.isMirroredEvent(event)) continue;
 
-      // 공간 미러링 — 즉시 실행 (알림 debounce와 독립)
-      await this.spaceMirrorService.mirrorEvent(event, schedule.calendarId).catch((err: Error) => {
-        this.logger.warn(
-          `Space mirror failed for event ${event.id}: ${err.message}`,
-        );
-      });
-
       const key = `${schedule.id}:${event.id}`;
       const currentType = detectChangeType(event);
       const existing = await this.notificationService.getPendingEntry(key);
 
       if (!existing) {
+        // 미러링 전에 "변경 전" 상태 캡처 (업데이트 알림 diff용)
+        let beforeSnapshot: EventSnapshot | undefined;
+        if (currentType === 'updated') {
+          const before = await this.spaceMirrorService
+            .fetchCurrentMirrorEvent(event)
+            .catch(() => null);
+          if (before) {
+            beforeSnapshot = {
+              summary: before.summary,
+              startDateTime: before.start?.dateTime,
+              endDateTime: before.end?.dateTime,
+              location: before.location,
+            };
+          }
+        }
+
+        // 공간 미러링 — 즉시 실행 (알림 debounce와 독립)
+        await this.spaceMirrorService
+          .mirrorEvent(event, schedule.calendarId)
+          .catch((err: Error) => {
+            this.logger.warn(
+              `Space mirror failed for event ${event.id}: ${err.message}`,
+            );
+          });
+
         const entry: DebounceEntry = {
           originalType: currentType,
           calendarId: schedule.calendarId,
@@ -106,9 +125,19 @@ export class ScheduleWatchController {
           scheduleName: schedule.name,
           eventId: event.id,
           dueAt: Date.now() + 3 * 60 * 1000,
+          beforeSnapshot,
         };
         await this.notificationService.enqueue(key, entry);
       } else {
+        // 두 번째 이후 webhook — 미러 업데이트만, beforeSnapshot은 유지
+        await this.spaceMirrorService
+          .mirrorEvent(event, schedule.calendarId)
+          .catch((err: Error) => {
+            this.logger.warn(
+              `Space mirror failed for event ${event.id}: ${err.message}`,
+            );
+          });
+
         if (currentType === 'cancelled' && existing.originalType === 'added') {
           // 신규 생성 후 삭제 → 알림 취소
           await this.notificationService.cancel(key);
@@ -119,7 +148,7 @@ export class ScheduleWatchController {
           // 삭제 후 실행 취소
           await this.notificationService.cancel(key);
         } else {
-          // 타이머 리셋 (originalType 유지)
+          // 타이머 리셋 (originalType, beforeSnapshot 유지)
           await this.notificationService.enqueue(key, {
             ...existing,
             dueAt: Date.now() + 3 * 60 * 1000,
