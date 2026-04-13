@@ -1,15 +1,15 @@
-import { Injectable, Logger, OnApplicationBootstrap } from '@nestjs/common';
+import { Injectable, Logger } from '@nestjs/common';
 import { Cron } from '@nestjs/schedule';
 import { ScheduleService } from './schedule.service';
 
 @Injectable()
-export class ScheduleCronService implements OnApplicationBootstrap {
+export class ScheduleCronService {
   private readonly logger = new Logger(ScheduleCronService.name);
 
   constructor(private readonly scheduleService: ScheduleService) {}
 
-  // 서버 시작 시 — watch 갱신 (서버 재시작으로 만료된 watch 복구)
-  async onApplicationBootstrap(): Promise<void> {
+  // listen() 완료 후 main.ts에서 직접 호출
+  async renewOnBootstrap(): Promise<void> {
     this.logger.log('Starting watch renewal on bootstrap...');
     await this.scheduleService.renewAllActiveWatches();
     this.logger.log('Bootstrap watch renewal completed');
