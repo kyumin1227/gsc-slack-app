@@ -61,8 +61,10 @@ export class SpaceController {
       .map((a) => a.trim())
       .filter(Boolean);
     const description = values.description_block.description_input.value ?? undefined;
+    const isDefault =
+      (values.is_default_block?.is_default_checkbox?.selected_options ?? []).length > 0;
 
-    const space = await this.spaceService.create({ name, type, aliases, description });
+    const space = await this.spaceService.create({ name, type, aliases, description, isDefault });
     const typeLabel = type === SpaceType.CLASSROOM ? '교실' : '스터디룸';
     await client.chat.postMessage({
       channel: body.user.id,
@@ -568,6 +570,39 @@ export class SpaceController {
         }
       }),
     ]);
+  }
+
+  @Action('study-room:admin:toggle-default')
+  async adminToggleDefault({
+    ack,
+    client,
+    body,
+    action,
+  }: SlackActionMiddlewareArgs<BlockAction> & AllMiddlewareArgs) {
+    await ack();
+    const { roomId, roomName } = JSON.parse(
+      (action as { value: string }).value,
+    ) as { roomId: number; roomName: string };
+
+    const space = await this.spaceService.findById(roomId);
+    if (!space) return;
+
+    if (space.isDefault) {
+      await this.spaceService.unsetDefault(roomId);
+    } else {
+      await this.spaceService.setDefault(roomId);
+    }
+
+    const spaces = await this.spaceService.findAll();
+    await client.views.update({
+      view_id: body.view?.id ?? '',
+      view: SpaceView.manageModal(spaces),
+    });
+    const label = space.isDefault ? '기본 공간 해제' : '기본 공간으로 지정';
+    await client.chat.postMessage({
+      channel: body.user.id,
+      text: `✅ *${roomName}* 이 ${label}되었습니다.`,
+    });
   }
 
   @Action('study-room:admin:toggle-status')

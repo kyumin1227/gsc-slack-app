@@ -187,6 +187,26 @@ export class SpaceView {
             },
           },
         },
+        {
+          type: 'input',
+          block_id: 'is_default_block',
+          label: { type: 'plain_text', text: '기본 공간' },
+          optional: true,
+          hint: {
+            type: 'plain_text',
+            text: '선택 시 alias가 없는 이벤트가 이 공간의 시간표에 자동으로 미러링됩니다.',
+          },
+          element: {
+            type: 'checkboxes',
+            action_id: 'is_default_checkbox',
+            options: [
+              {
+                text: { type: 'plain_text', text: '기본 공간으로 지정' },
+                value: 'true',
+              },
+            ],
+          },
+        },
       ],
     };
   }
@@ -487,13 +507,14 @@ export class SpaceView {
         });
         const statusLabel =
           space.status === SpaceStatus.ACTIVE ? '활성' : '비활성';
+        const defaultLabel = space.isDefault ? ' `기본 공간`' : '';
 
         blocks.push(
           {
             type: 'section',
             text: {
               type: 'mrkdwn',
-              text: `*${space.name}* \`${statusLabel}\`${space.description ? `\n${space.description}` : ''}`,
+              text: `*${space.name}* \`${statusLabel}\`${defaultLabel}${space.description ? `\n${space.description}` : ''}`,
             },
           },
           {
@@ -509,6 +530,16 @@ export class SpaceView {
                 type: 'button',
                 text: { type: 'plain_text', text: '수정자 관리' },
                 action_id: 'study-room:admin:open-editors',
+                value: meta,
+              },
+              {
+                type: 'button',
+                text: {
+                  type: 'plain_text',
+                  text: space.isDefault ? '기본 공간 해제' : '기본 공간 지정',
+                },
+                action_id: 'study-room:admin:toggle-default',
+                style: space.isDefault ? undefined : 'primary',
                 value: meta,
               },
               {
