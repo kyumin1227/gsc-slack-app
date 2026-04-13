@@ -11,6 +11,7 @@ export interface CreateSpaceDto {
   type?: SpaceType;
   aliases?: string[];
   description?: string;
+  isDefault?: boolean;
 }
 
 export interface BookSpaceDto {
@@ -53,12 +54,22 @@ export class SpaceService {
     const { calendarId } = await GoogleCalendarUtil.createCalendar(dto.name);
     await GoogleCalendarUtil.makeCalendarPublic(calendarId);
 
+    if (dto.isDefault) {
+      await this.spaceRepository
+        .createQueryBuilder()
+        .update()
+        .set({ isDefault: false })
+        .where('1=1')
+        .execute();
+    }
+
     const space = this.spaceRepository.create({
       name: dto.name,
       calendarId,
       type: dto.type ?? SpaceType.STUDY_ROOM,
       aliases: dto.aliases ?? [],
       description: dto.description,
+      isDefault: dto.isDefault ?? false,
     });
     return this.spaceRepository.save(space);
   }
@@ -82,6 +93,24 @@ export class SpaceService {
 
   async findById(id: number): Promise<Space | null> {
     return this.spaceRepository.findOne({ where: { id } });
+  }
+
+  async findDefault(): Promise<Space | null> {
+    return this.spaceRepository.findOne({ where: { isDefault: true } });
+  }
+
+  async setDefault(id: number): Promise<void> {
+    await this.spaceRepository
+      .createQueryBuilder()
+      .update()
+      .set({ isDefault: false })
+      .where('1=1')
+      .execute();
+    await this.spaceRepository.update(id, { isDefault: true });
+  }
+
+  async unsetDefault(id: number): Promise<void> {
+    await this.spaceRepository.update(id, { isDefault: false });
   }
 
   // location 문자열이 어떤 공간의 alias와 일치하면 해당 공간 반환

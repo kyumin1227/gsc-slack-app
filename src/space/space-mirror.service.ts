@@ -55,31 +55,17 @@ export class SpaceMirrorService {
     const storedMirroredEventId =
       event.extendedProperties?.private?.[MIRRORED_EVENT_ID_KEY];
 
+    // 대상 공간 결정: alias 매칭 → 없으면 기본 공간 → 없으면 스킵
     const location = event.location?.trim();
-
-    if (!location) {
-      // location 제거됨 → 이전에 미러된 이벤트 삭제
-      if (storedMirroredCalendarId && storedMirroredEventId) {
-        await GoogleCalendarUtil.deleteEventAsServiceAccount(
-          storedMirroredCalendarId,
-          storedMirroredEventId,
-        ).catch(() => {});
-        await GoogleCalendarUtil.patchEventPrivateExtendedProperty(
-          sourceCalendarId,
-          event.id!,
-          { [MIRRORED_CALENDAR_ID_KEY]: '', [MIRRORED_EVENT_ID_KEY]: '' },
-        );
-        this.logger.log(
-          `Mirror deleted (location removed): ${event.id} from ${storedMirroredCalendarId}`,
-        );
-      }
-      return;
+    let targetSpace = location
+      ? await this.spaceService.findByAlias(location)
+      : null;
+    if (!targetSpace) {
+      targetSpace = await this.spaceService.findDefault();
     }
 
-    const space = await this.spaceService.findByAlias(location);
-
-    if (!space) {
-      // 매핑되는 공간 없음 → 이전 미러만 정리
+    if (!targetSpace) {
+      // 대상 공간 없음 → 기존 미러 정리
       if (storedMirroredCalendarId && storedMirroredEventId) {
         await GoogleCalendarUtil.deleteEventAsServiceAccount(
           storedMirroredCalendarId,
@@ -91,7 +77,7 @@ export class SpaceMirrorService {
           { [MIRRORED_CALENDAR_ID_KEY]: '', [MIRRORED_EVENT_ID_KEY]: '' },
         );
         this.logger.log(
-          `Mirror deleted (no space match): ${event.id} from ${storedMirroredCalendarId}`,
+          `Mirror deleted (no target space): ${event.id} from ${storedMirroredCalendarId}`,
         );
       }
       return;
@@ -100,7 +86,7 @@ export class SpaceMirrorService {
     // 공간이 변경된 경우 이전 캘린더에서 미러 삭제
     if (
       storedMirroredCalendarId &&
-      storedMirroredCalendarId !== space.calendarId &&
+      storedMirroredCalendarId !== targetSpace.calendarId &&
       storedMirroredEventId
     ) {
       await GoogleCalendarUtil.deleteEventAsServiceAccount(
@@ -114,12 +100,12 @@ export class SpaceMirrorService {
 
     // 같은 공간이면 기존 mirroredEventId 재사용, 아니면 null(새로 생성)
     const existingMirrorEventId =
-      storedMirroredCalendarId === space.calendarId
+      storedMirroredCalendarId === targetSpace.calendarId
         ? (storedMirroredEventId ?? null)
         : null;
 
     await this.upsertMirror(
-      space.calendarId,
+      targetSpace.calendarId,
       event,
       sourceCalendarId,
       existingMirrorEventId,

@@ -5,6 +5,7 @@ import {
   CreateDateColumn,
   UpdateDateColumn,
   DeleteDateColumn,
+  Index,
 } from 'typeorm';
 
 export enum SpaceType {
@@ -17,6 +18,10 @@ export enum SpaceStatus {
   INACTIVE = 'inactive',
 }
 
+@Index('unique_default_space', ['isDefault'], {
+  unique: true,
+  where: '"isDefault" = true',
+})
 @Entity('space')
 export class Space {
   @PrimaryGeneratedColumn()
@@ -47,6 +52,9 @@ export class Space {
     default: SpaceStatus.ACTIVE,
   })
   status: SpaceStatus;
+
+  @Column({ default: false })
+  isDefault: boolean = false;
 
   @CreateDateColumn()
   createdAt: Date;
