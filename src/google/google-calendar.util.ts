@@ -482,6 +482,102 @@ export class GoogleCalendarUtil {
     });
   }
 
+  // 서비스 계정으로 이벤트의 private extendedProperties 일부 패치
+  static async patchEventPrivateExtendedProperty(
+    calendarId: string,
+    eventId: string,
+    privateProps: Record<string, string>,
+  ): Promise<void> {
+    const calendar = this.getCalendarClient();
+    await calendar.events.patch({
+      calendarId,
+      eventId,
+      sendUpdates: 'none',
+      requestBody: {
+        extendedProperties: { private: privateProps },
+      },
+    });
+  }
+
+  // extendedProperties.private 필터로 이벤트 검색 (미러 이벤트 추적용)
+  static async searchByExtendedProperty(
+    calendarId: string,
+    key: string,
+    value: string,
+  ): Promise<calendar_v3.Schema$Event[]> {
+    const calendar = this.getCalendarClient();
+    const response = await calendar.events.list({
+      calendarId,
+      privateExtendedProperty: [`${key}=${value}`],
+      maxResults: 1,
+      showDeleted: false,
+    });
+    return response.data.items ?? [];
+  }
+
+  // 서비스 계정으로 미러 이벤트 생성 (extendedProperties 포함)
+  static async createMirrorEventAsServiceAccount(
+    calendarId: string,
+    params: {
+      summary: string;
+      startDateTime: string;
+      endDateTime: string;
+      description?: string;
+      location?: string;
+      extendedProperties?: calendar_v3.Schema$Event['extendedProperties'];
+    },
+  ): Promise<string> {
+    const calendar = this.getCalendarClient();
+    const response = await calendar.events.insert({
+      calendarId,
+      sendUpdates: 'none',
+      requestBody: {
+        summary: params.summary,
+        description: params.description,
+        location: params.location,
+        start: { dateTime: params.startDateTime, timeZone: 'Asia/Seoul' },
+        end: { dateTime: params.endDateTime, timeZone: 'Asia/Seoul' },
+        extendedProperties: params.extendedProperties,
+      },
+    });
+    if (!response.data.id) {
+      throw new Error('Failed to create mirror calendar event');
+    }
+    return response.data.id;
+  }
+
+  // 서비스 계정으로 미러 이벤트 수정 (extendedProperties 포함)
+  static async updateMirrorEventAsServiceAccount(
+    calendarId: string,
+    eventId: string,
+    params: {
+      summary?: string;
+      description?: string;
+      location?: string;
+      startDateTime?: string;
+      endDateTime?: string;
+      extendedProperties?: calendar_v3.Schema$Event['extendedProperties'];
+    },
+  ): Promise<void> {
+    const calendar = this.getCalendarClient();
+    const body: calendar_v3.Schema$Event = {};
+    if (params.summary !== undefined) body.summary = params.summary;
+    if (params.description !== undefined) body.description = params.description;
+    if (params.location !== undefined) body.location = params.location;
+    if (params.startDateTime)
+      body.start = { dateTime: params.startDateTime, timeZone: 'Asia/Seoul' };
+    if (params.endDateTime)
+      body.end = { dateTime: params.endDateTime, timeZone: 'Asia/Seoul' };
+    if (params.extendedProperties)
+      body.extendedProperties = params.extendedProperties;
+    await calendar.events.patch({
+      calendarId,
+      eventId,
+      sendUpdates: 'none',
+      requestBody: body,
+    });
+  }
+
   // ========== 스터디룸 예약 ==========
 
   // 이벤트 생성 (참석자 포함, 메일 발송 없음)

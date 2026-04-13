@@ -7,9 +7,9 @@ import type {
   SlackViewMiddlewareArgs,
   BlockAction,
 } from '@slack/bolt';
-import { StudyRoomService } from './study-room.service';
-import { StudyRoomView } from './study-room.view';
-import { StudyRoomStatus } from './study-room.entity';
+import { SpaceService } from './space.service';
+import { SpaceView } from './space.view';
+import { SpaceStatus, SpaceType } from './space.entity';
 import { UserService } from '../user/user.service';
 import { UserStatus } from '../user/user.entity';
 import { GoogleCalendarUtil } from '../google/google-calendar.util';
@@ -17,9 +17,9 @@ import { CMD } from '../common/slack-commands';
 import { PermissionService } from '../user/permission.service';
 
 @Controller()
-export class StudyRoomController {
+export class SpaceController {
   constructor(
-    private readonly studyRoomService: StudyRoomService,
+    private readonly spaceService: SpaceService,
     private readonly userService: UserService,
     private readonly permissionService: PermissionService,
   ) {}
@@ -39,7 +39,7 @@ export class StudyRoomController {
 
     await client.views.open({
       trigger_id: body.trigger_id,
-      view: StudyRoomView.createModal(),
+      view: SpaceView.createModal(),
     });
   }
 
@@ -53,11 +53,22 @@ export class StudyRoomController {
 
     const values = body.view.state.values;
     const name = values.name_block.name_input.value ?? '';
+    const type = (values.type_block.type_select.selected_option?.value ??
+      'study_room') as SpaceType;
+    const aliasesRaw = values.aliases_block.aliases_input.value ?? '';
+    const aliases = aliasesRaw
+      .split(',')
+      .map((a) => a.trim())
+      .filter(Boolean);
+    const description = values.description_block.description_input.value ?? undefined;
+    const isDefault =
+      (values.is_default_block?.is_default_checkbox?.selected_options ?? []).length > 0;
 
-    const room = await this.studyRoomService.create({ name });
+    const space = await this.spaceService.create({ name, type, aliases, description, isDefault });
+    const typeLabel = type === SpaceType.CLASSROOM ? '교실' : '스터디룸';
     await client.chat.postMessage({
       channel: body.user.id,
-      text: `✅ 스터디룸이 등록되었습니다.\n*${room.name}*`,
+      text: `✅ ${typeLabel}이 등록되었습니다.\n*${space.name}*`,
     });
   }
 
@@ -85,10 +96,13 @@ export class StudyRoomController {
       return;
     }
 
-    const rooms = await this.studyRoomService.findAll(true);
+    const spaces = await this.spaceService.findAllByType(
+      SpaceType.STUDY_ROOM,
+      true,
+    );
     await client.views.open({
       trigger_id: body.trigger_id,
-      view: StudyRoomView.listModal(rooms),
+      view: SpaceView.listModal(spaces),
     });
   }
 
@@ -122,7 +136,6 @@ export class StudyRoomController {
       calculatedEndTime = `${String(Math.floor(kstMin / 60)).padStart(2, '0')}:${String(kstMin % 60).padStart(2, '0')}`;
     }
 
-    // TODO: 로직 통합
     if (view.callback_id === 'study-room:modal:modify-booking') {
       const { calendarId, eventId, roomName } = JSON.parse(
         view.private_metadata,
@@ -142,7 +155,7 @@ export class StudyRoomController {
       await client.views.update({
         view_id: view.id,
         hash: view.hash,
-        view: StudyRoomView.modifyBookingModal(
+        view: SpaceView.modifyBookingModal(
           { calendarId, eventId, roomName, summary, startTime, endTime },
           attendeeSlackIds,
         ),
@@ -151,13 +164,13 @@ export class StudyRoomController {
     }
 
     const { roomId } = JSON.parse(view.private_metadata) as { roomId: number };
-    const room = await this.studyRoomService.findById(roomId);
-    if (!room) return;
+    const space = await this.spaceService.findById(roomId);
+    if (!space) return;
 
     await client.views.update({
       view_id: view.id,
       hash: view.hash,
-      view: StudyRoomView.bookingModal(room, calculatedEndTime),
+      view: SpaceView.bookingModal(space, calculatedEndTime),
     });
   }
 
@@ -170,13 +183,13 @@ export class StudyRoomController {
   }: SlackActionMiddlewareArgs<BlockAction> & AllMiddlewareArgs) {
     await ack();
 
-    const roomId = parseInt((action as { value: string }).value, 10);
-    const room = await this.studyRoomService.findById(roomId);
-    if (!room) return;
+    const spaceId = parseInt((action as { value: string }).value, 10);
+    const space = await this.spaceService.findById(spaceId);
+    if (!space) return;
 
     await client.views.push({
       trigger_id: body.trigger_id,
-      view: StudyRoomView.bookingModal(room),
+      view: SpaceView.bookingModal(space),
     });
   }
 
@@ -219,8 +232,8 @@ export class StudyRoomController {
     const startTime = new Date(`${date}T${startTimeStr}:00+09:00`);
     const endTime = new Date(startTime.getTime() + durationMinutes * 60 * 1000);
 
-    await this.studyRoomService.bookStudyRoom({
-      studyRoomId: roomId,
+    await this.spaceService.bookSpace({
+      spaceId: roomId,
       title,
       startTime,
       endTime,
@@ -245,10 +258,10 @@ export class StudyRoomController {
     await ack();
 
     const userId = 'user_id' in body ? body.user_id : body.user.id;
-    const bookings = await this.studyRoomService.getMyBookings(userId);
+    const bookings = await this.spaceService.getMyBookings(userId);
     await client.views.open({
       trigger_id: body.trigger_id,
-      view: StudyRoomView.myBookingsModal(bookings),
+      view: SpaceView.myBookingsModal(bookings),
     });
   }
 
@@ -265,7 +278,7 @@ export class StudyRoomController {
       (action as { value: string }).value,
     ) as { calendarId: string; eventId: string; roomName: string };
 
-    await this.studyRoomService.cancelBooking(calendarId, eventId);
+    await this.spaceService.cancelBooking(calendarId, eventId);
     await client.chat.postMessage({
       channel: body.user.id,
       text: `✅ *${roomName}* 예약이 취소되었습니다.`,
@@ -303,7 +316,7 @@ export class StudyRoomController {
 
     await client.views.push({
       trigger_id: body.trigger_id,
-      view: StudyRoomView.modifyBookingModal(
+      view: SpaceView.modifyBookingModal(
         {
           calendarId,
           eventId,
@@ -356,17 +369,13 @@ export class StudyRoomController {
     const startTime = new Date(`${date}T${startTimeStr}:00+09:00`);
     const endTime = new Date(startTime.getTime() + durationMinutes * 60 * 1000);
 
-    const result = await this.studyRoomService.modifyBooking(
-      calendarId,
-      eventId,
-      {
-        title,
-        startTime,
-        endTime,
-        attendeeSlackIds,
-        roomName,
-      },
-    );
+    const result = await this.spaceService.modifyBooking(calendarId, eventId, {
+      title,
+      startTime,
+      endTime,
+      attendeeSlackIds,
+      spaceName: roomName,
+    });
 
     if (result === 'cancelled') {
       await client.chat.postMessage({
@@ -381,7 +390,33 @@ export class StudyRoomController {
     }
   }
 
-  // ========== 스터디룸 관리 (어드민) ==========
+  // URL 링크 버튼 — Slack 경고 방지용 ack (study-room:action:view-calendar 포함)
+  @Action(/^space:action:view-|^study-room:action:view-calendar$/)
+  async ackViewLinkButtons({
+    ack,
+  }: SlackActionMiddlewareArgs<BlockAction> & AllMiddlewareArgs) {
+    await ack();
+  }
+
+  @Action('home:open-classroom-schedule')
+  async openClassroomSchedule({
+    ack,
+    client,
+    body,
+  }: SlackActionMiddlewareArgs<BlockAction> & AllMiddlewareArgs) {
+    await ack();
+
+    const classrooms = await this.spaceService.findAllByType(
+      SpaceType.CLASSROOM,
+      true,
+    );
+    await client.views.open({
+      trigger_id: body.trigger_id,
+      view: SpaceView.classroomScheduleModal(classrooms),
+    });
+  }
+
+  // ========== 공간 관리 (어드민) ==========
 
   @Command(CMD.스터디룸)
   @Action('home:open-study-room-manage')
@@ -396,10 +431,10 @@ export class StudyRoomController {
     const userId = 'user_id' in body ? body.user_id : body.user.id;
     await this.permissionService.requireAdmin(userId);
 
-    const rooms = await this.studyRoomService.findAll();
+    const spaces = await this.spaceService.findAll();
     await client.views.open({
       trigger_id: body.trigger_id,
-      view: StudyRoomView.manageModal(rooms),
+      view: SpaceView.manageModal(spaces),
     });
   }
 
@@ -412,7 +447,7 @@ export class StudyRoomController {
     await ack();
     await client.views.push({
       trigger_id: body.trigger_id,
-      view: StudyRoomView.createModal(),
+      view: SpaceView.createModal(),
     });
   }
 
@@ -427,11 +462,11 @@ export class StudyRoomController {
     const { roomId } = JSON.parse((action as { value: string }).value) as {
       roomId: number;
     };
-    const room = await this.studyRoomService.findById(roomId);
-    if (!room) return;
+    const space = await this.spaceService.findById(roomId);
+    if (!space) return;
     await client.views.push({
       trigger_id: body.trigger_id,
-      view: StudyRoomView.editModal(room),
+      view: SpaceView.editModal(space),
     });
   }
 
@@ -447,13 +482,19 @@ export class StudyRoomController {
       roomId: number;
     };
     const name = values.name_block.name_input.value ?? '';
+    const type = values.type_block.type_select.selected_option?.value as SpaceType;
+    const aliasesRaw = values.aliases_block.aliases_input.value ?? '';
+    const aliases = aliasesRaw
+      .split(',')
+      .map((a) => a.trim())
+      .filter(Boolean);
     const description =
       values.description_block.description_input.value ?? null;
     const status = values.status_block.status_select.selected_option
-      ?.value as import('./study-room.entity').StudyRoomStatus;
+      ?.value as SpaceStatus;
 
-    await this.studyRoomService.rename(roomId, name);
-    await this.studyRoomService.updateInfo(roomId, { description, status });
+    await this.spaceService.rename(roomId, name);
+    await this.spaceService.updateInfo(roomId, { description, status, aliases, type });
     await client.chat.postMessage({
       channel: body.user.id,
       text: `✅ *${name}* 정보가 수정되었습니다.`,
@@ -472,8 +513,8 @@ export class StudyRoomController {
       (action as { value: string }).value,
     ) as { roomId: number; calendarId: string };
 
-    const room = await this.studyRoomService.findById(roomId);
-    if (!room) return;
+    const space = await this.spaceService.findById(roomId);
+    if (!space) return;
 
     const acl = await GoogleCalendarUtil.getCalendarAcl(calendarId);
     const editorEmails = acl
@@ -484,7 +525,7 @@ export class StudyRoomController {
 
     await client.views.push({
       trigger_id: body.trigger_id,
-      view: StudyRoomView.editorsModal(room, initialEditorSlackIds),
+      view: SpaceView.editorsModal(space, initialEditorSlackIds),
     });
   }
 
@@ -519,16 +560,49 @@ export class StudyRoomController {
       ...toAdd.map(async (slackId) => {
         const user = await this.userService.findBySlackId(slackId);
         if (user?.email) {
-          await this.studyRoomService.addEditor(roomId, user.email);
+          await this.spaceService.addEditor(roomId, user.email);
         }
       }),
       ...toRemove.map(async (slackId) => {
         const user = await this.userService.findBySlackId(slackId);
         if (user?.email) {
-          await this.studyRoomService.removeEditor(roomId, user.email);
+          await this.spaceService.removeEditor(roomId, user.email);
         }
       }),
     ]);
+  }
+
+  @Action('study-room:admin:toggle-default')
+  async adminToggleDefault({
+    ack,
+    client,
+    body,
+    action,
+  }: SlackActionMiddlewareArgs<BlockAction> & AllMiddlewareArgs) {
+    await ack();
+    const { roomId, roomName } = JSON.parse(
+      (action as { value: string }).value,
+    ) as { roomId: number; roomName: string };
+
+    const space = await this.spaceService.findById(roomId);
+    if (!space) return;
+
+    if (space.isDefault) {
+      await this.spaceService.unsetDefault(roomId);
+    } else {
+      await this.spaceService.setDefault(roomId);
+    }
+
+    const spaces = await this.spaceService.findAll();
+    await client.views.update({
+      view_id: body.view?.id ?? '',
+      view: SpaceView.manageModal(spaces),
+    });
+    const label = space.isDefault ? '기본 공간 해제' : '기본 공간으로 지정';
+    await client.chat.postMessage({
+      channel: body.user.id,
+      text: `✅ *${roomName}* 이 ${label}되었습니다.`,
+    });
   }
 
   @Action('study-room:admin:toggle-status')
@@ -543,22 +617,22 @@ export class StudyRoomController {
       (action as { value: string }).value,
     ) as { roomId: number; roomName: string };
 
-    const room = await this.studyRoomService.findById(roomId);
-    if (!room) return;
+    const space = await this.spaceService.findById(roomId);
+    if (!space) return;
 
     const newStatus =
-      room.status === StudyRoomStatus.ACTIVE
-        ? StudyRoomStatus.INACTIVE
-        : StudyRoomStatus.ACTIVE;
+      space.status === SpaceStatus.ACTIVE
+        ? SpaceStatus.INACTIVE
+        : SpaceStatus.ACTIVE;
 
-    await this.studyRoomService.updateInfo(roomId, { status: newStatus });
+    await this.spaceService.updateInfo(roomId, { status: newStatus });
 
-    const rooms = await this.studyRoomService.findAll();
+    const spaces = await this.spaceService.findAll();
     await client.views.update({
       view_id: body.view?.id ?? '',
-      view: StudyRoomView.manageModal(rooms),
+      view: SpaceView.manageModal(spaces),
     });
-    const label = newStatus === StudyRoomStatus.ACTIVE ? '활성화' : '비활성화';
+    const label = newStatus === SpaceStatus.ACTIVE ? '활성화' : '비활성화';
     await client.chat.postMessage({
       channel: body.user.id,
       text: `✅ *${roomName}* 이 ${label}되었습니다.`,

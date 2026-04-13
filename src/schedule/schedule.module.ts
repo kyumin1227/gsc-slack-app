@@ -11,6 +11,7 @@ import { UserModule } from '../user/user.module';
 import { TagModule } from '../tag/tag.module';
 import { Tag } from '../tag/tag.entity';
 import { ChannelModule } from '../channel/channel.module';
+import { SpaceModule } from '../space/space.module';
 
 @Module({
   imports: [
@@ -18,6 +19,7 @@ import { ChannelModule } from '../channel/channel.module';
     forwardRef(() => UserModule),
     forwardRef(() => TagModule),
     ChannelModule,
+    SpaceModule,
   ],
   controllers: [ScheduleController, ScheduleWatchController],
   providers: [ScheduleService, ScheduleCronService, ScheduleNotificationService],

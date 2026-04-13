@@ -7,7 +7,10 @@ import { GoogleCalendarUtil } from '../google/google-calendar.util';
 import {
   buildCalendarNotificationBlocks,
   EventChangeType,
+  EventSnapshot,
 } from './schedule-watch.view';
+
+export type { EventSnapshot };
 
 export interface DebounceEntry {
   originalType: EventChangeType;
@@ -16,6 +19,7 @@ export interface DebounceEntry {
   scheduleName: string;
   eventId: string;
   dueAt: number;
+  beforeSnapshot?: EventSnapshot; // 첫 webhook 시점의 "변경 전" 상태
 }
 
 const DEBOUNCE_KEY_PREFIX = 'calendar:debounce:';
@@ -78,7 +82,7 @@ export class ScheduleNotificationService {
 
     await this.cache.del(pendingKey(key));
 
-    // 최신 이벤트 조회
+    // 최신 이벤트 조회 (미러 메타데이터 포함)
     const event = await GoogleCalendarUtil.getEventById(
       entry.calendarId,
       entry.eventId,
@@ -106,6 +110,7 @@ export class ScheduleNotificationService {
       entry.scheduleName,
       event,
       finalType,
+      finalType === 'updated' ? entry.beforeSnapshot : undefined,
     );
 
     await Promise.allSettled(
