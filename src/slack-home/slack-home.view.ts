@@ -81,14 +81,14 @@ export class HomeView {
         { type: 'divider' },
         {
           type: 'header',
-          text: { type: 'plain_text', text: '📅 시간표 구독', emoji: true },
+          text: { type: 'plain_text', text: '📅 시간표', emoji: true },
         },
         {
           type: 'context',
           elements: [
             {
               type: 'mrkdwn',
-              text: '구독하면 *Google Calendar* 에서 수업 일정을 자동으로 받아볼 수 있어요.',
+              text: '수업 일정을 *Google Calendar* 에서 받아보거나, 교실별 일정을 확인할 수 있어요.',
             },
           ],
         },
@@ -97,9 +97,14 @@ export class HomeView {
           elements: [
             {
               type: 'button',
-              text: { type: 'plain_text', text: '구독하기' },
+              text: { type: 'plain_text', text: '과목 시간표' },
               style: 'primary',
               action_id: 'home:open-subscribe',
+            },
+            {
+              type: 'button',
+              text: { type: 'plain_text', text: '교실 시간표' },
+              action_id: 'home:open-classroom-schedule',
             },
           ],
         },
@@ -194,7 +199,7 @@ export class HomeView {
           elements: [
             {
               type: 'mrkdwn',
-              text: '시간표를 *구독* 하거나 *생성·수정* 할 수 있어요.',
+              text: '시간표를 *구독* 하거나 *생성·수정* 할 수 있어요. 교실별 일정도 확인할 수 있어요.',
             },
           ],
         },
@@ -203,9 +208,14 @@ export class HomeView {
           elements: [
             {
               type: 'button',
-              text: { type: 'plain_text', text: '구독' },
+              text: { type: 'plain_text', text: '과목 시간표' },
               style: 'primary',
               action_id: 'home:open-subscribe',
+            },
+            {
+              type: 'button',
+              text: { type: 'plain_text', text: '교실 시간표' },
+              action_id: 'home:open-classroom-schedule',
             },
             {
               type: 'button',

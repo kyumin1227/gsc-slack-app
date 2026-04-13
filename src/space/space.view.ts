@@ -1,19 +1,18 @@
 import type { View } from '@slack/types';
-import { StudyRoom, StudyRoomStatus } from './study-room.entity';
-import { BookingItem } from './study-room.service';
+import { Space, SpaceStatus, SpaceType } from './space.entity';
+import { BookingItem } from './space.service';
 import { toKST } from '../utils/date.util';
 import { multiUsersSelectBlock } from '../common/blocks';
 
-// Google Calendar 캘린더 색상
 const ROOM_COLORS = [
-  '%234285F4', // 파랑
-  '%23DB4437', // 빨강
-  '%230F9D58', // 초록
-  '%23F4B400', // 노랑
-  '%239E69AF', // 보라
-  '%23F6511D', // 주황
-  '%2300BCD4', // 하늘
-  '%23E91E63', // 분홍
+  '%234285F4',
+  '%23DB4437',
+  '%230F9D58',
+  '%23F4B400',
+  '%239E69AF',
+  '%23F6511D',
+  '%2300BCD4',
+  '%23E91E63',
 ];
 
 const DURATION_OPTIONS = (() => {
@@ -34,15 +33,15 @@ const DURATION_OPTIONS = (() => {
   return options;
 })();
 
-export class StudyRoomView {
-  static listModal(rooms: StudyRoom[]): View {
+export class SpaceView {
+  static listModal(spaces: Space[]): View {
     const combinedCalendarUrl =
-      rooms.length > 0
+      spaces.length > 0
         ? 'https://calendar.google.com/calendar/embed?' +
-          rooms
+          spaces
             .map(
-              (room, i) =>
-                `src=${encodeURIComponent(room.calendarId)}&color=${ROOM_COLORS[i % ROOM_COLORS.length]}`,
+              (space, i) =>
+                `src=${encodeURIComponent(space.calendarId)}&color=${ROOM_COLORS[i % ROOM_COLORS.length]}`,
             )
             .join('&') +
           '&ctz=Asia%2FSeoul&mode=WEEK'
@@ -67,23 +66,23 @@ export class StudyRoomView {
       { type: 'divider' },
     ];
 
-    if (rooms.length === 0) {
+    if (spaces.length === 0) {
       blocks.push({
         type: 'section',
         text: { type: 'mrkdwn', text: '등록된 스터디룸이 없습니다.' },
       });
     } else {
-      for (const [i, room] of rooms.entries()) {
+      for (const [i, space] of spaces.entries()) {
         const color = ROOM_COLORS[i % ROOM_COLORS.length];
-        const calendarUrl = `https://calendar.google.com/calendar/embed?src=${encodeURIComponent(room.calendarId)}&color=${color}&ctz=Asia%2FSeoul&mode=WEEK`;
+        const calendarUrl = `https://calendar.google.com/calendar/embed?src=${encodeURIComponent(space.calendarId)}&color=${color}&ctz=Asia%2FSeoul&mode=WEEK`;
         blocks.push(
           {
             type: 'section',
             text: {
               type: 'mrkdwn',
-              text: room.description
-                ? `*${room.name}*\n${room.description}`
-                : `*${room.name}*`,
+              text: space.description
+                ? `*${space.name}*\n${space.description}`
+                : `*${space.name}*`,
             },
           },
           {
@@ -94,7 +93,7 @@ export class StudyRoomView {
                 text: { type: 'plain_text', text: '예약' },
                 style: 'primary',
                 action_id: 'study-room:action:book',
-                value: String(room.id),
+                value: String(space.id),
               },
               {
                 type: 'button',
@@ -121,7 +120,7 @@ export class StudyRoomView {
     return {
       type: 'modal',
       callback_id: 'study-room:modal:create',
-      title: { type: 'plain_text', text: '스터디룸 등록' },
+      title: { type: 'plain_text', text: '공간 등록' },
       submit: { type: 'plain_text', text: '등록' },
       close: { type: 'plain_text', text: '취소' },
       blocks: [
@@ -134,7 +133,57 @@ export class StudyRoomView {
             action_id: 'name_input',
             placeholder: {
               type: 'plain_text',
-              text: '스터디룸 이름을 입력하세요',
+              text: '공간 이름을 입력하세요',
+            },
+          },
+        },
+        {
+          type: 'input',
+          block_id: 'type_block',
+          label: { type: 'plain_text', text: '유형' },
+          element: {
+            type: 'static_select',
+            action_id: 'type_select',
+            placeholder: { type: 'plain_text', text: '유형을 선택하세요' },
+            options: [
+              {
+                text: { type: 'plain_text', text: '스터디룸 (예약 가능)' },
+                value: 'study_room',
+              },
+              {
+                text: { type: 'plain_text', text: '교실 (시간표 자동 복제)' },
+                value: 'classroom',
+              },
+            ],
+          },
+        },
+        {
+          type: 'input',
+          block_id: 'aliases_block',
+          label: { type: 'plain_text', text: '별칭 (Alias)' },
+          optional: true,
+          hint: {
+            type: 'plain_text',
+            text: '쉼표로 구분해서 입력하세요. 시간표 이벤트의 location과 매핑됩니다. 예: 301강,301호,301',
+          },
+          element: {
+            type: 'plain_text_input',
+            action_id: 'aliases_input',
+            placeholder: { type: 'plain_text', text: '301강, 301호, 301' },
+          },
+        },
+        {
+          type: 'input',
+          block_id: 'description_block',
+          label: { type: 'plain_text', text: '설명' },
+          optional: true,
+          element: {
+            type: 'plain_text_input',
+            action_id: 'description_input',
+            multiline: true,
+            placeholder: {
+              type: 'plain_text',
+              text: '시설 정보, 수용 인원 등',
             },
           },
         },
@@ -142,18 +191,18 @@ export class StudyRoomView {
     };
   }
 
-  static bookingModal(room: StudyRoom, calculatedEndTime?: string): View {
+  static bookingModal(space: Space, calculatedEndTime?: string): View {
     return {
       type: 'modal',
       callback_id: 'study-room:modal:book',
       title: { type: 'plain_text', text: '예약하기' },
       submit: { type: 'plain_text', text: '예약' },
       close: { type: 'plain_text', text: '취소' },
-      private_metadata: JSON.stringify({ roomId: room.id }),
+      private_metadata: JSON.stringify({ roomId: space.id }),
       blocks: [
         {
           type: 'section',
-          text: { type: 'mrkdwn', text: `*${room.name}*` },
+          text: { type: 'mrkdwn', text: `*${space.name}*` },
         },
         { type: 'divider' },
         {
@@ -242,7 +291,7 @@ export class StudyRoomView {
         const meta = JSON.stringify({
           calendarId: booking.calendarId,
           eventId: booking.eventId,
-          roomName: booking.roomName,
+          roomName: booking.spaceName,
           startIso: booking.startTime.toISOString(),
           endIso: booking.endTime.toISOString(),
         });
@@ -252,7 +301,7 @@ export class StudyRoomView {
             type: 'section',
             text: {
               type: 'mrkdwn',
-              text: `*${booking.summary}*\n${booking.roomName} | ${dateStr} ${startStr}~${endStr}`,
+              text: `*${booking.summary}*\n${booking.spaceName} | ${dateStr} ${startStr}~${endStr}`,
             },
           },
           {
@@ -408,9 +457,7 @@ export class StudyRoomView {
     };
   }
 
-  // ========== 스터디룸 관리 (어드민) ==========
-
-  static manageModal(rooms: StudyRoom[]): View {
+  static manageModal(spaces: Space[]): View {
     const blocks: View['blocks'] = [
       {
         type: 'actions',
@@ -426,27 +473,27 @@ export class StudyRoomView {
       { type: 'divider' },
     ];
 
-    if (rooms.length === 0) {
+    if (spaces.length === 0) {
       blocks.push({
         type: 'section',
         text: { type: 'mrkdwn', text: '등록된 스터디룸이 없습니다.' },
       });
     } else {
-      for (const room of rooms) {
+      for (const space of spaces) {
         const meta = JSON.stringify({
-          roomId: room.id,
-          roomName: room.name,
-          calendarId: room.calendarId,
+          roomId: space.id,
+          roomName: space.name,
+          calendarId: space.calendarId,
         });
         const statusLabel =
-          room.status === StudyRoomStatus.ACTIVE ? '활성' : '비활성';
+          space.status === SpaceStatus.ACTIVE ? '활성' : '비활성';
 
         blocks.push(
           {
             type: 'section',
             text: {
               type: 'mrkdwn',
-              text: `*${room.name}* \`${statusLabel}\`${room.description ? `\n${room.description}` : ''}`,
+              text: `*${space.name}* \`${statusLabel}\`${space.description ? `\n${space.description}` : ''}`,
             },
           },
           {
@@ -469,21 +516,19 @@ export class StudyRoomView {
                 text: {
                   type: 'plain_text',
                   text:
-                    room.status === StudyRoomStatus.ACTIVE
-                      ? '비활성화'
-                      : '활성화',
+                    space.status === SpaceStatus.ACTIVE ? '비활성화' : '활성화',
                 },
                 action_id: 'study-room:admin:toggle-status',
                 style:
-                  room.status === StudyRoomStatus.ACTIVE ? 'danger' : 'primary',
+                  space.status === SpaceStatus.ACTIVE ? 'danger' : 'primary',
                 value: meta,
                 confirm:
-                  room.status === StudyRoomStatus.ACTIVE
+                  space.status === SpaceStatus.ACTIVE
                     ? {
                         title: { type: 'plain_text', text: '비활성화 확인' },
                         text: {
                           type: 'mrkdwn',
-                          text: `*${room.name}*을 비활성화하시겠습니까?\n예약 목록에서 숨겨집니다.`,
+                          text: `*${space.name}*을 비활성화하시겠습니까?\n예약 목록에서 숨겨집니다.`,
                         },
                         confirm: { type: 'plain_text', text: '비활성화' },
                         deny: { type: 'plain_text', text: '취소' },
@@ -507,7 +552,7 @@ export class StudyRoomView {
     };
   }
 
-  static editModal(room: StudyRoom): View {
+  static editModal(space: Space): View {
     return {
       type: 'modal',
       callback_id: 'study-room:modal:edit',
@@ -515,9 +560,9 @@ export class StudyRoomView {
       submit: { type: 'plain_text', text: '저장' },
       close: { type: 'plain_text', text: '취소' },
       private_metadata: JSON.stringify({
-        roomId: room.id,
-        roomName: room.name,
-        calendarId: room.calendarId,
+        roomId: space.id,
+        roomName: space.name,
+        calendarId: space.calendarId,
       }),
       blocks: [
         {
@@ -527,7 +572,52 @@ export class StudyRoomView {
           element: {
             type: 'plain_text_input',
             action_id: 'name_input',
-            initial_value: room.name,
+            initial_value: space.name,
+          },
+        },
+        {
+          type: 'input',
+          block_id: 'type_block',
+          label: { type: 'plain_text', text: '유형' },
+          element: {
+            type: 'static_select',
+            action_id: 'type_select',
+            options: [
+              {
+                text: { type: 'plain_text', text: '스터디룸 (예약 가능)' },
+                value: 'study_room',
+              },
+              {
+                text: { type: 'plain_text', text: '교실 (시간표 자동 복제)' },
+                value: 'classroom',
+              },
+            ],
+            initial_option: {
+              text: {
+                type: 'plain_text',
+                text:
+                  space.type === SpaceType.CLASSROOM
+                    ? '교실 (시간표 자동 복제)'
+                    : '스터디룸 (예약 가능)',
+              },
+              value: space.type,
+            },
+          },
+        },
+        {
+          type: 'input',
+          block_id: 'aliases_block',
+          label: { type: 'plain_text', text: '별칭 (Alias)' },
+          optional: true,
+          hint: {
+            type: 'plain_text',
+            text: '쉼표로 구분해서 입력하세요. 시간표 이벤트의 location과 매핑됩니다. 예: 301강,301호,301',
+          },
+          element: {
+            type: 'plain_text_input',
+            action_id: 'aliases_input',
+            initial_value: space.aliases?.join(', ') ?? '',
+            placeholder: { type: 'plain_text', text: '301강, 301호, 301' },
           },
         },
         {
@@ -539,7 +629,7 @@ export class StudyRoomView {
             type: 'plain_text_input',
             action_id: 'description_input',
             multiline: true,
-            initial_value: room.description ?? '',
+            initial_value: space.description ?? '',
             placeholder: {
               type: 'plain_text',
               text: '시설 정보, 수용 인원 등',
@@ -556,20 +646,19 @@ export class StudyRoomView {
             options: [
               {
                 text: { type: 'plain_text', text: '활성' },
-                value: StudyRoomStatus.ACTIVE,
+                value: SpaceStatus.ACTIVE,
               },
               {
                 text: { type: 'plain_text', text: '비활성' },
-                value: StudyRoomStatus.INACTIVE,
+                value: SpaceStatus.INACTIVE,
               },
             ],
             initial_option: {
               text: {
                 type: 'plain_text',
-                text:
-                  room.status === StudyRoomStatus.ACTIVE ? '활성' : '비활성',
+                text: space.status === SpaceStatus.ACTIVE ? '활성' : '비활성',
               },
-              value: room.status,
+              value: space.status,
             },
           },
         },
@@ -577,8 +666,67 @@ export class StudyRoomView {
     };
   }
 
+  static classroomScheduleModal(classrooms: Space[]): View {
+    const combinedCalendarUrl =
+      classrooms.length > 0
+        ? 'https://calendar.google.com/calendar/embed?' +
+          classrooms
+            .map(
+              (c, i) =>
+                `src=${encodeURIComponent(c.calendarId)}&color=${ROOM_COLORS[i % ROOM_COLORS.length]}`,
+            )
+            .join('&') +
+          '&ctz=Asia%2FSeoul&mode=WEEK'
+        : undefined;
+
+    const blocks: View['blocks'] = [];
+
+    if (classrooms.length === 0) {
+      blocks.push({
+        type: 'section',
+        text: { type: 'mrkdwn', text: '등록된 교실이 없습니다.' },
+      });
+    } else {
+      for (const [i, classroom] of classrooms.entries()) {
+        const color = ROOM_COLORS[i % ROOM_COLORS.length];
+        const calendarUrl = `https://calendar.google.com/calendar/embed?src=${encodeURIComponent(classroom.calendarId)}&color=${color}&ctz=Asia%2FSeoul&mode=WEEK`;
+        const aliasText =
+          classroom.aliases?.length > 0
+            ? `\n별칭: ${classroom.aliases.join(', ')}`
+            : '';
+
+        blocks.push(
+          {
+            type: 'section',
+            text: {
+              type: 'mrkdwn',
+              text: classroom.description
+                ? `*${classroom.name}*${aliasText}\n${classroom.description}`
+                : `*${classroom.name}*${aliasText}`,
+            },
+            accessory: {
+              type: 'button',
+              text: { type: 'plain_text', text: '일정 보기 ❐' },
+              url: calendarUrl,
+              action_id: `space:action:view-classroom-${classroom.id}`,
+            },
+          },
+          { type: 'divider' },
+        );
+      }
+    }
+
+    return {
+      type: 'modal',
+      callback_id: 'space:modal:classroom-schedule',
+      title: { type: 'plain_text', text: '교실 시간표' },
+      close: { type: 'plain_text', text: '닫기' },
+      blocks,
+    };
+  }
+
   static editorsModal(
-    room: StudyRoom,
+    space: Space,
     initialEditorSlackIds: string[] = [],
   ): View {
     return {
@@ -588,8 +736,8 @@ export class StudyRoomView {
       submit: { type: 'plain_text', text: '저장' },
       close: { type: 'plain_text', text: '취소' },
       private_metadata: JSON.stringify({
-        roomId: room.id,
-        calendarId: room.calendarId,
+        roomId: space.id,
+        calendarId: space.calendarId,
       }),
       blocks: [
         multiUsersSelectBlock({

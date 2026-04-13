@@ -7,31 +7,46 @@ import {
   DeleteDateColumn,
 } from 'typeorm';
 
-export enum StudyRoomStatus {
+export enum SpaceType {
+  CLASSROOM = 'classroom',
+  STUDY_ROOM = 'study_room',
+}
+
+export enum SpaceStatus {
   ACTIVE = 'active',
   INACTIVE = 'inactive',
 }
 
-@Entity()
-export class StudyRoom {
+@Entity('space')
+export class Space {
   @PrimaryGeneratedColumn()
   id: number;
 
   @Column()
   name: string;
 
+  @Column('simple-array', { nullable: true })
+  aliases: string[];
+
   @Column({ unique: true })
   calendarId: string;
+
+  @Column({
+    type: 'enum',
+    enum: SpaceType,
+    default: SpaceType.STUDY_ROOM,
+  })
+  type: SpaceType;
 
   @Column({ nullable: true })
   description: string;
 
   @Column({
     type: 'enum',
-    enum: StudyRoomStatus,
-    default: StudyRoomStatus.ACTIVE,
+    enum: SpaceStatus,
+    default: SpaceStatus.ACTIVE,
   })
-  status: StudyRoomStatus;
+  status: SpaceStatus;
 
   @CreateDateColumn()
   createdAt: Date;

@@ -14,7 +14,7 @@ import { StudentClassModule } from './student-class/student-class.module';
 import { TagModule } from './tag/tag.module';
 import { ScheduleModule } from './schedule/schedule.module';
 import { ChannelModule } from './channel/channel.module';
-import { StudyRoomModule } from './study-room/study-room.module';
+import { SpaceModule } from './space/space.module';
 import { httpReceiver } from './slack-receiver';
 import { slackErrorMiddleware } from './common/slack-error.middleware';
 
@@ -62,7 +62,7 @@ import { slackErrorMiddleware } from './common/slack-error.middleware';
     TagModule,
     ScheduleModule,
     ChannelModule,
-    StudyRoomModule,
+    SpaceModule,
   ],
   controllers: [AppController],
   providers: [AppService],
