@@ -17,7 +17,9 @@ export class SlackHomeController {
   @Action('home:report-bug')
   @Action('home:request-feature')
   @Action('home:google-calendar')
-  async ackLinkButtons({ ack }: SlackActionMiddlewareArgs<BlockAction> & AllMiddlewareArgs) {
+  async ackLinkButtons({
+    ack,
+  }: SlackActionMiddlewareArgs<BlockAction> & AllMiddlewareArgs) {
     await ack();
   }
 
@@ -25,7 +27,6 @@ export class SlackHomeController {
   async event({
     client,
     event,
-    logger,
   }: SlackEventMiddlewareArgs<'app_home_opened'> & AllMiddlewareArgs) {
     try {
       if (event.tab === 'home') {
@@ -33,7 +34,6 @@ export class SlackHomeController {
           user_id: event.user,
           view: await this.slackHomeService.getHomeView(event.user),
         });
-        logger.info(event);
       }
     } catch (error) {}
   }

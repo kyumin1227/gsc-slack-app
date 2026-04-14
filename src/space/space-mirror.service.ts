@@ -26,9 +26,6 @@ export class SpaceMirrorService {
     sourceCalendarId: string,
   ): Promise<string | null> {
     if (event.recurringEventId) return null; // 반복 이벤트 스킵
-    console.log(
-      `mirrorEvent: sourceEventId: ${event.id} ${event.status} ${event.start?.dateTime}`,
-    );
 
     if (event.status === 'cancelled') {
       // 취소된 이벤트는 webhook payload에 extendedProperties 없을 수 있음 → source 이벤트 직접 조회
@@ -59,10 +56,6 @@ export class SpaceMirrorService {
     const storedMirroredEventId =
       event.extendedProperties?.private?.[MIRRORED_EVENT_ID_KEY];
 
-    console.log(
-      `storedMirroredCalendarId: ${storedMirroredCalendarId}\nstoredMirroredEventId: ${storedMirroredEventId}`,
-    );
-
     // 대상 공간 결정: alias 매칭 → 없으면 기본 공간 → 없으면 스킵
     const location = event.location?.trim();
     let targetSpace = location
@@ -71,8 +64,6 @@ export class SpaceMirrorService {
     if (!targetSpace) {
       targetSpace = await this.spaceService.findDefault();
     }
-
-    console.log(`targetSpace: ${targetSpace?.id}`);
 
     if (!targetSpace) {
       // 대상 공간 없음 → 기존 미러 정리
@@ -99,7 +90,6 @@ export class SpaceMirrorService {
       storedMirroredCalendarId !== targetSpace.calendarId &&
       storedMirroredEventId
     ) {
-      console.log('공간 변경');
       await GoogleCalendarUtil.deleteEventAsServiceAccount(
         storedMirroredCalendarId,
         storedMirroredEventId,
@@ -175,10 +165,6 @@ export class SpaceMirrorService {
       },
     };
 
-    console.log(
-      `upsertMirror: spaceCalendarId: ${spaceCalendarId}\nevent: ${event.id}\nsourceCalendarId: ${sourceCalendarId}\nexistingMirrorEventId: ${existingMirrorEventId}`,
-    );
-
     if (existingMirrorEventId) {
       // 현재 미러 이벤트 조회 후 동일하면 패치 없이 스킵 (불필요한 webhook 방지)
       const currentMirror = await GoogleCalendarUtil.getEventById(
@@ -210,7 +196,6 @@ export class SpaceMirrorService {
             extendedProperties,
           },
         );
-        this.logger.log(`Mirror updated: ${event.id} → ${spaceCalendarId}`);
         return existingMirrorEventId;
       }
 
