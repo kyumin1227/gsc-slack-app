@@ -364,6 +364,36 @@ export class GoogleCalendarUtil {
     return response.data.items ?? [];
   }
 
+  // 특정 기간의 이벤트 전체 조회 (동기화용)
+  static async listEventsInRange(
+    calendarId: string,
+    timeMin: Date,
+    timeMax: Date,
+  ): Promise<calendar_v3.Schema$Event[]> {
+    const calendar = this.getCalendarClient();
+    const events: calendar_v3.Schema$Event[] = [];
+    let pageToken: string | undefined;
+
+    while (true) {
+      const response = await calendar.events.list({
+        calendarId,
+        timeMin: timeMin.toISOString(),
+        timeMax: timeMax.toISOString(),
+        showDeleted: false,
+        singleEvents: true,
+        maxResults: 2500,
+        ...(pageToken ? { pageToken } : {}),
+      });
+
+      events.push(...(response.data.items ?? []));
+
+      if (!response.data.nextPageToken) break;
+      pageToken = response.data.nextPageToken;
+    }
+
+    return events;
+  }
+
   // 단일 이벤트 조회 (디바운스 발송 시점에 최신 상태 확인용)
   static async getEventById(
     calendarId: string,
@@ -513,6 +543,37 @@ export class GoogleCalendarUtil {
       showDeleted: false,
     });
     return response.data.items ?? [];
+  }
+
+  // 특정 기간의 미러 이벤트 전체 조회 (mirroredBy=gsc-bot 필터)
+  static async listMirrorEventsInRange(
+    calendarId: string,
+    timeMin: Date,
+    timeMax: Date,
+  ): Promise<calendar_v3.Schema$Event[]> {
+    const calendar = this.getCalendarClient();
+    const events: calendar_v3.Schema$Event[] = [];
+    let pageToken: string | undefined;
+
+    while (true) {
+      const response = await calendar.events.list({
+        calendarId,
+        timeMin: timeMin.toISOString(),
+        timeMax: timeMax.toISOString(),
+        privateExtendedProperty: ['mirroredBy=gsc-bot'],
+        showDeleted: false,
+        singleEvents: true,
+        maxResults: 2500,
+        ...(pageToken ? { pageToken } : {}),
+      });
+
+      events.push(...(response.data.items ?? []));
+
+      if (!response.data.nextPageToken) break;
+      pageToken = response.data.nextPageToken;
+    }
+
+    return events;
   }
 
   // 서비스 계정으로 미러 이벤트 생성 (extendedProperties 포함)

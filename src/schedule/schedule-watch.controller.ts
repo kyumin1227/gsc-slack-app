@@ -72,6 +72,12 @@ export class ScheduleWatchController {
 
     await this.scheduleService.updateSyncToken(schedule.id, nextSyncToken);
 
+    // cron 동기화 중 — syncToken은 소비하되 알림/미러링은 스킵
+    if (await this.cache.get('suppress:cron:sync')) {
+      this.logger.log('Webhook suppressed during cron sync');
+      return;
+    }
+
     if (events.length === 0) return;
 
     for (const event of events) {
