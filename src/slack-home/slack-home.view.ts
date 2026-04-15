@@ -88,7 +88,7 @@ export class HomeView {
           elements: [
             {
               type: 'mrkdwn',
-              text: '수업 일정을 *Google Calendar* 에서 받아보거나, 교실별 일정을 확인할 수 있어요.',
+              text: '수업 일정을 *Google Calendar* 에서 받아보거나, 교실별/태그별 일정을 모아볼 수 있어요.',
             },
           ],
         },
@@ -105,6 +105,11 @@ export class HomeView {
               type: 'button',
               text: { type: 'plain_text', text: '교실 시간표' },
               action_id: 'home:open-classroom-schedule',
+            },
+            {
+              type: 'button',
+              text: { type: 'plain_text', text: '태그 시간표' },
+              action_id: 'home:open-tag-schedule',
             },
           ],
         },
@@ -199,7 +204,7 @@ export class HomeView {
           elements: [
             {
               type: 'mrkdwn',
-              text: '시간표를 *구독* 하거나 *생성·수정* 할 수 있어요. 교실별 일정도 확인할 수 있어요.',
+              text: '시간표를 *구독* 하거나 *생성·수정* 할 수 있어요. 교실별/태그별 일정도 모아볼 수 있어요.',
             },
           ],
         },
@@ -216,6 +221,11 @@ export class HomeView {
               type: 'button',
               text: { type: 'plain_text', text: '교실 시간표' },
               action_id: 'home:open-classroom-schedule',
+            },
+            {
+              type: 'button',
+              text: { type: 'plain_text', text: '태그 시간표' },
+              action_id: 'home:open-tag-schedule',
             },
             {
               type: 'button',

@@ -8,6 +8,13 @@ export interface TagListItem {
   isClassTag: boolean; // 반에서 자동 생성된 태그 여부
 }
 
+// 태그 시간표 선택 모달용 아이템
+export interface TagScheduleItem {
+  id: number;
+  name: string;
+  calendarUrl: string; // 해당 태그 소속 시간표들의 통합 구글 캘린더 URL
+}
+
 const STATUS_LABELS: Record<TagStatus, string> = {
   [TagStatus.ACTIVE]: '활성',
   [TagStatus.INACTIVE]: '비활성',
@@ -75,6 +82,56 @@ export class TagView {
         type: 'plain_text',
         text: '닫기',
       },
+      blocks,
+    };
+  }
+
+  // 태그 시간표 — 태그별 구글 캘린더 링크 모달
+  static tagScheduleListModal(tags: TagScheduleItem[]): View {
+    const blocks: View['blocks'] = [];
+
+    if (tags.length === 0) {
+      blocks.push({
+        type: 'section',
+        text: {
+          type: 'mrkdwn',
+          text: '활성 시간표가 연결된 태그가 없습니다.',
+        },
+      });
+    } else {
+      blocks.push({
+        type: 'context',
+        elements: [
+          {
+            type: 'mrkdwn',
+            text: '태그에 속한 시간표를 *구글 캘린더* 에서 모아서 볼 수 있어요.',
+          },
+        ],
+      });
+      blocks.push({ type: 'divider' });
+
+      for (const tag of tags) {
+        blocks.push(
+          {
+            type: 'section',
+            text: { type: 'mrkdwn', text: `*${tag.name}*` },
+            accessory: {
+              type: 'button',
+              text: { type: 'plain_text', text: '일정 보기 ❐' },
+              url: tag.calendarUrl,
+              action_id: 'tag:schedule:open-calendar',
+            },
+          },
+          { type: 'divider' },
+        );
+      }
+    }
+
+    return {
+      type: 'modal',
+      callback_id: 'tag:modal:schedule-list',
+      title: { type: 'plain_text', text: '태그 시간표' },
+      close: { type: 'plain_text', text: '닫기' },
       blocks,
     };
   }

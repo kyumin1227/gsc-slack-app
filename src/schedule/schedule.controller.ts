@@ -11,10 +11,17 @@ import { ScheduleService } from './schedule.service';
 import { ScheduleView } from './schedule.view';
 import { UserService } from '../user/user.service';
 import { TagService } from '../tag/tag.service';
+import { TagView } from '../tag/tag.view';
 import { ChannelService } from '../channel/channel.service';
 import { UserStatus, User } from '../user/user.entity';
 import { CMD } from '../common/slack-commands';
 import { PermissionService } from '../user/permission.service';
+
+const CALENDAR_COLORS = [
+  '%234285F4', '%23DB4437', '%230F9D58', '%23F4B400', '%239E69AF',
+  '%23F6511D', '%2300BCD4', '%23E91E63', '%23795548', '%23607D8B',
+  '%23FF5722', '%239C27B0', '%2303A9F4', '%238BC34A', '%23FF9800',
+];
 
 @Controller()
 export class ScheduleController {
@@ -910,6 +917,73 @@ export class ScheduleController {
     await client.chat.postMessage({
       channel: body.user.id,
       text: `반복 일정 수정 완료: ${updated}/${total}개`,
+    });
+  }
+
+  // 태그 시간표 — 태그별 구글 캘린더 링크 모달 열기
+  @Action('home:open-tag-schedule')
+  async openTagScheduleList({
+    ack,
+    client,
+    body,
+  }: SlackActionMiddlewareArgs<BlockAction> & AllMiddlewareArgs) {
+    await ack();
+
+    const userId = body.user.id;
+    const { isActive, message } = await this.checkActiveUser(userId);
+    if (!isActive) {
+      await client.chat.postEphemeral({
+        channel: userId,
+        user: userId,
+        text: message!,
+      });
+      return;
+    }
+
+    const displayTags = await this.tagService.findDisplayTags(true);
+
+    // 태그별 활성 시간표 병렬 조회 → 구글 캘린더 통합 URL 생성
+    const tagItems = (
+      await Promise.all(
+        displayTags.map(async (tag) => {
+          const schedules =
+            await this.scheduleService.findActiveSchedulesByTagId(tag.id);
+          if (schedules.length === 0) return null;
+
+          const calendarUrl =
+            'https://calendar.google.com/calendar/embed?' +
+            schedules
+              .map(
+                (s, i) =>
+                  `src=${encodeURIComponent(s.calendarId)}&color=${CALENDAR_COLORS[i % CALENDAR_COLORS.length]}`,
+              )
+              .join('&') +
+            '&ctz=Asia%2FSeoul&mode=WEEK';
+
+          return { id: tag.id, name: tag.name, calendarUrl };
+        }),
+      )
+    ).filter((item) => item !== null);
+
+    // 태그 없는 시간표도 통합해서 추가
+    const untaggedSchedules =
+      await this.scheduleService.findActiveSchedulesWithoutTags();
+    if (untaggedSchedules.length > 0) {
+      const calendarUrl =
+        'https://calendar.google.com/calendar/embed?' +
+        untaggedSchedules
+          .map(
+            (s, i) =>
+              `src=${encodeURIComponent(s.calendarId)}&color=${CALENDAR_COLORS[i % CALENDAR_COLORS.length]}`,
+          )
+          .join('&') +
+        '&ctz=Asia%2FSeoul&mode=WEEK';
+      tagItems.push({ id: -1, name: '태그 없음', calendarUrl });
+    }
+
+    await client.views.open({
+      trigger_id: body.trigger_id,
+      view: TagView.tagScheduleListModal(tagItems),
     });
   }
 }

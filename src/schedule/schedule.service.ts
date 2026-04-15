@@ -148,6 +148,39 @@ export class ScheduleService {
     });
   }
 
+  // 특정 태그를 가진 활성 스케줄 목록 조회 (태그 시간표용)
+  async findActiveSchedulesByTagId(tagId: number): Promise<Schedule[]> {
+    const ids = await this.scheduleRepository
+      .createQueryBuilder('schedule')
+      .innerJoin('schedule.tags', 'tag')
+      .where('tag.id = :tagId', { tagId })
+      .andWhere('schedule.status = :status', { status: ScheduleStatus.ACTIVE })
+      .andWhere('schedule.deletedAt IS NULL')
+      .select('schedule.id')
+      .getRawMany()
+      .then((rows: { schedule_id: number }[]) => rows.map((r) => r.schedule_id));
+
+    if (ids.length === 0) return [];
+
+    return this.scheduleRepository.find({
+      where: { id: In(ids) },
+      order: { name: 'ASC' },
+    });
+  }
+
+  // 태그가 없는 활성 스케줄 목록 조회
+  async findActiveSchedulesWithoutTags(): Promise<Schedule[]> {
+    return this.scheduleRepository
+      .createQueryBuilder('schedule')
+      .leftJoin('schedule.tags', 'tag')
+      .where('schedule.status = :status', { status: ScheduleStatus.ACTIVE })
+      .andWhere('schedule.deletedAt IS NULL')
+      .groupBy('schedule.id')
+      .having('COUNT(tag.id) = 0')
+      .orderBy('schedule.name', 'ASC')
+      .getMany();
+  }
+
   // 모든 스케줄 목록 조회 (관리용)
   async findAllSchedules(): Promise<Schedule[]> {
     return this.scheduleRepository.find({
