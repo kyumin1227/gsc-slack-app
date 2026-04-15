@@ -8,6 +8,7 @@ export interface EventSnapshot {
   startDateTime?: string | null;
   endDateTime?: string | null;
   location?: string | null;
+  description?: string | null;
 }
 
 export function detectChangeType(
@@ -54,50 +55,30 @@ function formatDateTimeFromEvent(event: calendar_v3.Schema$Event): string {
   const endDt = event.end?.dateTime ?? event.end?.date;
   if (!startDt || !endDt) return '날짜 정보 없음';
   if (!event.start?.dateTime) return `${formatDate(startDt)} (종일)`;
-  return `${formatDate(startDt)} ${formatTime(startDt)} ~ ${formatTime(endDt)}`;
+  return `${formatDate(startDt)} ${formatTime(startDt)} - ${formatTime(endDt)}`;
 }
 
 function formatDateTimeFromSnapshot(snapshot: EventSnapshot): string {
   const { startDateTime, endDateTime } = snapshot;
   if (!startDateTime || !endDateTime) return '날짜 정보 없음';
-  return `${formatDate(startDateTime)} ${formatTime(startDateTime)} ~ ${formatTime(endDateTime)}`;
+  return `${formatDate(startDateTime)} ${formatTime(startDateTime)} - ${formatTime(endDateTime)}`;
 }
 
-function buildDiffBlock(
+export function hasRelevantChanges(
   before: EventSnapshot,
   after: calendar_v3.Schema$Event,
-): KnownBlock | null {
-  const lines: string[] = [];
+): boolean {
+  if ((before.summary ?? '') !== (after.summary ?? '')) return true;
+  if ((before.location ?? '') !== (after.location ?? '')) return true;
+  if ((before.description ?? '') !== (after.description ?? '')) return true;
 
-  const beforeTitle = before.summary ?? '';
-  const afterTitle = after.summary ?? '';
-  if (beforeTitle !== afterTitle) {
-    lines.push(`📌 *제목* : ~${beforeTitle || '(없음)'}~ → *${afterTitle || '(없음)'}*`);
-  }
+  const beforeStart = before.startDateTime ?? '';
+  const beforeEnd = before.endDateTime ?? '';
+  const afterStart = after.start?.dateTime ?? after.start?.date ?? '';
+  const afterEnd = after.end?.dateTime ?? after.end?.date ?? '';
+  if (beforeStart !== afterStart || beforeEnd !== afterEnd) return true;
 
-  const beforeTime = formatDateTimeFromSnapshot(before);
-  const afterTime = formatDateTimeFromEvent(after);
-  if (beforeTime !== afterTime) {
-    lines.push(`🗓️ *일시* : ~${beforeTime}~ → *${afterTime}*`);
-  }
-
-  const beforeLocation = before.location ?? '';
-  const afterLocation = after.location ?? '';
-  if (beforeLocation !== afterLocation) {
-    lines.push(
-      `📍 *장소* : ~${beforeLocation || '미지정'}~ → *${afterLocation || '미지정'}*`,
-    );
-  }
-
-  if (lines.length === 0) return null;
-
-  return {
-    type: 'section',
-    text: {
-      type: 'mrkdwn',
-      text: `*변경 내용*\n${lines.join('\n')}`,
-    },
-  } as KnownBlock;
+  return false;
 }
 
 export function buildCalendarNotificationBlocks(
@@ -105,6 +86,7 @@ export function buildCalendarNotificationBlocks(
   event: calendar_v3.Schema$Event,
   changeType: EventChangeType,
   beforeEvent?: EventSnapshot,
+  writerDisplay?: string,
 ): KnownBlock[] {
   const headerMap: Record<EventChangeType, string> = {
     cancelled: `🚫 [${scheduleName}] 일정 취소 안내`,
@@ -112,23 +94,59 @@ export function buildCalendarNotificationBlocks(
     updated: `🔄 [${scheduleName}] 일정 변경 안내`,
   };
 
+  const diff = changeType === 'updated' && beforeEvent ? beforeEvent : null;
+
+  // 제목
+  const afterTitle = event.summary ?? '(제목 없음)';
+  const titleChanged = diff && (diff.summary ?? '') !== (event.summary ?? '');
+  let titleText: string;
+  if (titleChanged) {
+    titleText = `📌 *일정 제목* ✏️\n~${diff!.summary || '(없음)'}~ → *${afterTitle}*`;
+  } else {
+    titleText = `📌 *일정 제목*\n*${afterTitle}*`;
+  }
+
+  // 일시
   const startDt = event.start?.dateTime ?? event.start?.date;
   const endDt = event.end?.dateTime ?? event.end?.date;
   const isAllDay = !event.start?.dateTime;
+  const afterTime = formatDateTimeFromEvent(event);
 
   let dateTimeText: string;
   if (!startDt || !endDt) {
     dateTimeText = '🗓️ *일시*\n_날짜 정보 없음_';
+  } else if (diff) {
+    const beforeTime = formatDateTimeFromSnapshot(diff);
+    if (beforeTime !== afterTime) {
+      dateTimeText = `🗓️ *일시* ✏️\n~${beforeTime}~\n→ *${afterTime}*`;
+    } else if (isAllDay) {
+      dateTimeText = `🗓️ *일시*\n${formatDate(startDt)} *(종일)*`;
+    } else {
+      dateTimeText = `🗓️ *일시*\n${formatDate(startDt)} *${formatTime(startDt)} - ${formatTime(endDt)}*`;
+    }
   } else if (isAllDay) {
     dateTimeText = `🗓️ *일시*\n${formatDate(startDt)} *(종일)*`;
   } else {
-    dateTimeText = `🗓️ *일시*\n${formatDate(startDt)} *${formatTime(startDt)} ~ ${formatTime(endDt)}*`;
+    dateTimeText = `🗓️ *일시*\n${formatDate(startDt)} *${formatTime(startDt)} - ${formatTime(endDt)}*`;
   }
 
-  const diffBlock =
-    changeType === 'updated' && beforeEvent
-      ? buildDiffBlock(beforeEvent, event)
-      : null;
+  // 장소
+  const afterLocation = event.location ?? '';
+  const locationChanged = diff && (diff.location ?? '') !== afterLocation;
+  let locationText: string;
+  if (locationChanged) {
+    locationText = `📍 *장소* ✏️\n~${diff!.location || '미지정'}~ → *${afterLocation || '미지정'}*`;
+  } else {
+    locationText = `📍 *장소*\n${afterLocation || '_장소 미지정_'}`;
+  }
+
+  // 설명
+  const afterDescription = event.description ?? '';
+  const descriptionChanged =
+    diff && (diff.description ?? '') !== afterDescription;
+  const descriptionText = descriptionChanged
+    ? `📝 *추가 정보* ✏️\n~${diff!.description || '(없음)'}~ → ${afterDescription || '_(없음)_'}`
+    : `📝 *추가 정보*\n${afterDescription || '_추가 정보가 없습니다._'}`;
 
   return [
     {
@@ -140,12 +158,11 @@ export function buildCalendarNotificationBlocks(
       },
     },
     { type: 'divider' },
-    ...(diffBlock ? [diffBlock, { type: 'divider' } as KnownBlock] : []),
     {
       type: 'section',
       text: {
         type: 'mrkdwn',
-        text: `📌 *일정 제목*\n*${event.summary ?? '(제목 없음)'}*`,
+        text: titleText,
       },
     },
     {
@@ -157,7 +174,7 @@ export function buildCalendarNotificationBlocks(
         },
         {
           type: 'mrkdwn',
-          text: `📍 *장소*\n${event.location ?? '_장소 미지정_'}`,
+          text: locationText,
         },
       ],
     },
@@ -166,11 +183,11 @@ export function buildCalendarNotificationBlocks(
       fields: [
         {
           type: 'mrkdwn',
-          text: `📝 *추가 정보*\n${event.description ?? '_추가 정보가 없습니다._'}`,
+          text: descriptionText,
         },
         {
           type: 'mrkdwn',
-          text: `👤 *담당자*\n${event.creator?.email ?? '알 수 없음'}`,
+          text: `👤 *담당자*\n${writerDisplay ?? '알 수 없음'}`,
         },
       ],
     },
@@ -184,10 +201,11 @@ export function buildCalendarNotificationBlocks(
                 type: 'button',
                 text: {
                   type: 'plain_text',
-                  text: '구글 캘린더에서 보기',
+                  text: '구글 캘린더에서 보기 ❐',
                   emoji: true,
                 },
                 url: event.htmlLink,
+                action_id: 'notification:open-calendar',
               },
             ],
           },
@@ -198,7 +216,7 @@ export function buildCalendarNotificationBlocks(
       elements: [
         {
           type: 'mrkdwn',
-          text: `🕒 *최종 수정 시각:* ${event.updated ? formatUpdated(event.updated) : '알 수 없음'} | *Bannote Bot*`,
+          text: `*최종 수정 시각:* ${event.updated ? formatUpdated(event.updated) : '알 수 없음'} | *Bannote Bot*`,
         },
       ],
     },
