@@ -3,6 +3,7 @@ import { CACHE_MANAGER } from '@nestjs/cache-manager';
 import type { Cache } from 'cache-manager';
 import { WebClient } from '@slack/web-api';
 import { ChannelService } from '../channel/channel.service';
+import { UserService } from '../user/user.service';
 import { GoogleCalendarUtil } from '../google/google-calendar.util';
 import {
   buildCalendarNotificationBlocks,
@@ -38,6 +39,7 @@ export class ScheduleNotificationService {
   constructor(
     @Inject(CACHE_MANAGER) private cache: Cache,
     private readonly channelService: ChannelService,
+    private readonly userService: UserService,
   ) {}
 
   // 웹훅 수신 시: Redis 저장 + 타이머 예약 (타이머 리셋)
@@ -119,11 +121,15 @@ export class ScheduleNotificationService {
     const finalType: EventChangeType =
       event.status === 'cancelled' ? 'cancelled' : entry.originalType;
 
+    // 캘린더 writer/owner 목록 → Slack 멘션으로 변환
+    const writerDisplay = await this.resolveWriterDisplay(entry.calendarId);
+
     const blocks = buildCalendarNotificationBlocks(
       entry.scheduleName,
       event,
       finalType,
       finalType === 'updated' ? entry.beforeSnapshot : undefined,
+      writerDisplay,
     );
 
     await Promise.allSettled(
@@ -139,6 +145,25 @@ export class ScheduleNotificationService {
     this.logger.log(
       `Notification sent: ${key} (type: ${finalType}, channels: ${slackChannelIds.length})`,
     );
+  }
+
+  // 캘린더 writer/owner → Slack 멘션 문자열 변환 (서비스 가입자만)
+  private async resolveWriterDisplay(
+    calendarId: string,
+  ): Promise<string | undefined> {
+    try {
+      const acl = await GoogleCalendarUtil.getCalendarAcl(calendarId);
+      const writerEmails = acl
+        .filter((e) => e.role === 'writer' || e.role === 'owner')
+        .map((e) => e.email);
+
+      const slackIds = await this.userService.mapEmailsToSlackIds(writerEmails);
+      const mentions = slackIds.map((id) => `<@${id}>`);
+
+      return mentions.length > 0 ? mentions.join('  ') : undefined;
+    } catch {
+      return undefined;
+    }
   }
 
   // 외부에서 현재 대기 entry 조회 (컨트롤러에서 중복 확인용)

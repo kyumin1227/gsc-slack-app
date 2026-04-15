@@ -86,6 +86,7 @@ export function buildCalendarNotificationBlocks(
   event: calendar_v3.Schema$Event,
   changeType: EventChangeType,
   beforeEvent?: EventSnapshot,
+  writerDisplay?: string,
 ): KnownBlock[] {
   const headerMap: Record<EventChangeType, string> = {
     cancelled: `🚫 [${scheduleName}] 일정 취소 안내`,
@@ -141,7 +142,8 @@ export function buildCalendarNotificationBlocks(
 
   // 설명
   const afterDescription = event.description ?? '';
-  const descriptionChanged = diff && (diff.description ?? '') !== afterDescription;
+  const descriptionChanged =
+    diff && (diff.description ?? '') !== afterDescription;
   const descriptionText = descriptionChanged
     ? `📝 *추가 정보* ✏️\n~${diff!.description || '(없음)'}~ → ${afterDescription || '_(없음)_'}`
     : `📝 *추가 정보*\n${afterDescription || '_추가 정보가 없습니다._'}`;
@@ -185,7 +187,7 @@ export function buildCalendarNotificationBlocks(
         },
         {
           type: 'mrkdwn',
-          text: `👤 *담당자*\n${event.creator?.email ?? '알 수 없음'}`,
+          text: `👤 *담당자*\n${writerDisplay ?? '알 수 없음'}`,
         },
       ],
     },
