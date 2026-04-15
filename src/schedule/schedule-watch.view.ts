@@ -201,7 +201,7 @@ export function buildCalendarNotificationBlocks(
                 type: 'button',
                 text: {
                   type: 'plain_text',
-                  text: '구글 캘린더에서 보기',
+                  text: '구글 캘린더에서 보기 ❐',
                   emoji: true,
                 },
                 url: event.htmlLink,
