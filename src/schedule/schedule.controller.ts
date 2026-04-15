@@ -986,4 +986,12 @@ export class ScheduleController {
       view: TagView.tagScheduleListModal(tagItems),
     });
   }
+
+  // 알림 메시지의 구글 캘린더 URL 버튼 ack
+  @Action('notification:open-calendar')
+  async ackNotificationCalendarLink({
+    ack,
+  }: SlackActionMiddlewareArgs<BlockAction> & AllMiddlewareArgs) {
+    await ack();
+  }
 }

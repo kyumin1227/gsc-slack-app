@@ -6,6 +6,7 @@ import { ChannelService } from '../channel/channel.service';
 import { GoogleCalendarUtil } from '../google/google-calendar.util';
 import {
   buildCalendarNotificationBlocks,
+  hasRelevantChanges,
   EventChangeType,
   EventSnapshot,
 } from './schedule-watch.view';
@@ -93,6 +94,18 @@ export class ScheduleNotificationService {
     if (entry.originalType === 'added' && event.status === 'cancelled') {
       this.logger.log(
         `Skipping notification: new event was cancelled (${key})`,
+      );
+      return;
+    }
+
+    // updated인데 발송 시점 최신 상태가 변경 전과 동일하면 발송 안 함 (되돌린 경우)
+    if (
+      entry.originalType === 'updated' &&
+      entry.beforeSnapshot &&
+      !hasRelevantChanges(entry.beforeSnapshot, event)
+    ) {
+      this.logger.log(
+        `Skipping notification: event reverted to original state (${key})`,
       );
       return;
     }
