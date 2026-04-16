@@ -19,6 +19,27 @@ export class RecurrenceGroup {
   @Column()
   title: string;
 
+  @Column({ type: 'simple-json', nullable: true })
+  daysOfWeek: number[] | null; // [0=일, 1=월 ... 6=토] — weekly/biweekly 시 저장
+
+  @Column({ type: 'varchar', nullable: true })
+  location: string | null;
+
+  @Column()
+  startTime: string; // HH:MM
+
+  @Column()
+  endTime: string; // HH:MM
+
+  @Column()
+  recurrenceType: string; // 'weekly' | 'biweekly' | 'monthly'
+
+  @Column()
+  startDate: string; // YYYY-MM-DD
+
+  @Column()
+  endDate: string; // YYYY-MM-DD
+
   @ManyToOne(() => Schedule, { onDelete: 'CASCADE' })
   schedule: Schedule;
 
