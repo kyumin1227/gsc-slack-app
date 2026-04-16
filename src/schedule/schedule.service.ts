@@ -7,6 +7,7 @@ import { Repository, In } from 'typeorm';
 import { Schedule, ScheduleStatus } from './schedule.entity';
 import { RecurrenceGroup } from './recurrence-group.entity';
 import { GoogleCalendarService } from '../google/google-calendar.service';
+import { UserService } from '../user/user.service';
 import { Tag } from '../tag/tag.entity';
 import { ChannelService } from '../channel/channel.service';
 import { WebClient } from '@slack/web-api';
@@ -70,6 +71,7 @@ export class ScheduleService {
     @Inject(CACHE_MANAGER) private cache: Cache,
     private readonly channelService: ChannelService,
     private readonly googleCalendarService: GoogleCalendarService,
+    private readonly userService: UserService,
   ) {}
 
   // 스케줄 생성 (Google Calendar도 함께 생성)
@@ -506,7 +508,25 @@ export class ScheduleService {
 
   // ========== 반복 일정 ==========
 
-  async createRecurringEvents(dto: CreateRecurringEventsDto): Promise<void> {
+  private async resolveWriterDisplay(calendarId: string): Promise<string> {
+    try {
+      const acl = await this.googleCalendarService.getCalendarAcl(calendarId);
+      const emails = acl
+        .filter((e) => e.role === 'writer' || e.role === 'owner')
+        .map((e) => e.email);
+      const slackIds = await this.userService.mapEmailsToSlackIds(emails);
+      return slackIds.length > 0
+        ? slackIds.map((id) => `<@${id}>`).join('  ')
+        : '알 수 없음';
+    } catch {
+      return '알 수 없음';
+    }
+  }
+
+  async createRecurringEvents(
+    dto: CreateRecurringEventsDto,
+    executorSlackId?: string,
+  ): Promise<void> {
     const schedule = await this.findById(dto.scheduleId);
     if (!schedule) throw new BusinessError(ErrorCode.SCHEDULE_NOT_FOUND);
 
@@ -571,11 +591,19 @@ export class ScheduleService {
       dto.scheduleId,
     );
     if (slackChannelIds.length > 0) {
+      const writerDisplay = await this.resolveWriterDisplay(
+        schedule.calendarId,
+      );
+      const executorDisplay = executorSlackId
+        ? `<@${executorSlackId}>`
+        : '알 수 없음';
       const blocks = buildRecurringCreationBlocks(
         schedule.name,
         dto,
         dates.length,
         successCount,
+        executorDisplay,
+        writerDisplay,
       );
       await Promise.allSettled(
         slackChannelIds.map((channel) =>
@@ -644,6 +672,7 @@ export class ScheduleService {
     groupDbId: number,
     scope: 'all' | 'future',
     filterOriginal = false,
+    executorSlackId?: string,
   ): Promise<{ deleted: number; total: number }> {
     const group = await this.recurrenceGroupRepository.findOne({
       where: { id: groupDbId },
@@ -697,6 +726,10 @@ export class ScheduleService {
     const slackChannelIds = await this.channelService.getSlackChannelIds(
       group.scheduleId,
     );
+    const writerDisplay = await this.resolveWriterDisplay(schedule.calendarId);
+    const executorDisplay = executorSlackId
+      ? `<@${executorSlackId}>`
+      : '알 수 없음';
     await Promise.allSettled(
       slackChannelIds.map((channel) =>
         this.slack.chat.postMessage({
@@ -709,6 +742,8 @@ export class ScheduleService {
             filterOriginal,
             deletedCount,
             events.length,
+            executorDisplay,
+            writerDisplay,
           ),
         }),
       ),
@@ -725,6 +760,7 @@ export class ScheduleService {
     groupDbId: number,
     dto: UpdateRecurringEventsDto,
     scope: 'all' | 'future',
+    executorSlackId?: string,
   ): Promise<{ updated: number; total: number }> {
     const group = await this.recurrenceGroupRepository.findOne({
       where: { id: groupDbId },
@@ -861,6 +897,10 @@ export class ScheduleService {
     const slackChannelIds = await this.channelService.getSlackChannelIds(
       group.scheduleId,
     );
+    const writerDisplay = await this.resolveWriterDisplay(schedule.calendarId);
+    const executorDisplay = executorSlackId
+      ? `<@${executorSlackId}>`
+      : '알 수 없음';
     await Promise.allSettled(
       slackChannelIds.map((channel) =>
         this.slack.chat.postMessage({
@@ -873,6 +913,8 @@ export class ScheduleService {
             scope,
             updatedCount,
             events.length,
+            executorDisplay,
+            writerDisplay,
           ),
         }),
       ),
@@ -988,11 +1030,16 @@ function buildRecurringDeleteBlocks(
   filterOriginal: boolean,
   deletedCount: number,
   totalCount: number,
+  executorDisplay: string,
+  writerDisplay: string,
 ): KnownBlock[] {
   const DAY_LABELS = ['일', '월', '화', '수', '목', '금', '토'];
   const fmtDays = (days: number[] | null) =>
     days && days.length > 0
-      ? [...days].sort((a, b) => a - b).map((d) => DAY_LABELS[d]).join('·')
+      ? [...days]
+          .sort((a, b) => a - b)
+          .map((d) => DAY_LABELS[d])
+          .join('·')
       : '미지정';
   const fmtTime = (s: string, e: string) => `${s} - ${e}`;
   const fmtPeriod = (s: string, e: string) => `${s} - ${e}`;
@@ -1044,6 +1091,13 @@ function buildRecurringDeleteBlocks(
         },
       ],
     },
+    {
+      type: 'section',
+      fields: [
+        { type: 'mrkdwn', text: `👤 *실행자*\n${executorDisplay}` },
+        { type: 'mrkdwn', text: `👥 *담당자*\n${writerDisplay}` },
+      ],
+    },
     { type: 'divider' },
     {
       type: 'context',
@@ -1064,11 +1118,16 @@ function buildRecurringUpdateBlocks(
   scope: 'all' | 'future',
   updatedCount: number,
   totalCount: number,
+  executorDisplay: string,
+  writerDisplay: string,
 ): KnownBlock[] {
   const DAY_LABELS = ['일', '월', '화', '수', '목', '금', '토'];
   const fmtDays = (days: number[] | null) =>
     days && days.length > 0
-      ? [...days].sort((a, b) => a - b).map((d) => DAY_LABELS[d]).join('·')
+      ? [...days]
+          .sort((a, b) => a - b)
+          .map((d) => DAY_LABELS[d])
+          .join('·')
       : '미지정';
   const fmtTime = (s: string | null, e: string | null) =>
     s && e ? `${s} - ${e}` : '미지정';
@@ -1151,6 +1210,13 @@ function buildRecurringUpdateBlocks(
         { type: 'mrkdwn', text: locationText },
       ],
     },
+    {
+      type: 'section',
+      fields: [
+        { type: 'mrkdwn', text: `👤 *실행자*\n${executorDisplay}` },
+        { type: 'mrkdwn', text: `👥 *담당자*\n${writerDisplay}` },
+      ],
+    },
     { type: 'divider' },
     {
       type: 'context',
@@ -1170,6 +1236,8 @@ function buildRecurringCreationBlocks(
   dto: CreateRecurringEventsDto,
   totalCount: number,
   successCount: number,
+  executorDisplay: string,
+  writerDisplay: string,
 ): KnownBlock[] {
   const DAY_LABELS = ['일', '월', '화', '수', '목', '금', '토'];
   const recurrenceLabel: Record<RecurrenceType, string> = {
@@ -1179,7 +1247,10 @@ function buildRecurringCreationBlocks(
   };
   const fmtDays = (days: number[] | undefined) =>
     days && days.length > 0
-      ? [...days].sort((a, b) => a - b).map((d) => DAY_LABELS[d]).join('·')
+      ? [...days]
+          .sort((a, b) => a - b)
+          .map((d) => DAY_LABELS[d])
+          .join('·')
       : '미지정';
   const fmtTime = (s: string, e: string) => `${s} - ${e}`;
   const fmtPeriod = (s: string, e: string) => `${s} - ${e}`;
@@ -1232,6 +1303,13 @@ function buildRecurringCreationBlocks(
           type: 'mrkdwn',
           text: `📍 *장소*\n${dto.location || '_미지정_'}`,
         },
+      ],
+    },
+    {
+      type: 'section',
+      fields: [
+        { type: 'mrkdwn', text: `👤 *실행자*\n${executorDisplay}` },
+        { type: 'mrkdwn', text: `👥 *담당자*\n${writerDisplay}` },
       ],
     },
     { type: 'divider' },

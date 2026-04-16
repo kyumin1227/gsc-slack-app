@@ -19,9 +19,21 @@ import { PermissionService } from '../user/permission.service';
 import { GoogleCalendarService } from '../google/google-calendar.service';
 
 const CALENDAR_COLORS = [
-  '%234285F4', '%23DB4437', '%230F9D58', '%23F4B400', '%239E69AF',
-  '%23F6511D', '%2300BCD4', '%23E91E63', '%23795548', '%23607D8B',
-  '%23FF5722', '%239C27B0', '%2303A9F4', '%238BC34A', '%23FF9800',
+  '%234285F4',
+  '%23DB4437',
+  '%230F9D58',
+  '%23F4B400',
+  '%239E69AF',
+  '%23F6511D',
+  '%2300BCD4',
+  '%23E91E63',
+  '%23795548',
+  '%23607D8B',
+  '%23FF5722',
+  '%239C27B0',
+  '%2303A9F4',
+  '%238BC34A',
+  '%23FF9800',
 ];
 
 @Controller()
@@ -78,13 +90,16 @@ export class ScheduleController {
       schedules.map(async (s) => {
         const [channels, acl] = await Promise.all([
           this.channelService.getSlackChannelIds(s.id),
-          this.googleCalendarService.getCalendarAcl(s.calendarId).catch(() => []),
+          this.googleCalendarService
+            .getCalendarAcl(s.calendarId)
+            .catch(() => []),
         ]);
 
         const writerEmails = acl
           .filter((e) => e.role === 'writer' || e.role === 'owner')
           .map((e) => e.email);
-        const writers = await this.userService.mapEmailsToSlackIds(writerEmails);
+        const writers =
+          await this.userService.mapEmailsToSlackIds(writerEmails);
 
         return {
           id: s.id,
@@ -103,17 +118,13 @@ export class ScheduleController {
       }),
     );
 
-    return ScheduleView.listModal(
-      schedulesWithMeta,
-      displayTags,
-      {
-        page: safePage,
-        totalPages,
-        total,
-        selectedStatus: status,
-        selectedTagIds: tagIds,
-      },
-    );
+    return ScheduleView.listModal(schedulesWithMeta, displayTags, {
+      page: safePage,
+      totalPages,
+      total,
+      selectedStatus: status,
+      selectedTagIds: tagIds,
+    });
   }
 
   // /시간표 - 시간표 목록 조회
@@ -374,13 +385,16 @@ export class ScheduleController {
       schedules.map(async (s) => {
         const [channels, acl] = await Promise.all([
           this.channelService.getSlackChannelIds(s.id),
-          this.googleCalendarService.getCalendarAcl(s.calendarId).catch(() => []),
+          this.googleCalendarService
+            .getCalendarAcl(s.calendarId)
+            .catch(() => []),
         ]);
 
         const writerEmails = acl
           .filter((e) => e.role === 'writer' || e.role === 'owner')
           .map((e) => e.email);
-        const writers = await this.userService.mapEmailsToSlackIds(writerEmails);
+        const writers =
+          await this.userService.mapEmailsToSlackIds(writerEmails);
 
         return {
           id: s.id,
@@ -789,18 +803,21 @@ export class ScheduleController {
 
     await ack();
 
-    await this.scheduleService.createRecurringEvents({
-      scheduleId,
-      title: title.trim(),
-      description: description?.trim(),
-      location: location?.trim(),
-      startDate,
-      endDate,
-      startTime,
-      endTime,
-      recurrenceType,
-      daysOfWeek: recurrenceType !== 'monthly' ? daysOfWeek : undefined,
-    });
+    await this.scheduleService.createRecurringEvents(
+      {
+        scheduleId,
+        title: title.trim(),
+        description: description?.trim(),
+        location: location?.trim(),
+        startDate,
+        endDate,
+        startTime,
+        endTime,
+        recurrenceType,
+        daysOfWeek: recurrenceType !== 'monthly' ? daysOfWeek : undefined,
+      },
+      body.user.id,
+    );
 
     await client.chat.postMessage({
       channel: body.user.id,
@@ -855,7 +872,10 @@ export class ScheduleController {
     );
 
     if (isNaN(scheduleId)) {
-      await ack({ response_action: 'errors', errors: { schedule_block: '시간표를 선택해주세요.' } });
+      await ack({
+        response_action: 'errors',
+        errors: { schedule_block: '시간표를 선택해주세요.' },
+      });
       return;
     }
 
@@ -863,8 +883,7 @@ export class ScheduleController {
       this.scheduleService.findRecurrenceGroupsBySchedule(scheduleId),
       this.scheduleService.findActiveSchedules(),
     ]);
-    const scheduleName =
-      schedules.find((s) => s.id === scheduleId)?.name ?? '';
+    const scheduleName = schedules.find((s) => s.id === scheduleId)?.name ?? '';
 
     if (groups.length === 0) {
       await ack({
@@ -896,8 +915,8 @@ export class ScheduleController {
     const scope = (values.scope_block.scope_input.selected_option?.value ??
       'all') as 'all' | 'future';
     const filterOriginal =
-      (values.filter_block.filter_input.selected_option?.value ?? 'original') ===
-      'original';
+      (values.filter_block.filter_input.selected_option?.value ??
+        'original') === 'original';
 
     await ack();
 
@@ -905,6 +924,7 @@ export class ScheduleController {
       groupDbId,
       scope,
       filterOriginal,
+      body.user.id,
     );
     await client.chat.postMessage({
       channel: body.user.id,
@@ -959,7 +979,10 @@ export class ScheduleController {
     );
 
     if (isNaN(scheduleId)) {
-      await ack({ response_action: 'errors', errors: { schedule_block: '시간표를 선택해주세요.' } });
+      await ack({
+        response_action: 'errors',
+        errors: { schedule_block: '시간표를 선택해주세요.' },
+      });
       return;
     }
 
@@ -967,8 +990,7 @@ export class ScheduleController {
       this.scheduleService.findRecurrenceGroupsBySchedule(scheduleId),
       this.scheduleService.findActiveSchedules(),
     ]);
-    const scheduleName =
-      schedules.find((s) => s.id === scheduleId)?.name ?? '';
+    const scheduleName = schedules.find((s) => s.id === scheduleId)?.name ?? '';
 
     if (groups.length === 0) {
       await ack({
@@ -980,7 +1002,11 @@ export class ScheduleController {
 
     await ack({
       response_action: 'push',
-      view: ScheduleView.selectGroupForEditModal(groups, scheduleName, scheduleId),
+      view: ScheduleView.selectGroupForEditModal(
+        groups,
+        scheduleName,
+        scheduleId,
+      ),
     });
   }
 
@@ -999,13 +1025,19 @@ export class ScheduleController {
     );
 
     if (isNaN(groupDbId)) {
-      await ack({ response_action: 'errors', errors: { group_block: '반복 일정을 선택해주세요.' } });
+      await ack({
+        response_action: 'errors',
+        errors: { group_block: '반복 일정을 선택해주세요.' },
+      });
       return;
     }
 
     const group = await this.scheduleService.findRecurrenceGroupById(groupDbId);
     if (!group) {
-      await ack({ response_action: 'errors', errors: { group_block: '반복 일정을 찾을 수 없습니다.' } });
+      await ack({
+        response_action: 'errors',
+        errors: { group_block: '반복 일정을 찾을 수 없습니다.' },
+      });
       return;
     }
 
@@ -1075,8 +1107,18 @@ export class ScheduleController {
 
     const { updated, total } = await this.scheduleService.updateRecurringGroup(
       groupDbId,
-      { title, description, location, startTime, endTime, daysOfWeek, startDate, endDate },
+      {
+        title,
+        description,
+        location,
+        startTime,
+        endTime,
+        daysOfWeek,
+        startDate,
+        endDate,
+      },
       scope,
+      body.user.id,
     );
     await client.chat.postMessage({
       channel: body.user.id,

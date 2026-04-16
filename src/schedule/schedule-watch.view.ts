@@ -187,7 +187,7 @@ export function buildCalendarNotificationBlocks(
         },
         {
           type: 'mrkdwn',
-          text: `👤 *담당자*\n${writerDisplay ?? '알 수 없음'}`,
+          text: `👥 *담당자*\n${writerDisplay ?? '알 수 없음'}`,
         },
       ],
     },
