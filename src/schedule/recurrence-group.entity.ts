@@ -34,6 +34,12 @@ export class RecurrenceGroup {
   @Column()
   recurrenceType: string; // 'weekly' | 'biweekly' | 'monthly'
 
+  @Column()
+  startDate: string; // YYYY-MM-DD
+
+  @Column()
+  endDate: string; // YYYY-MM-DD
+
   @ManyToOne(() => Schedule, { onDelete: 'CASCADE' })
   schedule: Schedule;
 

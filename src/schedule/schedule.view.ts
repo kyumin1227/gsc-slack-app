@@ -948,12 +948,42 @@ export class ScheduleView {
             ],
           },
         },
+        {
+          type: 'input',
+          block_id: 'filter_block',
+          label: { type: 'plain_text', text: '삭제 대상' },
+          hint: {
+            type: 'plain_text',
+            text: '원본만: 생성 후 개별 수정된 일정은 제외합니다',
+          },
+          element: {
+            type: 'static_select',
+            action_id: 'filter_input',
+            initial_option: {
+              text: { type: 'plain_text', text: '원본만 삭제' },
+              value: 'original',
+            },
+            options: [
+              {
+                text: { type: 'plain_text', text: '원본만 삭제' },
+                value: 'original',
+              },
+              {
+                text: {
+                  type: 'plain_text',
+                  text: '전체 삭제 (수정된 것 포함)',
+                },
+                value: 'all',
+              },
+            ],
+          },
+        },
       ],
     };
   }
 
-  // Step 2: 반복 일정 수정 모달 (특정 시간표 필터링 후)
-  static editRecurringModal(
+  // Step 2: 반복 일정 선택 모달 (그룹 드롭다운만, 다음 → 프리필 폼)
+  static selectGroupForEditModal(
     groups: {
       id: number;
       title: string;
@@ -962,22 +992,19 @@ export class ScheduleView {
       endTime: string | null;
     }[],
     scheduleName: string,
+    scheduleId: number,
   ): View {
     return {
       type: 'modal',
-      callback_id: 'recurring:modal:edit',
+      callback_id: 'recurring:modal:step2:edit',
+      private_metadata: JSON.stringify({ scheduleName, scheduleId }),
       title: { type: 'plain_text', text: '반복 일정 수정' },
-      submit: { type: 'plain_text', text: '수정' },
+      submit: { type: 'plain_text', text: '다음' },
       close: { type: 'plain_text', text: '취소' },
       blocks: [
         {
           type: 'context',
-          elements: [
-            {
-              type: 'mrkdwn',
-              text: `📅 *${scheduleName}*`,
-            },
-          ],
+          elements: [{ type: 'mrkdwn', text: `📅 *${scheduleName}*` }],
         },
         {
           type: 'input',
@@ -996,64 +1023,144 @@ export class ScheduleView {
             })),
           },
         },
+      ],
+    };
+  }
+
+  // Step 3: 반복 일정 수정 폼 (선택된 그룹 기본값 프리필)
+  static editRecurringModal(
+    group: {
+      id: number;
+      title: string;
+      daysOfWeek: number[] | null;
+      startTime: string | null;
+      endTime: string | null;
+      location: string | null;
+      startDate: string | null;
+      endDate: string | null;
+    },
+    scheduleName: string,
+  ): View {
+    const DAY_OPTIONS = [
+      { text: { type: 'plain_text' as const, text: '일' }, value: '0' },
+      { text: { type: 'plain_text' as const, text: '월' }, value: '1' },
+      { text: { type: 'plain_text' as const, text: '화' }, value: '2' },
+      { text: { type: 'plain_text' as const, text: '수' }, value: '3' },
+      { text: { type: 'plain_text' as const, text: '목' }, value: '4' },
+      { text: { type: 'plain_text' as const, text: '금' }, value: '5' },
+      { text: { type: 'plain_text' as const, text: '토' }, value: '6' },
+    ];
+    const initialDays = group.daysOfWeek
+      ? DAY_OPTIONS.filter((o) => group.daysOfWeek!.includes(parseInt(o.value)))
+      : undefined;
+
+    return {
+      type: 'modal',
+      callback_id: 'recurring:modal:edit',
+      private_metadata: JSON.stringify({ groupDbId: group.id }),
+      title: { type: 'plain_text', text: '반복 일정 수정' },
+      submit: { type: 'plain_text', text: '수정' },
+      close: { type: 'plain_text', text: '취소' },
+      blocks: [
+        {
+          type: 'context',
+          elements: [{ type: 'mrkdwn', text: `📅 *${scheduleName}*` }],
+        },
         {
           type: 'input',
           block_id: 'title_block',
-          label: { type: 'plain_text', text: '새 제목' },
-          optional: true,
+          label: { type: 'plain_text', text: '제목' },
           element: {
             type: 'plain_text_input',
             action_id: 'title_input',
-            placeholder: { type: 'plain_text', text: '비우면 기존 제목 유지' },
+            initial_value: group.title,
+            placeholder: { type: 'plain_text', text: '제목' },
           },
         },
         {
           type: 'input',
           block_id: 'description_block',
-          label: { type: 'plain_text', text: '새 설명' },
+          label: { type: 'plain_text', text: '설명' },
           optional: true,
           element: {
             type: 'plain_text_input',
             action_id: 'description_input',
             multiline: true,
-            placeholder: { type: 'plain_text', text: '비우면 기존 설명 유지' },
+            placeholder: { type: 'plain_text', text: '설명' },
           },
         },
         {
           type: 'input',
           block_id: 'location_block',
-          label: { type: 'plain_text', text: '새 장소' },
+          label: { type: 'plain_text', text: '장소' },
           optional: true,
           element: {
             type: 'plain_text_input',
             action_id: 'location_input',
-            placeholder: { type: 'plain_text', text: '비우면 기존 장소 유지' },
+            ...(group.location ? { initial_value: group.location } : {}),
+            placeholder: { type: 'plain_text', text: '장소' },
           },
         },
         {
           type: 'input',
           block_id: 'start_time_block',
-          label: { type: 'plain_text', text: '새 시작 시각' },
-          optional: true,
-          hint: {
-            type: 'plain_text',
-            text: '시간 변경 시에만 입력 (시작/종료 함께 입력)',
-          },
+          label: { type: 'plain_text', text: '시작 시각' },
           element: {
             type: 'timepicker',
             action_id: 'start_time_input',
+            ...(group.startTime ? { initial_time: group.startTime } : {}),
             placeholder: { type: 'plain_text', text: '시작 시각' },
           },
         },
         {
           type: 'input',
           block_id: 'end_time_block',
-          label: { type: 'plain_text', text: '새 종료 시각' },
-          optional: true,
+          label: { type: 'plain_text', text: '종료 시각' },
           element: {
             type: 'timepicker',
             action_id: 'end_time_input',
+            ...(group.endTime ? { initial_time: group.endTime } : {}),
             placeholder: { type: 'plain_text', text: '종료 시각' },
+          },
+        },
+        {
+          type: 'input',
+          block_id: 'days_of_week_block',
+          label: { type: 'plain_text', text: '요일' },
+          hint: {
+            type: 'plain_text',
+            text: '제거된 요일의 원본 일정은 삭제, 추가된 요일에는 같은 기간으로 신규 생성',
+          },
+          element: {
+            type: 'multi_static_select',
+            action_id: 'days_of_week_input',
+            placeholder: { type: 'plain_text', text: '요일 선택' },
+            options: DAY_OPTIONS,
+            ...(initialDays && initialDays.length > 0
+              ? { initial_options: initialDays }
+              : {}),
+          },
+        },
+        {
+          type: 'input',
+          block_id: 'start_date_block',
+          label: { type: 'plain_text', text: '시작일' },
+          element: {
+            type: 'datepicker',
+            action_id: 'start_date_input',
+            ...(group.startDate ? { initial_date: group.startDate } : {}),
+            placeholder: { type: 'plain_text', text: '시작일' },
+          },
+        },
+        {
+          type: 'input',
+          block_id: 'end_date_block',
+          label: { type: 'plain_text', text: '종료일' },
+          element: {
+            type: 'datepicker',
+            action_id: 'end_date_input',
+            ...(group.endDate ? { initial_date: group.endDate } : {}),
+            placeholder: { type: 'plain_text', text: '종료일' },
           },
         },
         {
@@ -1087,7 +1194,12 @@ function formatRecurrenceGroupLabel(g: {
   const DAY_LABELS = ['일', '월', '화', '수', '목', '금', '토'];
   const parts: string[] = [];
   if (g.daysOfWeek && g.daysOfWeek.length > 0) {
-    parts.push(g.daysOfWeek.map((d) => DAY_LABELS[d]).join(''));
+    parts.push(
+      [...g.daysOfWeek]
+        .sort((a, b) => a - b)
+        .map((d) => DAY_LABELS[d])
+        .join('·'),
+    );
   }
   if (g.startTime && g.endTime) {
     parts.push(`${g.startTime}-${g.endTime}`);

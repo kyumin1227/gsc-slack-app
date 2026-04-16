@@ -35,8 +35,11 @@ export interface UpdateRecurringEventsDto {
   title?: string;
   description?: string;
   location?: string;
-  startTime?: string; // HH:MM, undefined → 시간 변경 안 함
+  startTime?: string; // HH:MM
   endTime?: string; // HH:MM
+  daysOfWeek?: number[]; // 변경 시 전체 삭제 후 재생성
+  startDate?: string; // YYYY-MM-DD — 변경 시 전체 삭제 후 재생성
+  endDate?: string; // YYYY-MM-DD
 }
 
 export interface CreateRecurringEventsDto {
@@ -552,8 +555,12 @@ export class ScheduleService {
       groupId,
       title: dto.title,
       scheduleId: dto.scheduleId,
-      daysOfWeek: dto.daysOfWeek ?? undefined,
+      daysOfWeek: dto.daysOfWeek
+        ? [...dto.daysOfWeek].sort((a, b) => a - b)
+        : undefined,
       location: dto.location,
+      startDate: dto.startDate,
+      endDate: dto.endDate,
       startTime: dto.startTime,
       endTime: dto.endTime,
       recurrenceType: dto.recurrenceType,
@@ -584,6 +591,10 @@ export class ScheduleService {
     this.logger.log(
       `Recurring events created: groupId=${groupId}, total=${successCount}/${dates.length}`,
     );
+  }
+
+  async findRecurrenceGroupById(id: number): Promise<RecurrenceGroup | null> {
+    return this.recurrenceGroupRepository.findOne({ where: { id } });
   }
 
   // groupId로 그룹 조회
@@ -632,6 +643,7 @@ export class ScheduleService {
   async deleteRecurringGroup(
     groupDbId: number,
     scope: 'all' | 'future',
+    filterOriginal = false,
   ): Promise<{ deleted: number; total: number }> {
     const group = await this.recurrenceGroupRepository.findOne({
       where: { id: groupDbId },
@@ -657,6 +669,10 @@ export class ScheduleService {
       events = events.filter(
         (e) => (e.start?.dateTime ?? e.start?.date ?? '') >= today,
       );
+    }
+
+    if (filterOriginal) {
+      events = events.filter((e) => isOriginalEvent(e, group));
     }
 
     const results = await runInChunks(events, (e) =>
@@ -688,8 +704,9 @@ export class ScheduleService {
           text: `🗑️ ${schedule.name} 반복 일정 삭제 안내`,
           blocks: buildRecurringDeleteBlocks(
             schedule.name,
-            group.title,
+            group,
             scope,
+            filterOriginal,
             deletedCount,
             events.length,
           ),
@@ -735,39 +752,104 @@ export class ScheduleService {
       );
     }
 
-    const results = await runInChunks(events, (e) => {
-      let startDateTime: string | undefined;
-      let endDateTime: string | undefined;
+    // 원본 조건(제목·시간·요일)과 일치하는 이벤트만 수정
+    events = events.filter((e) => isOriginalEvent(e, group));
 
-      if (dto.startTime && e.start?.dateTime) {
-        const datePart = e.start.dateTime.slice(0, 10);
-        startDateTime = `${datePart}T${dto.startTime}:00+09:00`;
-      }
-      if (dto.endTime && e.end?.dateTime) {
-        const datePart = e.end.dateTime.slice(0, 10);
-        endDateTime = `${datePart}T${dto.endTime}:00+09:00`;
-      }
+    let updatedCount = 0;
 
-      return this.googleCalendarService.updateEventAsServiceAccount(
-        schedule.calendarId,
-        e.id!,
-        {
-          summary: dto.title,
-          description: dto.description,
-          location: dto.location,
-          startDateTime,
-          endDateTime,
-        },
+    const needsRecreate =
+      dto.daysOfWeek !== undefined ||
+      dto.startDate !== undefined ||
+      dto.endDate !== undefined;
+
+    if (needsRecreate) {
+      // ── 요일/기간 변경: 기존 원본 전체 삭제 후 재생성 ───────────────
+      await runInChunks(events, (e) =>
+        this.googleCalendarService.deleteEventAsServiceAccount(
+          schedule.calendarId,
+          e.id!,
+        ),
       );
-    });
-    const updatedCount = results.filter((r) => r.status === 'fulfilled').length;
+
+      const effectiveStartDate = dto.startDate ?? group.startDate ?? null;
+      const effectiveEndDate = dto.endDate ?? group.endDate ?? null;
+
+      if (effectiveStartDate && effectiveEndDate) {
+        const effectiveStartTime = dto.startTime ?? group.startTime ?? '00:00';
+        const effectiveEndTime = dto.endTime ?? group.endTime ?? '00:00';
+        const effectiveDaysOfWeek =
+          dto.daysOfWeek ?? group.daysOfWeek ?? undefined;
+
+        const newDates = expandRecurringDates({
+          scheduleId: group.scheduleId,
+          title: dto.title ?? group.title,
+          startDate: effectiveStartDate,
+          endDate: effectiveEndDate,
+          startTime: effectiveStartTime,
+          endTime: effectiveEndTime,
+          daysOfWeek: effectiveDaysOfWeek,
+          recurrenceType: (group.recurrenceType as RecurrenceType) ?? 'weekly',
+        });
+
+        const createResults = await runInChunks(
+          newDates,
+          ({ startDateTime, endDateTime }) =>
+            this.googleCalendarService.createEventAsServiceAccount(
+              schedule.calendarId,
+              {
+                summary: dto.title ?? group.title,
+                startDateTime,
+                endDateTime,
+                description: dto.description,
+                location: dto.location ?? group.location ?? undefined,
+                groupId: group.groupId,
+              },
+            ),
+        );
+        updatedCount = createResults.filter(
+          (r) => r.status === 'fulfilled',
+        ).length;
+      }
+    } else {
+      // ── 일반 수정 (제목·시각·설명·장소) ──────────────────────────────
+      const results = await runInChunks(events, (e) => {
+        let startDateTime: string | undefined;
+        let endDateTime: string | undefined;
+
+        if (dto.startTime && e.start?.dateTime) {
+          const datePart = e.start.dateTime.slice(0, 10);
+          startDateTime = `${datePart}T${dto.startTime}:00+09:00`;
+        }
+        if (dto.endTime && e.end?.dateTime) {
+          const datePart = e.end.dateTime.slice(0, 10);
+          endDateTime = `${datePart}T${dto.endTime}:00+09:00`;
+        }
+
+        return this.googleCalendarService.updateEventAsServiceAccount(
+          schedule.calendarId,
+          e.id!,
+          {
+            summary: dto.title,
+            description: dto.description,
+            location: dto.location,
+            startDateTime,
+            endDateTime,
+          },
+        );
+      });
+      updatedCount = results.filter((r) => r.status === 'fulfilled').length;
+    }
 
     // DB 업데이트 데이터 빌드
-    const updateData: any = {};
+    const updateData: Partial<RecurrenceGroup> = {};
     if (dto.title) updateData.title = dto.title;
     if (dto.location !== undefined) updateData.location = dto.location;
     if (dto.startTime) updateData.startTime = dto.startTime;
     if (dto.endTime) updateData.endTime = dto.endTime;
+    if (dto.daysOfWeek !== undefined)
+      updateData.daysOfWeek = [...dto.daysOfWeek].sort((a, b) => a - b);
+    if (dto.startDate) updateData.startDate = dto.startDate;
+    if (dto.endDate) updateData.endDate = dto.endDate;
 
     if (Object.keys(updateData).length > 0) {
       await this.recurrenceGroupRepository.update(
@@ -783,10 +865,11 @@ export class ScheduleService {
       slackChannelIds.map((channel) =>
         this.slack.chat.postMessage({
           channel,
-          text: `✏️ ${schedule.name} 반복 일정 수정 안내`,
+          text: `🔄 ${schedule.name} 반복 일정 수정 안내`,
           blocks: buildRecurringUpdateBlocks(
             schedule.name,
-            dto.title ?? group.title,
+            group,
+            dto,
             scope,
             updatedCount,
             events.length,
@@ -900,12 +983,22 @@ async function runInChunks<T, R>(
 
 function buildRecurringDeleteBlocks(
   scheduleName: string,
-  title: string,
+  group: RecurrenceGroup,
   scope: 'all' | 'future',
+  filterOriginal: boolean,
   deletedCount: number,
   totalCount: number,
 ): KnownBlock[] {
+  const DAY_LABELS = ['일', '월', '화', '수', '목', '금', '토'];
+  const fmtDays = (days: number[] | null) =>
+    days && days.length > 0
+      ? [...days].sort((a, b) => a - b).map((d) => DAY_LABELS[d]).join('·')
+      : '미지정';
+  const fmtTime = (s: string, e: string) => `${s} - ${e}`;
+  const fmtPeriod = (s: string, e: string) => `${s} - ${e}`;
+
   const scopeText = scope === 'all' ? '전체' : '오늘 이후';
+  const filterText = filterOriginal ? '원본만' : '전체';
   const statusText =
     deletedCount < totalCount
       ? `⚠️ ${deletedCount}/${totalCount}개 삭제 완료`
@@ -923,30 +1016,107 @@ function buildRecurringDeleteBlocks(
     { type: 'divider' },
     {
       type: 'section',
-      text: { type: 'mrkdwn', text: `📌 *일정 제목*\n*${title}*` },
+      text: { type: 'mrkdwn', text: `📌 *일정 제목*\n*${group.title}*` },
     },
     {
       type: 'section',
       fields: [
-        { type: 'mrkdwn', text: `🔍 *삭제 범위*\n${scopeText}` },
-        { type: 'mrkdwn', text: `📊 *처리 결과*\n${statusText}` },
+        {
+          type: 'mrkdwn',
+          text: `🕐 *시간*\n${fmtTime(group.startTime, group.endTime)}`,
+        },
+        {
+          type: 'mrkdwn',
+          text: `📅 *요일*\n${fmtDays(group.daysOfWeek)}`,
+        },
+      ],
+    },
+    {
+      type: 'section',
+      fields: [
+        {
+          type: 'mrkdwn',
+          text: `🗓️ *기간*\n${fmtPeriod(group.startDate, group.endDate)}`,
+        },
+        {
+          type: 'mrkdwn',
+          text: `📍 *장소*\n${group.location || '_미지정_'}`,
+        },
       ],
     },
     { type: 'divider' },
     {
       type: 'context',
-      elements: [{ type: 'mrkdwn', text: `*Bannote Bot*` }],
+      elements: [
+        {
+          type: 'mrkdwn',
+          text: `🔍 *삭제 범위:* ${scopeText} (${filterText}) | 📊 *처리 결과:* ${statusText} | *Bannote Bot*`,
+        },
+      ],
     },
   ] as unknown as KnownBlock[];
 }
 
 function buildRecurringUpdateBlocks(
   scheduleName: string,
-  title: string,
+  group: RecurrenceGroup,
+  dto: UpdateRecurringEventsDto,
   scope: 'all' | 'future',
   updatedCount: number,
   totalCount: number,
 ): KnownBlock[] {
+  const DAY_LABELS = ['일', '월', '화', '수', '목', '금', '토'];
+  const fmtDays = (days: number[] | null) =>
+    days && days.length > 0
+      ? [...days].sort((a, b) => a - b).map((d) => DAY_LABELS[d]).join('·')
+      : '미지정';
+  const fmtTime = (s: string | null, e: string | null) =>
+    s && e ? `${s} - ${e}` : '미지정';
+  const fmtPeriod = (s: string | null, e: string | null) =>
+    s && e ? `${s} - ${e}` : '미지정';
+
+  // 제목
+  const titleChanged = dto.title !== undefined && dto.title !== group.title;
+  const titleText = titleChanged
+    ? `📌 *일정 제목* ✏️\n~${group.title}~ → *${dto.title}*`
+    : `📌 *일정 제목*\n*${group.title}*`;
+
+  // 시간
+  const newStart = dto.startTime ?? group.startTime;
+  const newEnd = dto.endTime ?? group.endTime;
+  const timeChanged =
+    (dto.startTime !== undefined && dto.startTime !== group.startTime) ||
+    (dto.endTime !== undefined && dto.endTime !== group.endTime);
+  const timeText = timeChanged
+    ? `🕐 *시간* ✏️\n~${fmtTime(group.startTime, group.endTime)}~ → *${fmtTime(newStart, newEnd)}*`
+    : `🕐 *시간*\n${fmtTime(group.startTime, group.endTime)}`;
+
+  // 요일
+  const daysChanged =
+    dto.daysOfWeek !== undefined &&
+    fmtDays(dto.daysOfWeek) !== fmtDays(group.daysOfWeek);
+  const daysText = daysChanged
+    ? `📅 *요일* ✏️\n~${fmtDays(group.daysOfWeek)}~ → *${fmtDays(dto.daysOfWeek!)}*`
+    : `📅 *요일*\n${fmtDays(group.daysOfWeek)}`;
+
+  // 기간
+  const newStartDate = dto.startDate ?? group.startDate;
+  const newEndDate = dto.endDate ?? group.endDate;
+  const periodChanged =
+    (dto.startDate !== undefined && dto.startDate !== group.startDate) ||
+    (dto.endDate !== undefined && dto.endDate !== group.endDate);
+  const periodText = periodChanged
+    ? `🗓️ *기간* ✏️\n~${fmtPeriod(group.startDate, group.endDate)}~ \n→ *${fmtPeriod(newStartDate, newEndDate)}*`
+    : `🗓️ *기간*\n${fmtPeriod(group.startDate, group.endDate)}`;
+
+  // 장소
+  const locationChanged =
+    dto.location !== undefined && dto.location !== group.location;
+  const locationText = locationChanged
+    ? `📍 *장소* ✏️\n~${group.location || '미지정'}~ → *${dto.location || '미지정'}*`
+    : `📍 *장소*\n${group.location || '_미지정_'}`;
+
+  // 처리 결과
   const scopeText = scope === 'all' ? '전체' : '오늘 이후';
   const statusText =
     updatedCount < totalCount
@@ -958,26 +1128,38 @@ function buildRecurringUpdateBlocks(
       type: 'header',
       text: {
         type: 'plain_text',
-        text: `✏️ [${scheduleName}] 반복 일정 수정 안내`,
+        text: `🔄 [${scheduleName}] 반복 일정 수정 안내`,
         emoji: true,
       },
     },
     { type: 'divider' },
     {
       type: 'section',
-      text: { type: 'mrkdwn', text: `📌 *일정 제목*\n*${title}*` },
+      text: { type: 'mrkdwn', text: titleText },
     },
     {
       type: 'section',
       fields: [
-        { type: 'mrkdwn', text: `🔍 *수정 범위*\n${scopeText}` },
-        { type: 'mrkdwn', text: `📊 *처리 결과*\n${statusText}` },
+        { type: 'mrkdwn', text: timeText },
+        { type: 'mrkdwn', text: daysText },
+      ],
+    },
+    {
+      type: 'section',
+      fields: [
+        { type: 'mrkdwn', text: periodText },
+        { type: 'mrkdwn', text: locationText },
       ],
     },
     { type: 'divider' },
     {
       type: 'context',
-      elements: [{ type: 'mrkdwn', text: `*Bannote Bot*` }],
+      elements: [
+        {
+          type: 'mrkdwn',
+          text: `🔍 *수정 범위:* ${scopeText} | 📊 *처리 결과:* ${statusText} | *Bannote Bot*`,
+        },
+      ],
     },
   ] as unknown as KnownBlock[];
 }
@@ -989,25 +1171,28 @@ function buildRecurringCreationBlocks(
   totalCount: number,
   successCount: number,
 ): KnownBlock[] {
+  const DAY_LABELS = ['일', '월', '화', '수', '목', '금', '토'];
   const recurrenceLabel: Record<RecurrenceType, string> = {
     weekly: '매주',
     biweekly: '격주',
     monthly: '매월',
   };
-  const dayLabels = ['일', '월', '화', '수', '목', '금', '토'];
-  const daysText = dto.daysOfWeek?.length
-    ? dto.daysOfWeek.map((d) => dayLabels[d]).join(', ')
-    : '';
+  const fmtDays = (days: number[] | undefined) =>
+    days && days.length > 0
+      ? [...days].sort((a, b) => a - b).map((d) => DAY_LABELS[d]).join('·')
+      : '미지정';
+  const fmtTime = (s: string, e: string) => `${s} - ${e}`;
+  const fmtPeriod = (s: string, e: string) => `${s} - ${e}`;
 
   const recurrenceText =
-    dto.recurrenceType !== 'monthly' && daysText
-      ? `${recurrenceLabel[dto.recurrenceType]} ${daysText}요일`
+    dto.recurrenceType !== 'monthly' && dto.daysOfWeek?.length
+      ? `${recurrenceLabel[dto.recurrenceType]} ${fmtDays(dto.daysOfWeek)}요일`
       : recurrenceLabel[dto.recurrenceType];
 
   const statusText =
     successCount < totalCount
       ? `⚠️ ${successCount}/${totalCount}개 생성 완료`
-      : `총 ${successCount}개`;
+      : `총 ${successCount}개 생성`;
 
   return [
     {
@@ -1021,21 +1206,18 @@ function buildRecurringCreationBlocks(
     { type: 'divider' },
     {
       type: 'section',
-      text: {
-        type: 'mrkdwn',
-        text: `📌 *일정 제목*\n*${dto.title}*`,
-      },
+      text: { type: 'mrkdwn', text: `📌 *일정 제목*\n*${dto.title}*` },
     },
     {
       type: 'section',
       fields: [
         {
           type: 'mrkdwn',
-          text: `🗓️ *기간*\n${dto.startDate} ~ ${dto.endDate}`,
+          text: `🕐 *시간*\n${fmtTime(dto.startTime, dto.endTime)}`,
         },
         {
           type: 'mrkdwn',
-          text: `🕐 *시간*\n${dto.startTime} ~ ${dto.endTime}`,
+          text: `📅 *요일*\n${fmtDays(dto.daysOfWeek)}`,
         },
       ],
     },
@@ -1044,11 +1226,11 @@ function buildRecurringCreationBlocks(
       fields: [
         {
           type: 'mrkdwn',
-          text: `🔁 *반복*\n${recurrenceText}`,
+          text: `🗓️ *기간*\n${fmtPeriod(dto.startDate, dto.endDate)}`,
         },
         {
           type: 'mrkdwn',
-          text: `📊 *생성 결과*\n${statusText}`,
+          text: `📍 *장소*\n${dto.location || '_미지정_'}`,
         },
       ],
     },
@@ -1058,9 +1240,58 @@ function buildRecurringCreationBlocks(
       elements: [
         {
           type: 'mrkdwn',
-          text: `*Bannote Bot*`,
+          text: `🔁 *반복:* ${recurrenceText} | 📊 *처리 결과:* ${statusText} | *Bannote Bot*`,
         },
       ],
     },
   ] as unknown as KnownBlock[];
+}
+
+// ========== 원본 이벤트 판별 헬퍼 ==========
+
+/** Google Calendar 이벤트 dateTime 문자열에서 KST 기준 HH:MM 추출 */
+function extractTimeKST(dateTimeStr: string): string {
+  const d = new Date(dateTimeStr);
+  const kstHours = (d.getUTCHours() + 9) % 24;
+  const kstMinutes = d.getUTCMinutes();
+  return `${String(kstHours).padStart(2, '0')}:${String(kstMinutes).padStart(2, '0')}`;
+}
+
+/** Google Calendar 이벤트 dateTime 문자열에서 KST 기준 요일(0=일 … 6=토) 추출 */
+function getDayOfWeekKST(dateTimeStr: string): number {
+  const d = new Date(dateTimeStr);
+  const kstMs = d.getTime() + 9 * 60 * 60 * 1000;
+  return new Date(kstMs).getUTCDay();
+}
+
+/**
+ * 이벤트가 반복 그룹의 원본 생성 조건(제목·시작시각·종료시각·요일)을 만족하는지 확인.
+ * 하나라도 다르면 개별 수정된 것으로 판단해 false를 반환한다.
+ */
+function isOriginalEvent(
+  event: {
+    summary?: string | null;
+    start?: { dateTime?: string | null } | null;
+    end?: { dateTime?: string | null } | null;
+  },
+  group: RecurrenceGroup,
+): boolean {
+  if (event.summary !== group.title) return false;
+
+  if (group.startTime && event.start?.dateTime) {
+    if (extractTimeKST(event.start.dateTime) !== group.startTime) return false;
+  }
+  if (group.endTime && event.end?.dateTime) {
+    if (extractTimeKST(event.end.dateTime) !== group.endTime) return false;
+  }
+  if (
+    group.daysOfWeek &&
+    group.daysOfWeek.length > 0 &&
+    event.start?.dateTime
+  ) {
+    if (!group.daysOfWeek.includes(getDayOfWeekKST(event.start.dateTime)))
+      return false;
+  }
+
+  return true;
 }

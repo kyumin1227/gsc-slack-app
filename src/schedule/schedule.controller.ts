@@ -895,12 +895,16 @@ export class ScheduleController {
     );
     const scope = (values.scope_block.scope_input.selected_option?.value ??
       'all') as 'all' | 'future';
+    const filterOriginal =
+      (values.filter_block.filter_input.selected_option?.value ?? 'original') ===
+      'original';
 
     await ack();
 
     const { deleted, total } = await this.scheduleService.deleteRecurringGroup(
       groupDbId,
       scope,
+      filterOriginal,
     );
     await client.chat.postMessage({
       channel: body.user.id,
@@ -976,7 +980,38 @@ export class ScheduleController {
 
     await ack({
       response_action: 'push',
-      view: ScheduleView.editRecurringModal(groups, scheduleName),
+      view: ScheduleView.selectGroupForEditModal(groups, scheduleName, scheduleId),
+    });
+  }
+
+  // 반복 일정 수정 - step2 (그룹 선택 후 프리필 폼 표시)
+  @View('recurring:modal:step2:edit')
+  async handleStep2EditRecurring({
+    ack,
+    view,
+  }: SlackViewMiddlewareArgs & AllMiddlewareArgs) {
+    const { scheduleName } = JSON.parse(view.private_metadata || '{}') as {
+      scheduleName: string;
+    };
+    const groupDbId = parseInt(
+      view.state.values.group_block.group_input.selected_option?.value ?? '',
+      10,
+    );
+
+    if (isNaN(groupDbId)) {
+      await ack({ response_action: 'errors', errors: { group_block: '반복 일정을 선택해주세요.' } });
+      return;
+    }
+
+    const group = await this.scheduleService.findRecurrenceGroupById(groupDbId);
+    if (!group) {
+      await ack({ response_action: 'errors', errors: { group_block: '반복 일정을 찾을 수 없습니다.' } });
+      return;
+    }
+
+    await ack({
+      response_action: 'push',
+      view: ScheduleView.editRecurringModal(group, scheduleName),
     });
   }
 
@@ -988,11 +1023,10 @@ export class ScheduleController {
     view,
     client,
   }: SlackViewMiddlewareArgs & AllMiddlewareArgs) {
+    const { groupDbId } = JSON.parse(view.private_metadata || '{}') as {
+      groupDbId: number;
+    };
     const values = view.state.values;
-    const groupDbId = parseInt(
-      values.group_block.group_input.selected_option?.value ?? '',
-      10,
-    );
     const title = values.title_block.title_input.value ?? undefined;
     const description =
       values.description_block.description_input.value ?? undefined;
@@ -1003,6 +1037,24 @@ export class ScheduleController {
       values.end_time_block.end_time_input.selected_time ?? undefined;
     const scope = (values.scope_block.scope_input.selected_option?.value ??
       'all') as 'all' | 'future';
+    const rawDays =
+      values.days_of_week_block?.days_of_week_input?.selected_options;
+    const daysOfWeek =
+      rawDays && rawDays.length > 0
+        ? rawDays.map((o) => parseInt(o.value, 10))
+        : undefined;
+    const startDate =
+      values.start_date_block?.start_date_input?.selected_date ?? undefined;
+    const endDate =
+      values.end_date_block?.end_date_input?.selected_date ?? undefined;
+
+    if (startDate && endDate && startDate > endDate) {
+      await ack({
+        response_action: 'errors',
+        errors: { end_date_block: '종료일이 시작일보다 앞입니다.' },
+      });
+      return;
+    }
 
     if (startTime && !endTime) {
       await ack({
@@ -1023,7 +1075,7 @@ export class ScheduleController {
 
     const { updated, total } = await this.scheduleService.updateRecurringGroup(
       groupDbId,
-      { title, description, location, startTime, endTime },
+      { title, description, location, startTime, endTime, daysOfWeek, startDate, endDate },
       scope,
     );
     await client.chat.postMessage({
