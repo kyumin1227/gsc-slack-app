@@ -852,8 +852,52 @@ export class ScheduleView {
     };
   }
 
+  // Step 1: 캘린더(시간표) 선택 모달 — 수정/삭제 공통
+  static selectScheduleForRecurringModal(
+    schedules: { id: number; name: string }[],
+    mode: 'edit' | 'delete',
+  ): View {
+    const isEdit = mode === 'edit';
+    return {
+      type: 'modal',
+      callback_id: isEdit
+        ? 'recurring:modal:step1:edit'
+        : 'recurring:modal:step1:delete',
+      title: {
+        type: 'plain_text',
+        text: isEdit ? '반복 일정 수정' : '반복 일정 삭제',
+      },
+      submit: { type: 'plain_text', text: '다음' },
+      close: { type: 'plain_text', text: '취소' },
+      blocks: [
+        {
+          type: 'input',
+          block_id: 'schedule_block',
+          label: { type: 'plain_text', text: '시간표 선택' },
+          element: {
+            type: 'static_select',
+            action_id: 'schedule_input',
+            placeholder: { type: 'plain_text', text: '시간표를 선택하세요' },
+            options: schedules.map((s) => ({
+              text: { type: 'plain_text' as const, text: s.name },
+              value: String(s.id),
+            })),
+          },
+        },
+      ],
+    };
+  }
+
+  // Step 2: 반복 일정 삭제 모달 (특정 시간표 필터링 후)
   static deleteRecurringModal(
-    groups: { id: number; title: string; scheduleName: string }[],
+    groups: {
+      id: number;
+      title: string;
+      daysOfWeek: number[] | null;
+      startTime: string | null;
+      endTime: string | null;
+    }[],
+    scheduleName: string,
   ): View {
     return {
       type: 'modal',
@@ -862,6 +906,15 @@ export class ScheduleView {
       submit: { type: 'plain_text', text: '삭제' },
       close: { type: 'plain_text', text: '취소' },
       blocks: [
+        {
+          type: 'context',
+          elements: [
+            {
+              type: 'mrkdwn',
+              text: `📅 *${scheduleName}*`,
+            },
+          ],
+        },
         {
           type: 'input',
           block_id: 'group_block',
@@ -873,7 +926,7 @@ export class ScheduleView {
             options: groups.map((g) => ({
               text: {
                 type: 'plain_text' as const,
-                text: `[${g.scheduleName}] ${g.title}`,
+                text: formatRecurrenceGroupLabel(g),
               },
               value: String(g.id),
             })),
@@ -899,8 +952,16 @@ export class ScheduleView {
     };
   }
 
+  // Step 2: 반복 일정 수정 모달 (특정 시간표 필터링 후)
   static editRecurringModal(
-    groups: { id: number; title: string; scheduleName: string }[],
+    groups: {
+      id: number;
+      title: string;
+      daysOfWeek: number[] | null;
+      startTime: string | null;
+      endTime: string | null;
+    }[],
+    scheduleName: string,
   ): View {
     return {
       type: 'modal',
@@ -909,6 +970,15 @@ export class ScheduleView {
       submit: { type: 'plain_text', text: '수정' },
       close: { type: 'plain_text', text: '취소' },
       blocks: [
+        {
+          type: 'context',
+          elements: [
+            {
+              type: 'mrkdwn',
+              text: `📅 *${scheduleName}*`,
+            },
+          ],
+        },
         {
           type: 'input',
           block_id: 'group_block',
@@ -920,7 +990,7 @@ export class ScheduleView {
             options: groups.map((g) => ({
               text: {
                 type: 'plain_text' as const,
-                text: `[${g.scheduleName}] ${g.title}`,
+                text: formatRecurrenceGroupLabel(g),
               },
               value: String(g.id),
             })),
@@ -1005,4 +1075,22 @@ export class ScheduleView {
       ],
     };
   }
+}
+
+// 반복 일정 그룹 표시 라벨 포맷: "운영체제 강의 (월수 09:00-11:00)"
+function formatRecurrenceGroupLabel(g: {
+  title: string;
+  daysOfWeek: number[] | null;
+  startTime: string | null;
+  endTime: string | null;
+}): string {
+  const DAY_LABELS = ['일', '월', '화', '수', '목', '금', '토'];
+  const parts: string[] = [];
+  if (g.daysOfWeek && g.daysOfWeek.length > 0) {
+    parts.push(g.daysOfWeek.map((d) => DAY_LABELS[d]).join(''));
+  }
+  if (g.startTime && g.endTime) {
+    parts.push(`${g.startTime}-${g.endTime}`);
+  }
+  return parts.length > 0 ? `${g.title} (${parts.join(' ')})` : g.title;
 }

@@ -159,7 +159,9 @@ export class ScheduleService {
       .andWhere('schedule.deletedAt IS NULL')
       .select('schedule.id')
       .getRawMany()
-      .then((rows: { schedule_id: number }[]) => rows.map((r) => r.schedule_id));
+      .then((rows: { schedule_id: number }[]) =>
+        rows.map((r) => r.schedule_id),
+      );
 
     if (ids.length === 0) return [];
 
@@ -359,10 +361,11 @@ export class ScheduleService {
     const channelId = randomUUID();
 
     try {
-      const { resourceId } = await this.googleCalendarService.watchCalendarEvents(
-        schedule.calendarId,
-        channelId,
-      );
+      const { resourceId } =
+        await this.googleCalendarService.watchCalendarEvents(
+          schedule.calendarId,
+          channelId,
+        );
 
       const syncToken = await this.googleCalendarService.getInitialSyncToken(
         schedule.calendarId,
@@ -463,7 +466,10 @@ export class ScheduleService {
     const schedule = await this.findById(id);
     if (!schedule) throw new BusinessError(ErrorCode.SCHEDULE_NOT_FOUND);
 
-    await this.googleCalendarService.unshareCalendar(schedule.calendarId, email);
+    await this.googleCalendarService.unshareCalendar(
+      schedule.calendarId,
+      email,
+    );
   }
 
   // 구독 (사용자 캘린더 목록에 추가)
@@ -512,14 +518,17 @@ export class ScheduleService {
 
     // 3. 이벤트 10개씩 청크 생성 (Rate Limit 방지)
     const results = await runInChunks(dates, ({ startDateTime, endDateTime }) =>
-      this.googleCalendarService.createEventAsServiceAccount(schedule.calendarId, {
-        summary: dto.title,
-        startDateTime,
-        endDateTime,
-        description: dto.description,
-        location: dto.location,
-        groupId,
-      }),
+      this.googleCalendarService.createEventAsServiceAccount(
+        schedule.calendarId,
+        {
+          summary: dto.title,
+          startDateTime,
+          endDateTime,
+          description: dto.description,
+          location: dto.location,
+          groupId,
+        },
+      ),
     );
 
     const successCount = results.filter((r) => r.status === 'fulfilled').length;
@@ -543,6 +552,11 @@ export class ScheduleService {
       groupId,
       title: dto.title,
       scheduleId: dto.scheduleId,
+      daysOfWeek: dto.daysOfWeek ?? undefined,
+      location: dto.location,
+      startTime: dto.startTime,
+      endTime: dto.endTime,
+      recurrenceType: dto.recurrenceType,
     });
 
     // 5. Slack 채널에 요약 알림 직접 발송
@@ -598,6 +612,21 @@ export class ScheduleService {
       ...g,
       scheduleName: scheduleMap.get(g.scheduleId) ?? '',
     }));
+  }
+
+  // 반복 그룹이 있는 스케줄 목록 조회 (step1 모달용)
+  async findSchedulesWithRecurrenceGroups(): Promise<
+    { id: number; name: string }[]
+  > {
+    const groups = await this.recurrenceGroupRepository.find({
+      select: ['scheduleId'],
+    });
+    const scheduleIds = [...new Set(groups.map((g) => g.scheduleId))];
+    if (scheduleIds.length === 0) return [];
+    const schedules = await this.scheduleRepository.findBy({
+      id: In(scheduleIds),
+    });
+    return schedules.map((s) => ({ id: s.id, name: s.name }));
   }
 
   async deleteRecurringGroup(
@@ -733,10 +762,17 @@ export class ScheduleService {
     });
     const updatedCount = results.filter((r) => r.status === 'fulfilled').length;
 
-    if (dto.title) {
+    // DB 업데이트 데이터 빌드
+    const updateData: any = {};
+    if (dto.title) updateData.title = dto.title;
+    if (dto.location !== undefined) updateData.location = dto.location;
+    if (dto.startTime) updateData.startTime = dto.startTime;
+    if (dto.endTime) updateData.endTime = dto.endTime;
+
+    if (Object.keys(updateData).length > 0) {
       await this.recurrenceGroupRepository.update(
         { id: groupDbId },
-        { title: dto.title },
+        updateData,
       );
     }
 

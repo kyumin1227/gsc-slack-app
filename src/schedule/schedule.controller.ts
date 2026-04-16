@@ -822,9 +822,10 @@ export class ScheduleController {
     const userId = 'user_id' in body ? body.user_id : body.user.id;
     await this.permissionService.requireAdmin(userId);
 
-    const groups = await this.scheduleService.findAllRecurrenceGroups();
+    const schedules =
+      await this.scheduleService.findSchedulesWithRecurrenceGroups();
 
-    if (groups.length === 0) {
+    if (schedules.length === 0) {
       if ('channel_id' in body) {
         await client.chat.postEphemeral({
           channel: body.channel_id,
@@ -837,7 +838,45 @@ export class ScheduleController {
 
     await client.views.open({
       trigger_id: body.trigger_id,
-      view: ScheduleView.deleteRecurringModal(groups),
+      view: ScheduleView.selectScheduleForRecurringModal(schedules, 'delete'),
+    });
+  }
+
+  // 반복 일정 삭제 - step1 (시간표 선택 후 반복 일정 목록 표시)
+  @View('recurring:modal:step1:delete')
+  async handleStep1DeleteRecurring({
+    ack,
+    view,
+  }: SlackViewMiddlewareArgs & AllMiddlewareArgs) {
+    const values = view.state.values;
+    const scheduleId = parseInt(
+      values.schedule_block.schedule_input.selected_option?.value ?? '',
+      10,
+    );
+
+    if (isNaN(scheduleId)) {
+      await ack({ response_action: 'errors', errors: { schedule_block: '시간표를 선택해주세요.' } });
+      return;
+    }
+
+    const [groups, schedules] = await Promise.all([
+      this.scheduleService.findRecurrenceGroupsBySchedule(scheduleId),
+      this.scheduleService.findActiveSchedules(),
+    ]);
+    const scheduleName =
+      schedules.find((s) => s.id === scheduleId)?.name ?? '';
+
+    if (groups.length === 0) {
+      await ack({
+        response_action: 'errors',
+        errors: { schedule_block: '해당 시간표에 반복 일정이 없습니다.' },
+      });
+      return;
+    }
+
+    await ack({
+      response_action: 'push',
+      view: ScheduleView.deleteRecurringModal(groups, scheduleName),
     });
   }
 
@@ -883,9 +922,10 @@ export class ScheduleController {
     const userId = 'user_id' in body ? body.user_id : body.user.id;
     await this.permissionService.requireAdmin(userId);
 
-    const groups = await this.scheduleService.findAllRecurrenceGroups();
+    const schedules =
+      await this.scheduleService.findSchedulesWithRecurrenceGroups();
 
-    if (groups.length === 0) {
+    if (schedules.length === 0) {
       if ('channel_id' in body) {
         await client.chat.postEphemeral({
           channel: body.channel_id,
@@ -898,7 +938,45 @@ export class ScheduleController {
 
     await client.views.open({
       trigger_id: body.trigger_id,
-      view: ScheduleView.editRecurringModal(groups),
+      view: ScheduleView.selectScheduleForRecurringModal(schedules, 'edit'),
+    });
+  }
+
+  // 반복 일정 수정 - step1 (시간표 선택 후 반복 일정 목록 표시)
+  @View('recurring:modal:step1:edit')
+  async handleStep1EditRecurring({
+    ack,
+    view,
+  }: SlackViewMiddlewareArgs & AllMiddlewareArgs) {
+    const values = view.state.values;
+    const scheduleId = parseInt(
+      values.schedule_block.schedule_input.selected_option?.value ?? '',
+      10,
+    );
+
+    if (isNaN(scheduleId)) {
+      await ack({ response_action: 'errors', errors: { schedule_block: '시간표를 선택해주세요.' } });
+      return;
+    }
+
+    const [groups, schedules] = await Promise.all([
+      this.scheduleService.findRecurrenceGroupsBySchedule(scheduleId),
+      this.scheduleService.findActiveSchedules(),
+    ]);
+    const scheduleName =
+      schedules.find((s) => s.id === scheduleId)?.name ?? '';
+
+    if (groups.length === 0) {
+      await ack({
+        response_action: 'errors',
+        errors: { schedule_block: '해당 시간표에 반복 일정이 없습니다.' },
+      });
+      return;
+    }
+
+    await ack({
+      response_action: 'push',
+      view: ScheduleView.editRecurringModal(groups, scheduleName),
     });
   }
 
