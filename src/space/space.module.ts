@@ -5,9 +5,10 @@ import { SpaceService } from './space.service';
 import { SpaceMirrorService } from './space-mirror.service';
 import { SpaceController } from './space.controller';
 import { UserModule } from '../user/user.module';
+import { GoogleModule } from '../google/google.module';
 
 @Module({
-  imports: [TypeOrmModule.forFeature([Space]), UserModule],
+  imports: [TypeOrmModule.forFeature([Space]), UserModule, GoogleModule],
   controllers: [SpaceController],
   providers: [SpaceService, SpaceMirrorService],
   exports: [SpaceService, SpaceMirrorService],

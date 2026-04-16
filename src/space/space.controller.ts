@@ -12,7 +12,7 @@ import { SpaceView } from './space.view';
 import { SpaceStatus, SpaceType } from './space.entity';
 import { UserService } from '../user/user.service';
 import { UserStatus } from '../user/user.entity';
-import { GoogleCalendarUtil } from '../google/google-calendar.util';
+import { GoogleCalendarService } from '../google/google-calendar.service';
 import { CMD } from '../common/slack-commands';
 import { PermissionService } from '../user/permission.service';
 
@@ -22,6 +22,7 @@ export class SpaceController {
     private readonly spaceService: SpaceService,
     private readonly userService: UserService,
     private readonly permissionService: PermissionService,
+    private readonly googleCalendarService: GoogleCalendarService,
   ) {}
 
   @Command(CMD.스터디룸생성)
@@ -304,7 +305,7 @@ export class SpaceController {
       endIso: string;
     };
 
-    const event = await GoogleCalendarUtil.getEventById(calendarId, eventId);
+    const event = await this.googleCalendarService.getEventById(calendarId, eventId);
     const attendeeEmails = event?.attendees?.map((a) => a.email ?? '') ?? [];
     const initialAttendeeSlackIds = (
       await Promise.all(
@@ -516,7 +517,7 @@ export class SpaceController {
     const space = await this.spaceService.findById(roomId);
     if (!space) return;
 
-    const acl = await GoogleCalendarUtil.getCalendarAcl(calendarId);
+    const acl = await this.googleCalendarService.getCalendarAcl(calendarId);
     const editorEmails = acl
       .filter((e) => e.role === 'writer')
       .map((e) => e.email);
@@ -544,7 +545,7 @@ export class SpaceController {
     const selectedIds =
       values['editors_block']?.['editors_select']?.selected_users ?? [];
 
-    const acl = await GoogleCalendarUtil.getCalendarAcl(calendarId);
+    const acl = await this.googleCalendarService.getCalendarAcl(calendarId);
     const currentEditorEmails = acl
       .filter((e) => e.role === 'writer')
       .map((e) => e.email);

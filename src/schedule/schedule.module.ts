@@ -12,6 +12,7 @@ import { TagModule } from '../tag/tag.module';
 import { Tag } from '../tag/tag.entity';
 import { ChannelModule } from '../channel/channel.module';
 import { SpaceModule } from '../space/space.module';
+import { GoogleModule } from '../google/google.module';
 
 @Module({
   imports: [
@@ -20,6 +21,7 @@ import { SpaceModule } from '../space/space.module';
     forwardRef(() => TagModule),
     ChannelModule,
     SpaceModule,
+    GoogleModule,
   ],
   controllers: [ScheduleController, ScheduleWatchController],
   providers: [ScheduleService, ScheduleCronService, ScheduleNotificationService],
