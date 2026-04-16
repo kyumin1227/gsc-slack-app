@@ -10,6 +10,8 @@ export interface ScheduleListItem {
   status: ScheduleStatus;
   tags: { id: number; name: string }[];
   createdBy: { name: string };
+  channels: string[]; // Slack 채널 ID 목록
+  writers: string[]; // 담당자 Slack 유저 ID 목록
   createdAt: Date;
 }
 
@@ -26,7 +28,8 @@ export interface SubscribeScheduleItem {
   description?: string;
   calendarId: string;
   tags: { id: number; name: string }[];
-  createdBy: { name: string };
+  channels: string[]; // Slack 채널 ID 목록
+  writers: string[]; // 담당자 Slack 유저 ID 목록
   isSubscribed: boolean;
 }
 
@@ -144,12 +147,21 @@ export class ScheduleView {
         ? `\n${schedule.description}`
         : '';
 
+      const channelText =
+        schedule.channels.length > 0
+          ? `\n알림 채널: ${schedule.channels.map((id) => `<#${id}>`).join('  ')}`
+          : '';
+      const writerText =
+        schedule.writers.length > 0
+          ? `\n담당자: ${schedule.writers.map((id) => `<@${id}>`).join('  ')}`
+          : '';
+
       blocks.push(
         {
           type: 'section',
           text: {
             type: 'mrkdwn',
-            text: `${statusEmoji} *${schedule.name}*${description}\n태그: ${tagNames}\n상태: ${STATUS_LABELS[schedule.status]} | 생성자: ${schedule.createdBy.name} | 생성일: ${schedule.createdAt.toLocaleDateString('ko-KR', { timeZone: 'Asia/Seoul' })}`,
+            text: `${statusEmoji} *${schedule.name}*${description}\n태그: ${tagNames}\n상태: ${STATUS_LABELS[schedule.status]} | 생성자: ${schedule.createdBy.name} | 생성일: ${schedule.createdAt.toLocaleDateString('ko-KR', { timeZone: 'Asia/Seoul' })}${channelText}${writerText}`,
           },
         },
         {
@@ -594,13 +606,22 @@ export class ScheduleView {
             ? `\n${schedule.description}`
             : '';
 
+          const channelText =
+            schedule.channels.length > 0
+              ? `\n알림 채널: ${schedule.channels.map((id) => `<#${id}>`).join('  ')}`
+              : '';
+          const writerText =
+            schedule.writers.length > 0
+              ? `\n담당자: ${schedule.writers.map((id) => `<@${id}>`).join('  ')}`
+              : '';
+
           const calendarUrl = `https://calendar.google.com/calendar/embed?src=${encodeURIComponent(schedule.calendarId)}&ctz=Asia%2FSeoul&mode=WEEK`;
           blocks.push(
             {
               type: 'section',
               text: {
                 type: 'mrkdwn',
-                text: `*${schedule.name}*${descriptionText}\n태그: ${tagNames}\n생성자: ${schedule.createdBy.name}`,
+                text: `*${schedule.name}*${descriptionText}\n태그: ${tagNames}${channelText}${writerText}`,
               },
             },
             {
@@ -831,8 +852,52 @@ export class ScheduleView {
     };
   }
 
+  // Step 1: 캘린더(시간표) 선택 모달 — 수정/삭제 공통
+  static selectScheduleForRecurringModal(
+    schedules: { id: number; name: string }[],
+    mode: 'edit' | 'delete',
+  ): View {
+    const isEdit = mode === 'edit';
+    return {
+      type: 'modal',
+      callback_id: isEdit
+        ? 'recurring:modal:step1:edit'
+        : 'recurring:modal:step1:delete',
+      title: {
+        type: 'plain_text',
+        text: isEdit ? '반복 일정 수정' : '반복 일정 삭제',
+      },
+      submit: { type: 'plain_text', text: '다음' },
+      close: { type: 'plain_text', text: '취소' },
+      blocks: [
+        {
+          type: 'input',
+          block_id: 'schedule_block',
+          label: { type: 'plain_text', text: '시간표 선택' },
+          element: {
+            type: 'static_select',
+            action_id: 'schedule_input',
+            placeholder: { type: 'plain_text', text: '시간표를 선택하세요' },
+            options: schedules.map((s) => ({
+              text: { type: 'plain_text' as const, text: s.name },
+              value: String(s.id),
+            })),
+          },
+        },
+      ],
+    };
+  }
+
+  // Step 2: 반복 일정 삭제 모달 (특정 시간표 필터링 후)
   static deleteRecurringModal(
-    groups: { id: number; title: string; scheduleName: string }[],
+    groups: {
+      id: number;
+      title: string;
+      daysOfWeek: number[] | null;
+      startTime: string | null;
+      endTime: string | null;
+    }[],
+    scheduleName: string,
   ): View {
     return {
       type: 'modal',
@@ -841,6 +906,15 @@ export class ScheduleView {
       submit: { type: 'plain_text', text: '삭제' },
       close: { type: 'plain_text', text: '취소' },
       blocks: [
+        {
+          type: 'context',
+          elements: [
+            {
+              type: 'mrkdwn',
+              text: `📅 *${scheduleName}*`,
+            },
+          ],
+        },
         {
           type: 'input',
           block_id: 'group_block',
@@ -852,7 +926,7 @@ export class ScheduleView {
             options: groups.map((g) => ({
               text: {
                 type: 'plain_text' as const,
-                text: `[${g.scheduleName}] ${g.title}`,
+                text: formatRecurrenceGroupLabel(g),
               },
               value: String(g.id),
             })),
@@ -874,20 +948,64 @@ export class ScheduleView {
             ],
           },
         },
+        {
+          type: 'input',
+          block_id: 'filter_block',
+          label: { type: 'plain_text', text: '삭제 대상' },
+          hint: {
+            type: 'plain_text',
+            text: '원본만: 생성 후 개별 수정된 일정은 제외합니다',
+          },
+          element: {
+            type: 'static_select',
+            action_id: 'filter_input',
+            initial_option: {
+              text: { type: 'plain_text', text: '원본만 삭제' },
+              value: 'original',
+            },
+            options: [
+              {
+                text: { type: 'plain_text', text: '원본만 삭제' },
+                value: 'original',
+              },
+              {
+                text: {
+                  type: 'plain_text',
+                  text: '전체 삭제 (수정된 것 포함)',
+                },
+                value: 'all',
+              },
+            ],
+          },
+        },
       ],
     };
   }
 
-  static editRecurringModal(
-    groups: { id: number; title: string; scheduleName: string }[],
+  // Step 2: 반복 일정 선택 모달 (그룹 드롭다운만, 다음 → 프리필 폼)
+  static selectGroupForEditModal(
+    groups: {
+      id: number;
+      title: string;
+      daysOfWeek: number[] | null;
+      startTime: string | null;
+      endTime: string | null;
+    }[],
+    scheduleName: string,
+    scheduleId: number,
   ): View {
     return {
       type: 'modal',
-      callback_id: 'recurring:modal:edit',
+      callback_id: 'recurring:modal:step2:edit',
+      private_metadata: JSON.stringify({ scheduleName, scheduleId }),
       title: { type: 'plain_text', text: '반복 일정 수정' },
-      submit: { type: 'plain_text', text: '수정' },
+      submit: { type: 'plain_text', text: '다음' },
       close: { type: 'plain_text', text: '취소' },
       blocks: [
+        {
+          type: 'context',
+          elements: [{ type: 'mrkdwn', text: `📅 *${scheduleName}*` }],
+        },
         {
           type: 'input',
           block_id: 'group_block',
@@ -899,70 +1017,150 @@ export class ScheduleView {
             options: groups.map((g) => ({
               text: {
                 type: 'plain_text' as const,
-                text: `[${g.scheduleName}] ${g.title}`,
+                text: formatRecurrenceGroupLabel(g),
               },
               value: String(g.id),
             })),
           },
         },
+      ],
+    };
+  }
+
+  // Step 3: 반복 일정 수정 폼 (선택된 그룹 기본값 프리필)
+  static editRecurringModal(
+    group: {
+      id: number;
+      title: string;
+      daysOfWeek: number[] | null;
+      startTime: string | null;
+      endTime: string | null;
+      location: string | null;
+      startDate: string | null;
+      endDate: string | null;
+    },
+    scheduleName: string,
+  ): View {
+    const DAY_OPTIONS = [
+      { text: { type: 'plain_text' as const, text: '일' }, value: '0' },
+      { text: { type: 'plain_text' as const, text: '월' }, value: '1' },
+      { text: { type: 'plain_text' as const, text: '화' }, value: '2' },
+      { text: { type: 'plain_text' as const, text: '수' }, value: '3' },
+      { text: { type: 'plain_text' as const, text: '목' }, value: '4' },
+      { text: { type: 'plain_text' as const, text: '금' }, value: '5' },
+      { text: { type: 'plain_text' as const, text: '토' }, value: '6' },
+    ];
+    const initialDays = group.daysOfWeek
+      ? DAY_OPTIONS.filter((o) => group.daysOfWeek!.includes(parseInt(o.value)))
+      : undefined;
+
+    return {
+      type: 'modal',
+      callback_id: 'recurring:modal:edit',
+      private_metadata: JSON.stringify({ groupDbId: group.id }),
+      title: { type: 'plain_text', text: '반복 일정 수정' },
+      submit: { type: 'plain_text', text: '수정' },
+      close: { type: 'plain_text', text: '취소' },
+      blocks: [
+        {
+          type: 'context',
+          elements: [{ type: 'mrkdwn', text: `📅 *${scheduleName}*` }],
+        },
         {
           type: 'input',
           block_id: 'title_block',
-          label: { type: 'plain_text', text: '새 제목' },
-          optional: true,
+          label: { type: 'plain_text', text: '제목' },
           element: {
             type: 'plain_text_input',
             action_id: 'title_input',
-            placeholder: { type: 'plain_text', text: '비우면 기존 제목 유지' },
+            initial_value: group.title,
+            placeholder: { type: 'plain_text', text: '제목' },
           },
         },
         {
           type: 'input',
           block_id: 'description_block',
-          label: { type: 'plain_text', text: '새 설명' },
+          label: { type: 'plain_text', text: '설명' },
           optional: true,
           element: {
             type: 'plain_text_input',
             action_id: 'description_input',
             multiline: true,
-            placeholder: { type: 'plain_text', text: '비우면 기존 설명 유지' },
+            placeholder: { type: 'plain_text', text: '설명' },
           },
         },
         {
           type: 'input',
           block_id: 'location_block',
-          label: { type: 'plain_text', text: '새 장소' },
+          label: { type: 'plain_text', text: '장소' },
           optional: true,
           element: {
             type: 'plain_text_input',
             action_id: 'location_input',
-            placeholder: { type: 'plain_text', text: '비우면 기존 장소 유지' },
+            ...(group.location ? { initial_value: group.location } : {}),
+            placeholder: { type: 'plain_text', text: '장소' },
           },
         },
         {
           type: 'input',
           block_id: 'start_time_block',
-          label: { type: 'plain_text', text: '새 시작 시각' },
-          optional: true,
-          hint: {
-            type: 'plain_text',
-            text: '시간 변경 시에만 입력 (시작/종료 함께 입력)',
-          },
+          label: { type: 'plain_text', text: '시작 시각' },
           element: {
             type: 'timepicker',
             action_id: 'start_time_input',
+            ...(group.startTime ? { initial_time: group.startTime } : {}),
             placeholder: { type: 'plain_text', text: '시작 시각' },
           },
         },
         {
           type: 'input',
           block_id: 'end_time_block',
-          label: { type: 'plain_text', text: '새 종료 시각' },
-          optional: true,
+          label: { type: 'plain_text', text: '종료 시각' },
           element: {
             type: 'timepicker',
             action_id: 'end_time_input',
+            ...(group.endTime ? { initial_time: group.endTime } : {}),
             placeholder: { type: 'plain_text', text: '종료 시각' },
+          },
+        },
+        {
+          type: 'input',
+          block_id: 'days_of_week_block',
+          label: { type: 'plain_text', text: '요일' },
+          hint: {
+            type: 'plain_text',
+            text: '제거된 요일의 원본 일정은 삭제, 추가된 요일에는 같은 기간으로 신규 생성',
+          },
+          element: {
+            type: 'multi_static_select',
+            action_id: 'days_of_week_input',
+            placeholder: { type: 'plain_text', text: '요일 선택' },
+            options: DAY_OPTIONS,
+            ...(initialDays && initialDays.length > 0
+              ? { initial_options: initialDays }
+              : {}),
+          },
+        },
+        {
+          type: 'input',
+          block_id: 'start_date_block',
+          label: { type: 'plain_text', text: '시작일' },
+          element: {
+            type: 'datepicker',
+            action_id: 'start_date_input',
+            ...(group.startDate ? { initial_date: group.startDate } : {}),
+            placeholder: { type: 'plain_text', text: '시작일' },
+          },
+        },
+        {
+          type: 'input',
+          block_id: 'end_date_block',
+          label: { type: 'plain_text', text: '종료일' },
+          element: {
+            type: 'datepicker',
+            action_id: 'end_date_input',
+            ...(group.endDate ? { initial_date: group.endDate } : {}),
+            placeholder: { type: 'plain_text', text: '종료일' },
           },
         },
         {
@@ -984,4 +1182,27 @@ export class ScheduleView {
       ],
     };
   }
+}
+
+// 반복 일정 그룹 표시 라벨 포맷: "운영체제 강의 (월수 09:00-11:00)"
+function formatRecurrenceGroupLabel(g: {
+  title: string;
+  daysOfWeek: number[] | null;
+  startTime: string | null;
+  endTime: string | null;
+}): string {
+  const DAY_LABELS = ['일', '월', '화', '수', '목', '금', '토'];
+  const parts: string[] = [];
+  if (g.daysOfWeek && g.daysOfWeek.length > 0) {
+    parts.push(
+      [...g.daysOfWeek]
+        .sort((a, b) => a - b)
+        .map((d) => DAY_LABELS[d])
+        .join('·'),
+    );
+  }
+  if (g.startTime && g.endTime) {
+    parts.push(`${g.startTime}-${g.endTime}`);
+  }
+  return parts.length > 0 ? `${g.title} (${parts.join(' ')})` : g.title;
 }

@@ -1,0 +1,57 @@
+[
+  {
+    "name": "✨ feat",
+    "color": "a2eeef",
+    "description": "새로운 기능 구현"
+  },
+  {
+    "name": "🐛 bug",
+    "color": "d73a4a",
+    "description": "잘못된 동작 수정 (버그 리포트)"
+  },
+  {
+    "name": "🚑 hotfix",
+    "color": "ff0000",
+    "description": "급하게 수정이 필요한 치명적인 버그"
+  },
+  {
+    "name": "♻️ refactor",
+    "color": "e99695",
+    "description": "기능 변경 없는 코드 구조 개선"
+  },
+  {
+    "name": "⚡ perf",
+    "color": "f9d0c4",
+    "description": "성능 개선 (캐싱, 쿼리 최적화 등)"
+  },
+  {
+    "name": "🎨 style",
+    "color": "7057ff",
+    "description": "코드 포맷팅, 세미콜론 누락, UI 스타일 수정"
+  },
+  {
+    "name": "⚙️ infra",
+    "color": "bfdadc",
+    "description": "CI/CD, Docker, K8s, 서버 환경 설정 변경"
+  },
+  {
+    "name": "🚀 release",
+    "color": "006b75",
+    "description": "메인 브랜치 배포를 위한 최종 PR"
+  },
+  {
+    "name": "🔧 chore",
+    "color": "d4c5f9",
+    "description": "패키지 관리, 빌드 설정, 단순 파일 이동 등 기타 작업"
+  },
+  {
+    "name": "📝 docs",
+    "color": "0075ca",
+    "description": "문서 수정 (README, 문서화 등)"
+  },
+  {
+    "name": "✅ test",
+    "color": "3d9970",
+    "description": "테스트 코드 추가 및 수정"
+  }
+]

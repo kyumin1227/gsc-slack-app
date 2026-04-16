@@ -95,6 +95,14 @@ export class TagController {
     logger.info(`Tag created: ${name}`);
   }
 
+  // 태그 시간표 — 구글 캘린더 URL 버튼 ack
+  @Action('tag:schedule:open-calendar')
+  async ackTagCalendarLink({
+    ack,
+  }: SlackActionMiddlewareArgs<BlockAction> & AllMiddlewareArgs) {
+    await ack();
+  }
+
   // 태그 상태 토글 (활성화/비활성화)
   @Action(/^tag:list:toggle:/)
   async handleToggle({

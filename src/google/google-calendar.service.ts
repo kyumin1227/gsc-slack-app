@@ -1,3 +1,6 @@
+import { Inject, Injectable } from '@nestjs/common';
+import { CACHE_MANAGER } from '@nestjs/cache-manager';
+import type { Cache } from 'cache-manager';
 import { google, calendar_v3 } from 'googleapis';
 
 const SCOPES = ['https://www.googleapis.com/auth/calendar'];
@@ -18,9 +21,15 @@ export interface CalendarAclEntry {
   role: 'reader' | 'writer' | 'owner';
 }
 
-export class GoogleCalendarUtil {
+@Injectable()
+export class GoogleCalendarService {
+  private readonly ACL_CACHE_KEY = (id: string) => `google:acl:${id}`;
+  private readonly ACL_TTL_MS = 15 * 60 * 1000; // 15분
+
+  constructor(@Inject(CACHE_MANAGER) private readonly cache: Cache) {}
+
   // Service Account 인증 (캘린더 생성/관리용)
-  private static getServiceAccountAuth() {
+  private getServiceAccountAuth() {
     const email = process.env.GOOGLE_SERVICE_ACCOUNT_EMAIL;
     const privateKey = process.env.GOOGLE_SERVICE_ACCOUNT_PRIVATE_KEY?.replace(
       /\\n/g,
@@ -42,7 +51,7 @@ export class GoogleCalendarUtil {
   }
 
   // 사용자 OAuth 인증 (사용자 캘린더 목록 관리용)
-  private static getUserAuth(refreshToken: string) {
+  private getUserAuth(refreshToken: string) {
     const clientId = process.env.GOOGLE_CLIENT_ID;
     const clientSecret = process.env.GOOGLE_CLIENT_SECRET;
 
@@ -59,20 +68,18 @@ export class GoogleCalendarUtil {
     return oauth2Client;
   }
 
-  private static getCalendarClient(): calendar_v3.Calendar {
+  private getCalendarClient(): calendar_v3.Calendar {
     const auth = this.getServiceAccountAuth();
     return google.calendar({ version: 'v3', auth });
   }
 
-  private static getUserCalendarClient(
-    refreshToken: string,
-  ): calendar_v3.Calendar {
+  private getUserCalendarClient(refreshToken: string): calendar_v3.Calendar {
     const auth = this.getUserAuth(refreshToken);
     return google.calendar({ version: 'v3', auth });
   }
 
   // 캘린더 생성
-  static async createCalendar(
+  async createCalendar(
     summary: string,
     description?: string,
   ): Promise<CreateCalendarResult> {
@@ -97,13 +104,13 @@ export class GoogleCalendarUtil {
   }
 
   // 캘린더 삭제
-  static async deleteCalendar(calendarId: string): Promise<void> {
+  async deleteCalendar(calendarId: string): Promise<void> {
     const calendar = this.getCalendarClient();
     await calendar.calendars.delete({ calendarId });
   }
 
   // 캘린더 공유 (유저에게 권한 부여)
-  static async shareCalendar(options: ShareCalendarOptions): Promise<void> {
+  async shareCalendar(options: ShareCalendarOptions): Promise<void> {
     const calendar = this.getCalendarClient();
 
     await calendar.acl.insert({
@@ -116,13 +123,12 @@ export class GoogleCalendarUtil {
         },
       },
     });
+
+    await this.cache.del(this.ACL_CACHE_KEY(options.calendarId));
   }
 
   // 캘린더 공유 제거 (권한 삭제)
-  static async unshareCalendar(
-    calendarId: string,
-    email: string,
-  ): Promise<void> {
+  async unshareCalendar(calendarId: string, email: string): Promise<void> {
     const calendar = this.getCalendarClient();
 
     // 구글 캘린더 ACL에서 유저 권한의 ruleId는 보통 "user:이메일주소" 형식
@@ -135,14 +141,17 @@ export class GoogleCalendarUtil {
       });
     } catch (error: any) {
       if (error.code === 404) {
+        await this.cache.del(this.ACL_CACHE_KEY(calendarId));
         return;
       }
       throw error;
     }
+
+    await this.cache.del(this.ACL_CACHE_KEY(calendarId));
   }
 
   // 캘린더 공개 설정 (읽기 전용)
-  static async makeCalendarPublic(calendarId: string): Promise<void> {
+  async makeCalendarPublic(calendarId: string): Promise<void> {
     const calendar = this.getCalendarClient();
 
     await calendar.acl.insert({
@@ -157,7 +166,7 @@ export class GoogleCalendarUtil {
   }
 
   // 캘린더 정보 조회
-  static async getCalendar(
+  async getCalendar(
     calendarId: string,
   ): Promise<calendar_v3.Schema$Calendar | null> {
     const calendar = this.getCalendarClient();
@@ -174,7 +183,7 @@ export class GoogleCalendarUtil {
   }
 
   // 캘린더 이름 변경
-  static async updateCalendar(
+  async updateCalendar(
     calendarId: string,
     summary: string,
     description?: string,
@@ -190,8 +199,20 @@ export class GoogleCalendarUtil {
     });
   }
 
-  // 캘린더 ACL 조회 (권한 목록)
-  static async getCalendarAcl(calendarId: string): Promise<CalendarAclEntry[]> {
+  // 캘린더 ACL 조회 (권한 목록) — Redis 15분 캐싱
+  async getCalendarAcl(calendarId: string): Promise<CalendarAclEntry[]> {
+    const key = this.ACL_CACHE_KEY(calendarId);
+    const cached = await this.cache.get<CalendarAclEntry[]>(key);
+    if (cached) return cached;
+
+    const data = await this.fetchCalendarAcl(calendarId);
+    await this.cache.set(key, data, this.ACL_TTL_MS);
+    return data;
+  }
+
+  private async fetchCalendarAcl(
+    calendarId: string,
+  ): Promise<CalendarAclEntry[]> {
     const calendar = this.getCalendarClient();
 
     const response = await calendar.acl.list({ calendarId });
@@ -214,7 +235,7 @@ export class GoogleCalendarUtil {
   // ========== 사용자 캘린더 목록 관리 (OAuth 토큰 사용) ==========
 
   // 사용자 캘린더 목록에 캘린더 추가
-  static async addCalendarToUserList(
+  async addCalendarToUserList(
     calendarId: string,
     userRefreshToken: string,
   ): Promise<void> {
@@ -238,12 +259,12 @@ export class GoogleCalendarUtil {
 
   // ========== Google Calendar Watch (Push Notification) ==========
 
-  static isWatchConfigured(): boolean {
+  isWatchConfigured(): boolean {
     return !!process.env.GOOGLE_WEBHOOK_URL;
   }
 
   // 캘린더 이벤트 변경 watch 등록
-  static async watchCalendarEvents(
+  async watchCalendarEvents(
     calendarId: string,
     channelId: string,
   ): Promise<{ resourceId: string }> {
@@ -271,7 +292,7 @@ export class GoogleCalendarUtil {
   }
 
   // watch 해제
-  static async stopCalendarWatch(
+  async stopCalendarWatch(
     channelId: string,
     resourceId: string,
   ): Promise<void> {
@@ -291,7 +312,7 @@ export class GoogleCalendarUtil {
   }
 
   // 초기 syncToken 발급 (watch 등록 시 호출)
-  static async getInitialSyncToken(calendarId: string): Promise<string> {
+  async getInitialSyncToken(calendarId: string): Promise<string> {
     const calendar = this.getCalendarClient();
     let pageToken: string | undefined;
 
@@ -318,7 +339,7 @@ export class GoogleCalendarUtil {
 
   // syncToken으로 변경된 이벤트 조회 (웹훅 수신 후 사용)
   // 410 Gone 시 getInitialSyncToken으로 fallback → { events: [], nextSyncToken }
-  static async getChangedEventsBySyncToken(
+  async getChangedEventsBySyncToken(
     calendarId: string,
     syncToken: string,
   ): Promise<{ events: calendar_v3.Schema$Event[]; nextSyncToken: string }> {
@@ -347,7 +368,7 @@ export class GoogleCalendarUtil {
   }
 
   // 최근 변경된 이벤트 조회 (레거시 — syncToken 없는 경우 fallback용)
-  static async getRecentChangedEvents(
+  async getRecentChangedEvents(
     calendarId: string,
   ): Promise<calendar_v3.Schema$Event[]> {
     const calendar = this.getCalendarClient();
@@ -365,7 +386,7 @@ export class GoogleCalendarUtil {
   }
 
   // 특정 기간의 이벤트 전체 조회 (동기화용)
-  static async listEventsInRange(
+  async listEventsInRange(
     calendarId: string,
     timeMin: Date,
     timeMax: Date,
@@ -395,7 +416,7 @@ export class GoogleCalendarUtil {
   }
 
   // 단일 이벤트 조회 (디바운스 발송 시점에 최신 상태 확인용)
-  static async getEventById(
+  async getEventById(
     calendarId: string,
     eventId: string,
   ): Promise<calendar_v3.Schema$Event | null> {
@@ -413,7 +434,7 @@ export class GoogleCalendarUtil {
   // ========== 반복 일정 (서비스 계정 기반) ==========
 
   // 서비스 계정으로 이벤트 생성 (groupId extendedProperties 포함)
-  static async createEventAsServiceAccount(
+  async createEventAsServiceAccount(
     calendarId: string,
     params: {
       summary: string;
@@ -449,7 +470,7 @@ export class GoogleCalendarUtil {
   }
 
   // groupId로 이벤트 목록 조회 (전체 삭제/수정용)
-  static async listEventsByGroupId(
+  async listEventsByGroupId(
     calendarId: string,
     groupId: string,
   ): Promise<calendar_v3.Schema$Event[]> {
@@ -475,7 +496,7 @@ export class GoogleCalendarUtil {
   }
 
   // 서비스 계정으로 이벤트 삭제
-  static async deleteEventAsServiceAccount(
+  async deleteEventAsServiceAccount(
     calendarId: string,
     eventId: string,
   ): Promise<void> {
@@ -484,7 +505,7 @@ export class GoogleCalendarUtil {
   }
 
   // 서비스 계정으로 이벤트 수정 (patch: undefined 필드는 변경 안 함)
-  static async updateEventAsServiceAccount(
+  async updateEventAsServiceAccount(
     calendarId: string,
     eventId: string,
     params: {
@@ -513,7 +534,7 @@ export class GoogleCalendarUtil {
   }
 
   // 서비스 계정으로 이벤트의 private extendedProperties 일부 패치
-  static async patchEventPrivateExtendedProperty(
+  async patchEventPrivateExtendedProperty(
     calendarId: string,
     eventId: string,
     privateProps: Record<string, string>,
@@ -530,7 +551,7 @@ export class GoogleCalendarUtil {
   }
 
   // extendedProperties.private 필터로 이벤트 검색 (미러 이벤트 추적용)
-  static async searchByExtendedProperty(
+  async searchByExtendedProperty(
     calendarId: string,
     key: string,
     value: string,
@@ -546,7 +567,7 @@ export class GoogleCalendarUtil {
   }
 
   // 특정 기간의 미러 이벤트 전체 조회 (mirroredBy=gsc-bot 필터)
-  static async listMirrorEventsInRange(
+  async listMirrorEventsInRange(
     calendarId: string,
     timeMin: Date,
     timeMax: Date,
@@ -577,7 +598,7 @@ export class GoogleCalendarUtil {
   }
 
   // 서비스 계정으로 미러 이벤트 생성 (extendedProperties 포함)
-  static async createMirrorEventAsServiceAccount(
+  async createMirrorEventAsServiceAccount(
     calendarId: string,
     params: {
       summary: string;
@@ -608,7 +629,7 @@ export class GoogleCalendarUtil {
   }
 
   // 서비스 계정으로 미러 이벤트 수정 (extendedProperties 포함)
-  static async updateMirrorEventAsServiceAccount(
+  async updateMirrorEventAsServiceAccount(
     calendarId: string,
     eventId: string,
     params: {
@@ -642,7 +663,7 @@ export class GoogleCalendarUtil {
   // ========== 스터디룸 예약 ==========
 
   // 이벤트 생성 (참석자 포함, 메일 발송 없음)
-  static async createEvent(
+  async createEvent(
     calendarId: string,
     refreshToken: string,
     params: {
@@ -683,7 +704,7 @@ export class GoogleCalendarUtil {
   }
 
   // FreeBusy API로 시간대 사용 여부 확인
-  static async isTimeSlotBusy(
+  async isTimeSlotBusy(
     calendarId: string,
     refreshToken: string,
     startTime: Date,
@@ -705,7 +726,7 @@ export class GoogleCalendarUtil {
   }
 
   // 특정 사용자가 참석자인 이벤트 목록 조회 (여러 캘린더, 서비스 계정 사용)
-  static async getUserBookings(
+  async getUserBookings(
     calendarIds: string[],
     userEmail: string,
   ): Promise<Array<{ calendarId: string; event: calendar_v3.Schema$Event }>> {
@@ -748,7 +769,7 @@ export class GoogleCalendarUtil {
   }
 
   // 이벤트 삭제
-  static async deleteEvent(
+  async deleteEvent(
     calendarId: string,
     refreshToken: string,
     eventId: string,
@@ -758,7 +779,7 @@ export class GoogleCalendarUtil {
   }
 
   // 이벤트 수정 (부분 업데이트)
-  static async updateEvent(
+  async updateEvent(
     calendarId: string,
     refreshToken: string,
     eventId: string,
@@ -803,7 +824,7 @@ export class GoogleCalendarUtil {
   }
 
   // 사용자 캘린더 목록에서 캘린더 제거
-  static async removeCalendarFromUserList(
+  async removeCalendarFromUserList(
     calendarId: string,
     userRefreshToken: string,
   ): Promise<void> {
@@ -821,9 +842,7 @@ export class GoogleCalendarUtil {
     }
   }
 
-  static async getUserCalendarIds(
-    userRefreshToken: string,
-  ): Promise<Set<string>> {
+  async getUserCalendarIds(userRefreshToken: string): Promise<Set<string>> {
     const calendar = this.getUserCalendarClient(userRefreshToken);
     const ids = new Set<string>();
     let pageToken: string | undefined;

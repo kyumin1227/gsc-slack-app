@@ -2,7 +2,7 @@ import { Injectable, Logger } from '@nestjs/common';
 import { InjectRepository } from '@nestjs/typeorm';
 import { Repository } from 'typeorm';
 import { Space, SpaceStatus, SpaceType } from './space.entity';
-import { GoogleCalendarUtil } from '../google/google-calendar.util';
+import { GoogleCalendarService } from '../google/google-calendar.service';
 import { UserService } from '../user/user.service';
 import { BusinessError, ErrorCode } from '../common/errors';
 
@@ -48,11 +48,12 @@ export class SpaceService {
     @InjectRepository(Space)
     private readonly spaceRepository: Repository<Space>,
     private readonly userService: UserService,
+    private readonly googleCalendarService: GoogleCalendarService,
   ) {}
 
   async create(dto: CreateSpaceDto): Promise<Space> {
-    const { calendarId } = await GoogleCalendarUtil.createCalendar(dto.name);
-    await GoogleCalendarUtil.makeCalendarPublic(calendarId);
+    const { calendarId } = await this.googleCalendarService.createCalendar(dto.name);
+    await this.googleCalendarService.makeCalendarPublic(calendarId);
 
     if (dto.isDefault) {
       await this.spaceRepository
@@ -129,7 +130,7 @@ export class SpaceService {
     const space = await this.findById(dto.spaceId);
     if (!space) throw new BusinessError(ErrorCode.STUDY_ROOM_NOT_FOUND);
 
-    const acl = await GoogleCalendarUtil.getCalendarAcl(space.calendarId);
+    const acl = await this.googleCalendarService.getCalendarAcl(space.calendarId);
     const editorEmails = acl
       .filter((e) => e.role === 'writer' || e.role === 'owner')
       .map((e) => e.email);
@@ -144,7 +145,7 @@ export class SpaceService {
       throw new BusinessError(ErrorCode.CALENDAR_WRITER_NO_TOKEN);
     }
 
-    const isBusy = await GoogleCalendarUtil.isTimeSlotBusy(
+    const isBusy = await this.googleCalendarService.isTimeSlotBusy(
       space.calendarId,
       refreshToken,
       dto.startTime,
@@ -173,7 +174,7 @@ export class SpaceService {
       })
       .join('\n');
 
-    const eventId = await GoogleCalendarUtil.createEvent(
+    const eventId = await this.googleCalendarService.createEvent(
       space.calendarId,
       refreshToken,
       {
@@ -194,7 +195,7 @@ export class SpaceService {
   }
 
   private async getEditorRefreshToken(calendarId: string): Promise<string> {
-    const acl = await GoogleCalendarUtil.getCalendarAcl(calendarId);
+    const acl = await this.googleCalendarService.getCalendarAcl(calendarId);
     const editorEmails = acl
       .filter((e) => e.role === 'writer' || e.role === 'owner')
       .map((e) => e.email);
@@ -219,7 +220,7 @@ export class SpaceService {
     const calendarIds = rooms.map((r) => r.calendarId);
     const roomMap = new Map(rooms.map((r) => [r.calendarId, r.name]));
 
-    const rawBookings = await GoogleCalendarUtil.getUserBookings(
+    const rawBookings = await this.googleCalendarService.getUserBookings(
       calendarIds,
       user.email,
     );
@@ -237,7 +238,7 @@ export class SpaceService {
   async rename(id: number, name: string): Promise<void> {
     const space = await this.findById(id);
     if (!space) throw new BusinessError(ErrorCode.STUDY_ROOM_NOT_FOUND);
-    await GoogleCalendarUtil.updateCalendar(space.calendarId, name);
+    await this.googleCalendarService.updateCalendar(space.calendarId, name);
     await this.spaceRepository.update(id, { name });
   }
 
@@ -251,7 +252,7 @@ export class SpaceService {
   async addEditor(id: number, email: string): Promise<void> {
     const space = await this.findById(id);
     if (!space) throw new BusinessError(ErrorCode.STUDY_ROOM_NOT_FOUND);
-    await GoogleCalendarUtil.shareCalendar({
+    await this.googleCalendarService.shareCalendar({
       calendarId: space.calendarId,
       email,
       role: 'writer',
@@ -261,19 +262,19 @@ export class SpaceService {
   async removeEditor(id: number, email: string): Promise<void> {
     const space = await this.findById(id);
     if (!space) throw new BusinessError(ErrorCode.STUDY_ROOM_NOT_FOUND);
-    await GoogleCalendarUtil.unshareCalendar(space.calendarId, email);
+    await this.googleCalendarService.unshareCalendar(space.calendarId, email);
   }
 
   async remove(id: number): Promise<void> {
     const space = await this.findById(id);
     if (!space) throw new BusinessError(ErrorCode.STUDY_ROOM_NOT_FOUND);
-    await GoogleCalendarUtil.deleteCalendar(space.calendarId);
+    await this.googleCalendarService.deleteCalendar(space.calendarId);
     await this.spaceRepository.softDelete(id);
   }
 
   async cancelBooking(calendarId: string, eventId: string): Promise<void> {
     const refreshToken = await this.getEditorRefreshToken(calendarId);
-    await GoogleCalendarUtil.deleteEvent(calendarId, refreshToken, eventId);
+    await this.googleCalendarService.deleteEvent(calendarId, refreshToken, eventId);
   }
 
   async modifyBooking(
@@ -308,7 +309,7 @@ export class SpaceService {
       })
       .join('\n');
 
-    await GoogleCalendarUtil.updateEvent(calendarId, refreshToken, eventId, {
+    await this.googleCalendarService.updateEvent(calendarId, refreshToken, eventId, {
       summary: dto.title,
       startTime: dto.startTime,
       endTime: dto.endTime,

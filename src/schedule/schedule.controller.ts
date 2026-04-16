@@ -11,10 +11,30 @@ import { ScheduleService } from './schedule.service';
 import { ScheduleView } from './schedule.view';
 import { UserService } from '../user/user.service';
 import { TagService } from '../tag/tag.service';
+import { TagView } from '../tag/tag.view';
 import { ChannelService } from '../channel/channel.service';
 import { UserStatus, User } from '../user/user.entity';
 import { CMD } from '../common/slack-commands';
 import { PermissionService } from '../user/permission.service';
+import { GoogleCalendarService } from '../google/google-calendar.service';
+
+const CALENDAR_COLORS = [
+  '%234285F4',
+  '%23DB4437',
+  '%230F9D58',
+  '%23F4B400',
+  '%239E69AF',
+  '%23F6511D',
+  '%2300BCD4',
+  '%23E91E63',
+  '%23795548',
+  '%23607D8B',
+  '%23FF5722',
+  '%239C27B0',
+  '%2303A9F4',
+  '%238BC34A',
+  '%23FF9800',
+];
 
 @Controller()
 export class ScheduleController {
@@ -24,6 +44,7 @@ export class ScheduleController {
     private readonly tagService: TagService,
     private readonly channelService: ChannelService,
     private readonly permissionService: PermissionService,
+    private readonly googleCalendarService: GoogleCalendarService,
   ) {}
 
   // 활성 사용자 확인 헬퍼
@@ -65,28 +86,45 @@ export class ScheduleController {
 
     const displayTagMap = new Map(displayTags.map((t) => [t.id, t.name]));
 
-    return ScheduleView.listModal(
-      schedules.map((s) => ({
-        id: s.id,
-        name: s.name,
-        description: s.description,
-        status: s.status,
-        tags: s.tags.map((t) => ({
-          id: t.id,
-          name: displayTagMap.get(t.id) ?? t.name,
-        })),
-        createdBy: { name: s.createdBy?.name ?? '알 수 없음' },
-        createdAt: s.createdAt,
-      })),
-      displayTags,
-      {
-        page: safePage,
-        totalPages,
-        total,
-        selectedStatus: status,
-        selectedTagIds: tagIds,
-      },
+    const schedulesWithMeta = await Promise.all(
+      schedules.map(async (s) => {
+        const [channels, acl] = await Promise.all([
+          this.channelService.getSlackChannelIds(s.id),
+          this.googleCalendarService
+            .getCalendarAcl(s.calendarId)
+            .catch(() => []),
+        ]);
+
+        const writerEmails = acl
+          .filter((e) => e.role === 'writer' || e.role === 'owner')
+          .map((e) => e.email);
+        const writers =
+          await this.userService.mapEmailsToSlackIds(writerEmails);
+
+        return {
+          id: s.id,
+          name: s.name,
+          description: s.description,
+          status: s.status,
+          tags: s.tags.map((t) => ({
+            id: t.id,
+            name: displayTagMap.get(t.id) ?? t.name,
+          })),
+          createdBy: { name: s.createdBy?.name ?? '알 수 없음' },
+          channels,
+          writers,
+          createdAt: s.createdAt,
+        };
+      }),
     );
+
+    return ScheduleView.listModal(schedulesWithMeta, displayTags, {
+      page: safePage,
+      totalPages,
+      total,
+      selectedStatus: status,
+      selectedTagIds: tagIds,
+    });
   }
 
   // /시간표 - 시간표 목록 조회
@@ -343,19 +381,36 @@ export class ScheduleController {
       displayActiveTags.map((t) => [t.id, t.name]),
     );
 
-    const schedulesWithSubscription = schedules.map((s) => ({
-      id: s.id,
-      name: s.name,
-      description: s.description,
-      calendarId: s.calendarId,
-      tags: s.tags.map((t) => ({
-        id: t.id,
-        name: displayActiveTagMap.get(t.id) ?? t.name,
-      })),
-      createdBy: { name: s.createdBy?.name ?? '알 수 없음' },
-      createdAt: s.createdAt,
-      isSubscribed: subscribedIds.has(s.calendarId),
-    }));
+    const schedulesWithSubscription = await Promise.all(
+      schedules.map(async (s) => {
+        const [channels, acl] = await Promise.all([
+          this.channelService.getSlackChannelIds(s.id),
+          this.googleCalendarService
+            .getCalendarAcl(s.calendarId)
+            .catch(() => []),
+        ]);
+
+        const writerEmails = acl
+          .filter((e) => e.role === 'writer' || e.role === 'owner')
+          .map((e) => e.email);
+        const writers =
+          await this.userService.mapEmailsToSlackIds(writerEmails);
+
+        return {
+          id: s.id,
+          name: s.name,
+          description: s.description,
+          calendarId: s.calendarId,
+          tags: s.tags.map((t) => ({
+            id: t.id,
+            name: displayActiveTagMap.get(t.id) ?? t.name,
+          })),
+          channels,
+          writers,
+          isSubscribed: subscribedIds.has(s.calendarId),
+        };
+      }),
+    );
 
     return ScheduleView.subscribeSearchModal(
       displayActiveTags,
@@ -748,18 +803,21 @@ export class ScheduleController {
 
     await ack();
 
-    await this.scheduleService.createRecurringEvents({
-      scheduleId,
-      title: title.trim(),
-      description: description?.trim(),
-      location: location?.trim(),
-      startDate,
-      endDate,
-      startTime,
-      endTime,
-      recurrenceType,
-      daysOfWeek: recurrenceType !== 'monthly' ? daysOfWeek : undefined,
-    });
+    await this.scheduleService.createRecurringEvents(
+      {
+        scheduleId,
+        title: title.trim(),
+        description: description?.trim(),
+        location: location?.trim(),
+        startDate,
+        endDate,
+        startTime,
+        endTime,
+        recurrenceType,
+        daysOfWeek: recurrenceType !== 'monthly' ? daysOfWeek : undefined,
+      },
+      body.user.id,
+    );
 
     await client.chat.postMessage({
       channel: body.user.id,
@@ -781,9 +839,10 @@ export class ScheduleController {
     const userId = 'user_id' in body ? body.user_id : body.user.id;
     await this.permissionService.requireAdmin(userId);
 
-    const groups = await this.scheduleService.findAllRecurrenceGroups();
+    const schedules =
+      await this.scheduleService.findSchedulesWithRecurrenceGroups();
 
-    if (groups.length === 0) {
+    if (schedules.length === 0) {
       if ('channel_id' in body) {
         await client.chat.postEphemeral({
           channel: body.channel_id,
@@ -796,7 +855,47 @@ export class ScheduleController {
 
     await client.views.open({
       trigger_id: body.trigger_id,
-      view: ScheduleView.deleteRecurringModal(groups),
+      view: ScheduleView.selectScheduleForRecurringModal(schedules, 'delete'),
+    });
+  }
+
+  // 반복 일정 삭제 - step1 (시간표 선택 후 반복 일정 목록 표시)
+  @View('recurring:modal:step1:delete')
+  async handleStep1DeleteRecurring({
+    ack,
+    view,
+  }: SlackViewMiddlewareArgs & AllMiddlewareArgs) {
+    const values = view.state.values;
+    const scheduleId = parseInt(
+      values.schedule_block.schedule_input.selected_option?.value ?? '',
+      10,
+    );
+
+    if (isNaN(scheduleId)) {
+      await ack({
+        response_action: 'errors',
+        errors: { schedule_block: '시간표를 선택해주세요.' },
+      });
+      return;
+    }
+
+    const [groups, schedules] = await Promise.all([
+      this.scheduleService.findRecurrenceGroupsBySchedule(scheduleId),
+      this.scheduleService.findActiveSchedules(),
+    ]);
+    const scheduleName = schedules.find((s) => s.id === scheduleId)?.name ?? '';
+
+    if (groups.length === 0) {
+      await ack({
+        response_action: 'errors',
+        errors: { schedule_block: '해당 시간표에 반복 일정이 없습니다.' },
+      });
+      return;
+    }
+
+    await ack({
+      response_action: 'push',
+      view: ScheduleView.deleteRecurringModal(groups, scheduleName),
     });
   }
 
@@ -815,12 +914,17 @@ export class ScheduleController {
     );
     const scope = (values.scope_block.scope_input.selected_option?.value ??
       'all') as 'all' | 'future';
+    const filterOriginal =
+      (values.filter_block.filter_input.selected_option?.value ??
+        'original') === 'original';
 
     await ack();
 
     const { deleted, total } = await this.scheduleService.deleteRecurringGroup(
       groupDbId,
       scope,
+      filterOriginal,
+      body.user.id,
     );
     await client.chat.postMessage({
       channel: body.user.id,
@@ -842,9 +946,10 @@ export class ScheduleController {
     const userId = 'user_id' in body ? body.user_id : body.user.id;
     await this.permissionService.requireAdmin(userId);
 
-    const groups = await this.scheduleService.findAllRecurrenceGroups();
+    const schedules =
+      await this.scheduleService.findSchedulesWithRecurrenceGroups();
 
-    if (groups.length === 0) {
+    if (schedules.length === 0) {
       if ('channel_id' in body) {
         await client.chat.postEphemeral({
           channel: body.channel_id,
@@ -857,7 +962,88 @@ export class ScheduleController {
 
     await client.views.open({
       trigger_id: body.trigger_id,
-      view: ScheduleView.editRecurringModal(groups),
+      view: ScheduleView.selectScheduleForRecurringModal(schedules, 'edit'),
+    });
+  }
+
+  // 반복 일정 수정 - step1 (시간표 선택 후 반복 일정 목록 표시)
+  @View('recurring:modal:step1:edit')
+  async handleStep1EditRecurring({
+    ack,
+    view,
+  }: SlackViewMiddlewareArgs & AllMiddlewareArgs) {
+    const values = view.state.values;
+    const scheduleId = parseInt(
+      values.schedule_block.schedule_input.selected_option?.value ?? '',
+      10,
+    );
+
+    if (isNaN(scheduleId)) {
+      await ack({
+        response_action: 'errors',
+        errors: { schedule_block: '시간표를 선택해주세요.' },
+      });
+      return;
+    }
+
+    const [groups, schedules] = await Promise.all([
+      this.scheduleService.findRecurrenceGroupsBySchedule(scheduleId),
+      this.scheduleService.findActiveSchedules(),
+    ]);
+    const scheduleName = schedules.find((s) => s.id === scheduleId)?.name ?? '';
+
+    if (groups.length === 0) {
+      await ack({
+        response_action: 'errors',
+        errors: { schedule_block: '해당 시간표에 반복 일정이 없습니다.' },
+      });
+      return;
+    }
+
+    await ack({
+      response_action: 'push',
+      view: ScheduleView.selectGroupForEditModal(
+        groups,
+        scheduleName,
+        scheduleId,
+      ),
+    });
+  }
+
+  // 반복 일정 수정 - step2 (그룹 선택 후 프리필 폼 표시)
+  @View('recurring:modal:step2:edit')
+  async handleStep2EditRecurring({
+    ack,
+    view,
+  }: SlackViewMiddlewareArgs & AllMiddlewareArgs) {
+    const { scheduleName } = JSON.parse(view.private_metadata || '{}') as {
+      scheduleName: string;
+    };
+    const groupDbId = parseInt(
+      view.state.values.group_block.group_input.selected_option?.value ?? '',
+      10,
+    );
+
+    if (isNaN(groupDbId)) {
+      await ack({
+        response_action: 'errors',
+        errors: { group_block: '반복 일정을 선택해주세요.' },
+      });
+      return;
+    }
+
+    const group = await this.scheduleService.findRecurrenceGroupById(groupDbId);
+    if (!group) {
+      await ack({
+        response_action: 'errors',
+        errors: { group_block: '반복 일정을 찾을 수 없습니다.' },
+      });
+      return;
+    }
+
+    await ack({
+      response_action: 'push',
+      view: ScheduleView.editRecurringModal(group, scheduleName),
     });
   }
 
@@ -869,11 +1055,10 @@ export class ScheduleController {
     view,
     client,
   }: SlackViewMiddlewareArgs & AllMiddlewareArgs) {
+    const { groupDbId } = JSON.parse(view.private_metadata || '{}') as {
+      groupDbId: number;
+    };
     const values = view.state.values;
-    const groupDbId = parseInt(
-      values.group_block.group_input.selected_option?.value ?? '',
-      10,
-    );
     const title = values.title_block.title_input.value ?? undefined;
     const description =
       values.description_block.description_input.value ?? undefined;
@@ -884,6 +1069,24 @@ export class ScheduleController {
       values.end_time_block.end_time_input.selected_time ?? undefined;
     const scope = (values.scope_block.scope_input.selected_option?.value ??
       'all') as 'all' | 'future';
+    const rawDays =
+      values.days_of_week_block?.days_of_week_input?.selected_options;
+    const daysOfWeek =
+      rawDays && rawDays.length > 0
+        ? rawDays.map((o) => parseInt(o.value, 10))
+        : undefined;
+    const startDate =
+      values.start_date_block?.start_date_input?.selected_date ?? undefined;
+    const endDate =
+      values.end_date_block?.end_date_input?.selected_date ?? undefined;
+
+    if (startDate && endDate && startDate > endDate) {
+      await ack({
+        response_action: 'errors',
+        errors: { end_date_block: '종료일이 시작일보다 앞입니다.' },
+      });
+      return;
+    }
 
     if (startTime && !endTime) {
       await ack({
@@ -904,12 +1107,97 @@ export class ScheduleController {
 
     const { updated, total } = await this.scheduleService.updateRecurringGroup(
       groupDbId,
-      { title, description, location, startTime, endTime },
+      {
+        title,
+        description,
+        location,
+        startTime,
+        endTime,
+        daysOfWeek,
+        startDate,
+        endDate,
+      },
       scope,
+      body.user.id,
     );
     await client.chat.postMessage({
       channel: body.user.id,
       text: `반복 일정 수정 완료: ${updated}/${total}개`,
     });
+  }
+
+  // 태그 시간표 — 태그별 구글 캘린더 링크 모달 열기
+  @Action('home:open-tag-schedule')
+  async openTagScheduleList({
+    ack,
+    client,
+    body,
+  }: SlackActionMiddlewareArgs<BlockAction> & AllMiddlewareArgs) {
+    await ack();
+
+    const userId = body.user.id;
+    const { isActive, message } = await this.checkActiveUser(userId);
+    if (!isActive) {
+      await client.chat.postEphemeral({
+        channel: userId,
+        user: userId,
+        text: message!,
+      });
+      return;
+    }
+
+    const displayTags = await this.tagService.findDisplayTags(true);
+
+    // 태그별 활성 시간표 병렬 조회 → 구글 캘린더 통합 URL 생성
+    const tagItems = (
+      await Promise.all(
+        displayTags.map(async (tag) => {
+          const schedules =
+            await this.scheduleService.findActiveSchedulesByTagId(tag.id);
+          if (schedules.length === 0) return null;
+
+          const calendarUrl =
+            'https://calendar.google.com/calendar/embed?' +
+            schedules
+              .map(
+                (s, i) =>
+                  `src=${encodeURIComponent(s.calendarId)}&color=${CALENDAR_COLORS[i % CALENDAR_COLORS.length]}`,
+              )
+              .join('&') +
+            '&ctz=Asia%2FSeoul&mode=WEEK';
+
+          return { id: tag.id, name: tag.name, calendarUrl };
+        }),
+      )
+    ).filter((item) => item !== null);
+
+    // 태그 없는 시간표도 통합해서 추가
+    const untaggedSchedules =
+      await this.scheduleService.findActiveSchedulesWithoutTags();
+    if (untaggedSchedules.length > 0) {
+      const calendarUrl =
+        'https://calendar.google.com/calendar/embed?' +
+        untaggedSchedules
+          .map(
+            (s, i) =>
+              `src=${encodeURIComponent(s.calendarId)}&color=${CALENDAR_COLORS[i % CALENDAR_COLORS.length]}`,
+          )
+          .join('&') +
+        '&ctz=Asia%2FSeoul&mode=WEEK';
+      tagItems.push({ id: -1, name: '태그 없음', calendarUrl });
+    }
+
+    await client.views.open({
+      trigger_id: body.trigger_id,
+      view: TagView.tagScheduleListModal(tagItems),
+    });
+  }
+
+  // 알림 메시지의 구글 캘린더 URL 버튼 ack
+  @Action('notification:open-calendar')
+  async ackNotificationCalendarLink({
+    ack,
+  }: SlackActionMiddlewareArgs<BlockAction> & AllMiddlewareArgs) {
+    await ack();
   }
 }

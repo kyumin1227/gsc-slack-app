@@ -9,13 +9,13 @@ import {
 import { CACHE_MANAGER } from '@nestjs/cache-manager';
 import type { Cache } from 'cache-manager';
 import { ChannelService } from '../channel/channel.service';
-import { GoogleCalendarUtil } from '../google/google-calendar.util';
+import { GoogleCalendarService } from '../google/google-calendar.service';
 import { ScheduleService } from './schedule.service';
 import {
   ScheduleNotificationService,
   DebounceEntry,
 } from './schedule-notification.service';
-import { detectChangeType } from './schedule-watch.view';
+import { detectChangeType, hasRelevantChanges } from './schedule-watch.view';
 import { SpaceMirrorService } from '../space/space-mirror.service';
 import { EventSnapshot } from './schedule-notification.service';
 
@@ -28,6 +28,7 @@ export class ScheduleWatchController {
     private readonly channelService: ChannelService,
     private readonly notificationService: ScheduleNotificationService,
     private readonly spaceMirrorService: SpaceMirrorService,
+    private readonly googleCalendarService: GoogleCalendarService,
     @Inject(CACHE_MANAGER) private readonly cache: Cache,
   ) {}
 
@@ -65,7 +66,7 @@ export class ScheduleWatchController {
     }
 
     const { events, nextSyncToken } =
-      await GoogleCalendarUtil.getChangedEventsBySyncToken(
+      await this.googleCalendarService.getChangedEventsBySyncToken(
         schedule.calendarId,
         schedule.syncToken,
       );
@@ -109,6 +110,7 @@ export class ScheduleWatchController {
               startDateTime: before.start?.dateTime,
               endDateTime: before.end?.dateTime,
               location: before.location,
+              description: before.description,
             };
           }
         }
@@ -123,16 +125,25 @@ export class ScheduleWatchController {
           });
 
         if (!notificationSuppressed) {
-          const entry: DebounceEntry = {
-            originalType: currentType,
-            calendarId: schedule.calendarId,
-            scheduleId: schedule.id,
-            scheduleName: schedule.name,
-            eventId: event.id,
-            dueAt: Date.now() + 3 * 60 * 1000,
-            beforeSnapshot,
-          };
-          await this.notificationService.enqueue(key, entry);
+          // updated인데 추적 필드 변경 없으면 알림 스킵
+          if (
+            currentType === 'updated' &&
+            beforeSnapshot &&
+            !hasRelevantChanges(beforeSnapshot, event)
+          ) {
+            // no-op
+          } else {
+            const entry: DebounceEntry = {
+              originalType: currentType,
+              calendarId: schedule.calendarId,
+              scheduleId: schedule.id,
+              scheduleName: schedule.name,
+              eventId: event.id,
+              dueAt: Date.now() + 3 * 60 * 1000,
+              beforeSnapshot,
+            };
+            await this.notificationService.enqueue(key, entry);
+          }
         }
       } else {
         // 두 번째 이후 webhook — 미러 업데이트만, beforeSnapshot은 유지
