@@ -10,6 +10,8 @@ export interface ScheduleListItem {
   status: ScheduleStatus;
   tags: { id: number; name: string }[];
   createdBy: { name: string };
+  channels: string[]; // Slack 채널 ID 목록
+  writers: string[]; // 담당자 Slack 유저 ID 목록
   createdAt: Date;
 }
 
@@ -26,7 +28,8 @@ export interface SubscribeScheduleItem {
   description?: string;
   calendarId: string;
   tags: { id: number; name: string }[];
-  createdBy: { name: string };
+  channels: string[]; // Slack 채널 ID 목록
+  writers: string[]; // 담당자 Slack 유저 ID 목록
   isSubscribed: boolean;
 }
 
@@ -144,12 +147,21 @@ export class ScheduleView {
         ? `\n${schedule.description}`
         : '';
 
+      const channelText =
+        schedule.channels.length > 0
+          ? `\n알림 채널: ${schedule.channels.map((id) => `<#${id}>`).join('  ')}`
+          : '';
+      const writerText =
+        schedule.writers.length > 0
+          ? `\n담당자: ${schedule.writers.map((id) => `<@${id}>`).join('  ')}`
+          : '';
+
       blocks.push(
         {
           type: 'section',
           text: {
             type: 'mrkdwn',
-            text: `${statusEmoji} *${schedule.name}*${description}\n태그: ${tagNames}\n상태: ${STATUS_LABELS[schedule.status]} | 생성자: ${schedule.createdBy.name} | 생성일: ${schedule.createdAt.toLocaleDateString('ko-KR', { timeZone: 'Asia/Seoul' })}`,
+            text: `${statusEmoji} *${schedule.name}*${description}\n태그: ${tagNames}\n상태: ${STATUS_LABELS[schedule.status]} | 생성자: ${schedule.createdBy.name} | 생성일: ${schedule.createdAt.toLocaleDateString('ko-KR', { timeZone: 'Asia/Seoul' })}${channelText}${writerText}`,
           },
         },
         {
@@ -594,13 +606,22 @@ export class ScheduleView {
             ? `\n${schedule.description}`
             : '';
 
+          const channelText =
+            schedule.channels.length > 0
+              ? `\n알림 채널: ${schedule.channels.map((id) => `<#${id}>`).join('  ')}`
+              : '';
+          const writerText =
+            schedule.writers.length > 0
+              ? `\n담당자: ${schedule.writers.map((id) => `<@${id}>`).join('  ')}`
+              : '';
+
           const calendarUrl = `https://calendar.google.com/calendar/embed?src=${encodeURIComponent(schedule.calendarId)}&ctz=Asia%2FSeoul&mode=WEEK`;
           blocks.push(
             {
               type: 'section',
               text: {
                 type: 'mrkdwn',
-                text: `*${schedule.name}*${descriptionText}\n태그: ${tagNames}\n생성자: ${schedule.createdBy.name}`,
+                text: `*${schedule.name}*${descriptionText}\n태그: ${tagNames}${channelText}${writerText}`,
               },
             },
             {

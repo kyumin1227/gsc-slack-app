@@ -16,6 +16,7 @@ import { ChannelService } from '../channel/channel.service';
 import { UserStatus, User } from '../user/user.entity';
 import { CMD } from '../common/slack-commands';
 import { PermissionService } from '../user/permission.service';
+import { GoogleCalendarUtil } from '../google/google-calendar.util';
 
 const CALENDAR_COLORS = [
   '%234285F4', '%23DB4437', '%230F9D58', '%23F4B400', '%239E69AF',
@@ -72,19 +73,37 @@ export class ScheduleController {
 
     const displayTagMap = new Map(displayTags.map((t) => [t.id, t.name]));
 
+    const schedulesWithMeta = await Promise.all(
+      schedules.map(async (s) => {
+        const [channels, acl] = await Promise.all([
+          this.channelService.getSlackChannelIds(s.id),
+          GoogleCalendarUtil.getCalendarAcl(s.calendarId).catch(() => []),
+        ]);
+
+        const writerEmails = acl
+          .filter((e) => e.role === 'writer' || e.role === 'owner')
+          .map((e) => e.email);
+        const writers = await this.userService.mapEmailsToSlackIds(writerEmails);
+
+        return {
+          id: s.id,
+          name: s.name,
+          description: s.description,
+          status: s.status,
+          tags: s.tags.map((t) => ({
+            id: t.id,
+            name: displayTagMap.get(t.id) ?? t.name,
+          })),
+          createdBy: { name: s.createdBy?.name ?? '알 수 없음' },
+          channels,
+          writers,
+          createdAt: s.createdAt,
+        };
+      }),
+    );
+
     return ScheduleView.listModal(
-      schedules.map((s) => ({
-        id: s.id,
-        name: s.name,
-        description: s.description,
-        status: s.status,
-        tags: s.tags.map((t) => ({
-          id: t.id,
-          name: displayTagMap.get(t.id) ?? t.name,
-        })),
-        createdBy: { name: s.createdBy?.name ?? '알 수 없음' },
-        createdAt: s.createdAt,
-      })),
+      schedulesWithMeta,
       displayTags,
       {
         page: safePage,
@@ -350,19 +369,33 @@ export class ScheduleController {
       displayActiveTags.map((t) => [t.id, t.name]),
     );
 
-    const schedulesWithSubscription = schedules.map((s) => ({
-      id: s.id,
-      name: s.name,
-      description: s.description,
-      calendarId: s.calendarId,
-      tags: s.tags.map((t) => ({
-        id: t.id,
-        name: displayActiveTagMap.get(t.id) ?? t.name,
-      })),
-      createdBy: { name: s.createdBy?.name ?? '알 수 없음' },
-      createdAt: s.createdAt,
-      isSubscribed: subscribedIds.has(s.calendarId),
-    }));
+    const schedulesWithSubscription = await Promise.all(
+      schedules.map(async (s) => {
+        const [channels, acl] = await Promise.all([
+          this.channelService.getSlackChannelIds(s.id),
+          GoogleCalendarUtil.getCalendarAcl(s.calendarId).catch(() => []),
+        ]);
+
+        const writerEmails = acl
+          .filter((e) => e.role === 'writer' || e.role === 'owner')
+          .map((e) => e.email);
+        const writers = await this.userService.mapEmailsToSlackIds(writerEmails);
+
+        return {
+          id: s.id,
+          name: s.name,
+          description: s.description,
+          calendarId: s.calendarId,
+          tags: s.tags.map((t) => ({
+            id: t.id,
+            name: displayActiveTagMap.get(t.id) ?? t.name,
+          })),
+          channels,
+          writers,
+          isSubscribed: subscribedIds.has(s.calendarId),
+        };
+      }),
+    );
 
     return ScheduleView.subscribeSearchModal(
       displayActiveTags,
