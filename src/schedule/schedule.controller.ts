@@ -16,7 +16,7 @@ import { ChannelService } from '../channel/channel.service';
 import { UserStatus, User } from '../user/user.entity';
 import { CMD } from '../common/slack-commands';
 import { PermissionService } from '../user/permission.service';
-import { GoogleCalendarUtil } from '../google/google-calendar.util';
+import { GoogleCalendarService } from '../google/google-calendar.service';
 
 const CALENDAR_COLORS = [
   '%234285F4', '%23DB4437', '%230F9D58', '%23F4B400', '%239E69AF',
@@ -32,6 +32,7 @@ export class ScheduleController {
     private readonly tagService: TagService,
     private readonly channelService: ChannelService,
     private readonly permissionService: PermissionService,
+    private readonly googleCalendarService: GoogleCalendarService,
   ) {}
 
   // 활성 사용자 확인 헬퍼
@@ -77,7 +78,7 @@ export class ScheduleController {
       schedules.map(async (s) => {
         const [channels, acl] = await Promise.all([
           this.channelService.getSlackChannelIds(s.id),
-          GoogleCalendarUtil.getCalendarAcl(s.calendarId).catch(() => []),
+          this.googleCalendarService.getCalendarAcl(s.calendarId).catch(() => []),
         ]);
 
         const writerEmails = acl
@@ -373,7 +374,7 @@ export class ScheduleController {
       schedules.map(async (s) => {
         const [channels, acl] = await Promise.all([
           this.channelService.getSlackChannelIds(s.id),
-          GoogleCalendarUtil.getCalendarAcl(s.calendarId).catch(() => []),
+          this.googleCalendarService.getCalendarAcl(s.calendarId).catch(() => []),
         ]);
 
         const writerEmails = acl

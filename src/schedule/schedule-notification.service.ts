@@ -4,7 +4,7 @@ import type { Cache } from 'cache-manager';
 import { WebClient } from '@slack/web-api';
 import { ChannelService } from '../channel/channel.service';
 import { UserService } from '../user/user.service';
-import { GoogleCalendarUtil } from '../google/google-calendar.util';
+import { GoogleCalendarService } from '../google/google-calendar.service';
 import {
   buildCalendarNotificationBlocks,
   hasRelevantChanges,
@@ -40,6 +40,7 @@ export class ScheduleNotificationService {
     @Inject(CACHE_MANAGER) private cache: Cache,
     private readonly channelService: ChannelService,
     private readonly userService: UserService,
+    private readonly googleCalendarService: GoogleCalendarService,
   ) {}
 
   // 웹훅 수신 시: Redis 저장 + 타이머 예약 (타이머 리셋)
@@ -86,7 +87,7 @@ export class ScheduleNotificationService {
     await this.cache.del(pendingKey(key));
 
     // 최신 이벤트 조회 (미러 메타데이터 포함)
-    const event = await GoogleCalendarUtil.getEventById(
+    const event = await this.googleCalendarService.getEventById(
       entry.calendarId,
       entry.eventId,
     );
@@ -152,7 +153,7 @@ export class ScheduleNotificationService {
     calendarId: string,
   ): Promise<string | undefined> {
     try {
-      const acl = await GoogleCalendarUtil.getCalendarAcl(calendarId);
+      const acl = await this.googleCalendarService.getCalendarAcl(calendarId);
       const writerEmails = acl
         .filter((e) => e.role === 'writer' || e.role === 'owner')
         .map((e) => e.email);

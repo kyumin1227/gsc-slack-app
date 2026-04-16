@@ -1,6 +1,6 @@
 import { Injectable, Logger } from '@nestjs/common';
 import { calendar_v3 } from 'googleapis';
-import { GoogleCalendarUtil } from '../google/google-calendar.util';
+import { GoogleCalendarService } from '../google/google-calendar.service';
 import { SpaceService } from './space.service';
 
 const MIRRORED_BY_KEY = 'mirroredBy';
@@ -14,7 +14,10 @@ const MIRRORED_EVENT_ID_KEY = 'mirroredEventId';
 export class SpaceMirrorService {
   private readonly logger = new Logger(SpaceMirrorService.name);
 
-  constructor(private readonly spaceService: SpaceService) {}
+  constructor(
+    private readonly spaceService: SpaceService,
+    private readonly googleCalendarService: GoogleCalendarService,
+  ) {}
 
   /**
    * debounce 발사 시점에 호출.
@@ -29,7 +32,7 @@ export class SpaceMirrorService {
 
     if (event.status === 'cancelled') {
       // 취소된 이벤트는 webhook payload에 extendedProperties 없을 수 있음 → source 이벤트 직접 조회
-      const sourceEvent = await GoogleCalendarUtil.getEventById(
+      const sourceEvent = await this.googleCalendarService.getEventById(
         sourceCalendarId,
         event.id!,
       );
@@ -41,7 +44,7 @@ export class SpaceMirrorService {
         sourceEvent.extendedProperties?.private?.[MIRRORED_EVENT_ID_KEY];
       if (!mirroredCalendarId || !mirroredEventId) return null;
 
-      await GoogleCalendarUtil.deleteEventAsServiceAccount(
+      await this.googleCalendarService.deleteEventAsServiceAccount(
         mirroredCalendarId,
         mirroredEventId,
       ).catch(() => {
@@ -68,11 +71,11 @@ export class SpaceMirrorService {
     if (!targetSpace) {
       // 대상 공간 없음 → 기존 미러 정리
       if (storedMirroredCalendarId && storedMirroredEventId) {
-        await GoogleCalendarUtil.deleteEventAsServiceAccount(
+        await this.googleCalendarService.deleteEventAsServiceAccount(
           storedMirroredCalendarId,
           storedMirroredEventId,
         ).catch(() => {});
-        await GoogleCalendarUtil.patchEventPrivateExtendedProperty(
+        await this.googleCalendarService.patchEventPrivateExtendedProperty(
           sourceCalendarId,
           event.id!,
           { [MIRRORED_CALENDAR_ID_KEY]: '', [MIRRORED_EVENT_ID_KEY]: '' },
@@ -90,7 +93,7 @@ export class SpaceMirrorService {
       storedMirroredCalendarId !== targetSpace.calendarId &&
       storedMirroredEventId
     ) {
-      await GoogleCalendarUtil.deleteEventAsServiceAccount(
+      await this.googleCalendarService.deleteEventAsServiceAccount(
         storedMirroredCalendarId,
         storedMirroredEventId,
       ).catch(() => {});
@@ -128,7 +131,7 @@ export class SpaceMirrorService {
       event.extendedProperties?.private?.[MIRRORED_EVENT_ID_KEY];
     if (!mirroredCalendarId || !mirroredEventId) return null;
 
-    return GoogleCalendarUtil.getEventById(mirroredCalendarId, mirroredEventId);
+    return this.googleCalendarService.getEventById(mirroredCalendarId, mirroredEventId);
   }
 
   // 미러 이벤트인지 판별 (webhook suppress용)
@@ -167,7 +170,7 @@ export class SpaceMirrorService {
 
     if (existingMirrorEventId) {
       // 현재 미러 이벤트 조회 후 동일하면 패치 없이 스킵 (불필요한 webhook 방지)
-      const currentMirror = await GoogleCalendarUtil.getEventById(
+      const currentMirror = await this.googleCalendarService.getEventById(
         spaceCalendarId,
         existingMirrorEventId,
       );
@@ -184,7 +187,7 @@ export class SpaceMirrorService {
 
       // 미러가 살아있고 내용이 달라졌으면 업데이트
       if (currentMirror && currentMirror.status !== 'cancelled') {
-        await GoogleCalendarUtil.updateMirrorEventAsServiceAccount(
+        await this.googleCalendarService.updateMirrorEventAsServiceAccount(
           spaceCalendarId,
           existingMirrorEventId,
           {
@@ -206,7 +209,7 @@ export class SpaceMirrorService {
     }
 
     const newMirrorId =
-      await GoogleCalendarUtil.createMirrorEventAsServiceAccount(
+      await this.googleCalendarService.createMirrorEventAsServiceAccount(
         spaceCalendarId,
         {
           summary: event.summary ?? '',
@@ -219,7 +222,7 @@ export class SpaceMirrorService {
       );
     // source 이벤트에 mirroredCalendarId + mirroredEventId 함께 저장
     // → 이후 events.get()으로 즉시 조회 가능 (검색 인덱스 지연 없음)
-    await GoogleCalendarUtil.patchEventPrivateExtendedProperty(
+    await this.googleCalendarService.patchEventPrivateExtendedProperty(
       sourceCalendarId,
       event.id!,
       {

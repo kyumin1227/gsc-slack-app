@@ -2,10 +2,11 @@ import { Injectable, Inject, Logger } from '@nestjs/common';
 import { Cron } from '@nestjs/schedule';
 import { CACHE_MANAGER } from '@nestjs/cache-manager';
 import type { Cache } from 'cache-manager';
+import { calendar_v3 } from 'googleapis';
 import { ScheduleService } from './schedule.service';
 import { SpaceMirrorService } from '../space/space-mirror.service';
 import { SpaceService } from '../space/space.service';
-import { GoogleCalendarUtil } from '../google/google-calendar.util';
+import { GoogleCalendarService } from '../google/google-calendar.service';
 
 const CRON_SUPPRESS_KEY = 'suppress:cron:sync';
 
@@ -17,6 +18,7 @@ export class ScheduleCronService {
     private readonly scheduleService: ScheduleService,
     private readonly spaceMirrorService: SpaceMirrorService,
     private readonly spaceService: SpaceService,
+    private readonly googleCalendarService: GoogleCalendarService,
     @Inject(CACHE_MANAGER) private readonly cache: Cache,
   ) {}
 
@@ -54,11 +56,9 @@ export class ScheduleCronService {
       const validMirrorEventIds = new Set<string>();
 
       for (const schedule of schedules) {
-        let events: Awaited<
-          ReturnType<typeof GoogleCalendarUtil.listEventsInRange>
-        >;
+        let events: calendar_v3.Schema$Event[];
         try {
-          events = await GoogleCalendarUtil.listEventsInRange(
+          events = await this.googleCalendarService.listEventsInRange(
             schedule.calendarId,
             timeMin,
             timeMax,
@@ -102,11 +102,9 @@ export class ScheduleCronService {
       const spaces = await this.spaceService.findAll(true);
 
       for (const space of spaces) {
-        let mirrorEvents: Awaited<
-          ReturnType<typeof GoogleCalendarUtil.listMirrorEventsInRange>
-        >;
+        let mirrorEvents: calendar_v3.Schema$Event[];
         try {
-          mirrorEvents = await GoogleCalendarUtil.listMirrorEventsInRange(
+          mirrorEvents = await this.googleCalendarService.listMirrorEventsInRange(
             space.calendarId,
             timeMin,
             timeMax,
@@ -122,7 +120,7 @@ export class ScheduleCronService {
           if (!mirror.id) continue;
 
           if (!validMirrorEventIds.has(mirror.id)) {
-            await GoogleCalendarUtil.deleteEventAsServiceAccount(
+            await this.googleCalendarService.deleteEventAsServiceAccount(
               space.calendarId,
               mirror.id,
             )
