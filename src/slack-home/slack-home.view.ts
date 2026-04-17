@@ -77,6 +77,11 @@ export class HomeView {
             type: 'mrkdwn',
             text: `*안녕하세요, ${user.name}님!* 👋\n\n아래 기능을 이용할 수 있어요.`,
           },
+          accessory: {
+            type: 'button',
+            text: { type: 'plain_text', text: '✏️ 내 정보 수정' },
+            action_id: 'home:open-my-info',
+          },
         },
         { type: 'divider' },
         {
@@ -193,6 +198,11 @@ export class HomeView {
             type: 'mrkdwn',
             text: `*안녕하세요, ${user.name}님!* 👋\n\n아래 기능을 이용할 수 있어요.`,
           },
+          accessory: {
+            type: 'button',
+            text: { type: 'plain_text', text: '✏️ 내 정보 수정' },
+            action_id: 'home:open-my-info',
+          },
         },
         { type: 'divider' },
         {
@@ -279,14 +289,14 @@ export class HomeView {
         { type: 'divider' },
         {
           type: 'header',
-          text: { type: 'plain_text', text: '✅ 회원 승인', emoji: true },
+          text: { type: 'plain_text', text: '👥 유저 관리', emoji: true },
         },
         {
           type: 'context',
           elements: [
             {
               type: 'mrkdwn',
-              text: '가입 신청한 회원을 *승인* 하거나 *거절* 할 수 있어요.',
+              text: '전체 유저 목록을 조회하고 정보를 *수정* 하거나, 가입 신청을 *승인·거절* 할 수 있어요.',
             },
           ],
         },
@@ -295,7 +305,12 @@ export class HomeView {
           elements: [
             {
               type: 'button',
-              text: { type: 'plain_text', text: '승인하기' },
+              text: { type: 'plain_text', text: '유저 관리' },
+              action_id: 'home:open-user-management',
+            },
+            {
+              type: 'button',
+              text: { type: 'plain_text', text: '가입 승인' },
               action_id: 'home:open-approval',
             },
           ],
