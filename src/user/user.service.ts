@@ -171,9 +171,9 @@ export class UserService {
     return this.findBySlackId(slackId);
   }
 
-  // 가입 거절 (soft delete)
+  // 가입 거절 (hard delete → 재가입 가능)
   async rejectUser(slackId: string): Promise<void> {
-    await this.userRepository.softDelete({ slackId });
+    await this.userRepository.delete({ slackId });
   }
 
   // 전체 유저 목록 (soft-delete 제외, 이름 오름차순)

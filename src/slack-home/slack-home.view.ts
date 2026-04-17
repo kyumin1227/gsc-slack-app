@@ -289,30 +289,6 @@ export class HomeView {
         { type: 'divider' },
         {
           type: 'header',
-          text: { type: 'plain_text', text: '✅ 회원 승인', emoji: true },
-        },
-        {
-          type: 'context',
-          elements: [
-            {
-              type: 'mrkdwn',
-              text: '가입 신청한 회원을 *승인* 하거나 *거절* 할 수 있어요.',
-            },
-          ],
-        },
-        {
-          type: 'actions',
-          elements: [
-            {
-              type: 'button',
-              text: { type: 'plain_text', text: '승인하기' },
-              action_id: 'home:open-approval',
-            },
-          ],
-        },
-        { type: 'divider' },
-        {
-          type: 'header',
           text: { type: 'plain_text', text: '👥 유저 관리', emoji: true },
         },
         {
@@ -320,7 +296,7 @@ export class HomeView {
           elements: [
             {
               type: 'mrkdwn',
-              text: '전체 유저 목록을 조회하고 정보를 *수정* 할 수 있어요.',
+              text: '전체 유저 목록을 조회하고 정보를 *수정* 하거나, 가입 신청을 *승인·거절* 할 수 있어요.',
             },
           ],
         },
@@ -331,6 +307,11 @@ export class HomeView {
               type: 'button',
               text: { type: 'plain_text', text: '유저 관리' },
               action_id: 'home:open-user-management',
+            },
+            {
+              type: 'button',
+              text: { type: 'plain_text', text: '가입 승인' },
+              action_id: 'home:open-approval',
             },
           ],
         },
