@@ -18,6 +18,31 @@ export interface SubmitRegistrationDto {
   studentClassId?: number; // 반 ID (학생/키지기/반대표만)
 }
 
+export interface UpdateUserInfoDto {
+  name?: string;
+  code?: string;
+  role?: UserRole;
+  studentClassId?: number | null;
+  status?: UserStatus;
+}
+
+export interface UpdateMyInfoDto {
+  name?: string;
+  code?: string;
+  studentClassId?: number | null;
+}
+
+export interface UserListFilter {
+  role?: UserRole;
+  status?: UserStatus;
+  studentClassId?: number;
+}
+
+export interface FindFilteredResult {
+  users: User[];
+  total: number;
+}
+
 @Injectable()
 export class UserService {
   // 임시 저장소 (모달 업데이트용)
@@ -149,6 +174,65 @@ export class UserService {
   // 가입 거절 (soft delete)
   async rejectUser(slackId: string): Promise<void> {
     await this.userRepository.softDelete({ slackId });
+  }
+
+  // 전체 유저 목록 (soft-delete 제외, 이름 오름차순)
+  async findAll(): Promise<User[]> {
+    return this.userRepository.find({
+      relations: ['studentClass'],
+      order: { name: 'ASC' },
+    });
+  }
+
+  // 필터 + 페이지네이션 유저 목록
+  async findFiltered(
+    filter: UserListFilter,
+    skip: number,
+    take: number,
+  ): Promise<FindFilteredResult> {
+    const qb = this.userRepository
+      .createQueryBuilder('user')
+      .leftJoinAndSelect('user.studentClass', 'studentClass')
+      .orderBy('user.name', 'ASC');
+
+    if (filter.role) {
+      qb.andWhere('user.role = :role', { role: filter.role });
+    }
+    if (filter.status) {
+      qb.andWhere('user.status = :status', { status: filter.status });
+    }
+    if (filter.studentClassId) {
+      qb.andWhere('user.studentClassId = :classId', {
+        classId: filter.studentClassId,
+      });
+    }
+
+    const [users, total] = await qb.skip(skip).take(take).getManyAndCount();
+    return { users, total };
+  }
+
+  // 유저 정보 수정 (관리자용: 역할·상태 포함)
+  async updateUserInfo(
+    targetSlackId: string,
+    dto: UpdateUserInfoDto,
+  ): Promise<User | null> {
+    await this.userRepository.update(
+      { slackId: targetSlackId },
+      dto as Parameters<typeof this.userRepository.update>[1],
+    );
+    return this.findBySlackIdWithClass(targetSlackId);
+  }
+
+  // 내 정보 수정 (본인용: 이름·학번·반만)
+  async updateMyInfo(
+    slackId: string,
+    dto: UpdateMyInfoDto,
+  ): Promise<User | null> {
+    await this.userRepository.update(
+      { slackId },
+      dto as Parameters<typeof this.userRepository.update>[1],
+    );
+    return this.findBySlackIdWithClass(slackId);
   }
 
   // 비활성화

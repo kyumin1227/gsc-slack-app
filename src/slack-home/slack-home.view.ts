@@ -77,6 +77,11 @@ export class HomeView {
             type: 'mrkdwn',
             text: `*안녕하세요, ${user.name}님!* 👋\n\n아래 기능을 이용할 수 있어요.`,
           },
+          accessory: {
+            type: 'button',
+            text: { type: 'plain_text', text: '✏️ 내 정보 수정' },
+            action_id: 'home:open-my-info',
+          },
         },
         { type: 'divider' },
         {
@@ -193,6 +198,11 @@ export class HomeView {
             type: 'mrkdwn',
             text: `*안녕하세요, ${user.name}님!* 👋\n\n아래 기능을 이용할 수 있어요.`,
           },
+          accessory: {
+            type: 'button',
+            text: { type: 'plain_text', text: '✏️ 내 정보 수정' },
+            action_id: 'home:open-my-info',
+          },
         },
         { type: 'divider' },
         {
@@ -297,6 +307,30 @@ export class HomeView {
               type: 'button',
               text: { type: 'plain_text', text: '승인하기' },
               action_id: 'home:open-approval',
+            },
+          ],
+        },
+        { type: 'divider' },
+        {
+          type: 'header',
+          text: { type: 'plain_text', text: '👥 유저 관리', emoji: true },
+        },
+        {
+          type: 'context',
+          elements: [
+            {
+              type: 'mrkdwn',
+              text: '전체 유저 목록을 조회하고 정보를 *수정* 할 수 있어요.',
+            },
+          ],
+        },
+        {
+          type: 'actions',
+          elements: [
+            {
+              type: 'button',
+              text: { type: 'plain_text', text: '유저 관리' },
+              action_id: 'home:open-user-management',
             },
           ],
         },
