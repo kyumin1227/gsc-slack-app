@@ -9,7 +9,6 @@ export interface ClassOption {
 }
 
 export interface RegisterFormPrefill {
-  name: string;
   email: string;
   refreshToken: string;
   classes: ClassOption[];
@@ -76,7 +75,6 @@ export interface EditUserPrefill {
 }
 
 export interface MyInfoPrefill {
-  name: string;
   code: string | null;
   role: UserRole | null;
   status: UserStatus;
@@ -149,24 +147,7 @@ export class UserView {
           type: 'section',
           text: {
             type: 'mrkdwn',
-            text: 'Google 로그인 완료!\n아래 정보를 입력해주세요.',
-          },
-        },
-        {
-          type: 'input',
-          block_id: 'name_block',
-          element: {
-            type: 'plain_text_input',
-            action_id: 'name_input',
-            initial_value: prefill.name,
-            placeholder: {
-              type: 'plain_text',
-              text: '이름을 입력하세요',
-            },
-          },
-          label: {
-            type: 'plain_text',
-            text: '이름',
+            text: 'Google 로그인 완료!\n아래 정보를 입력해주세요.\n이름은 Slack 프로필 이름으로 자동 설정됩니다.',
           },
         },
         {
@@ -301,7 +282,7 @@ export class UserView {
           type: 'section',
           text: {
             type: 'mrkdwn',
-            text: `*${user.name}* (${user.email})\n${user.code} | ${ROLE_LABELS[user.role]}${classInfo}`,
+            text: `<@${user.slackId}> (${user.email})\n${user.code} | ${ROLE_LABELS[user.role]}${classInfo}`,
           },
           accessory: {
             type: 'overflow',
@@ -674,14 +655,13 @@ export class UserView {
           ],
         },
         {
-          type: 'input',
-          block_id: 'name_block',
-          label: { type: 'plain_text', text: '이름' },
-          element: {
-            type: 'plain_text_input',
-            action_id: 'name_input',
-            initial_value: prefill.name,
-          },
+          type: 'context',
+          elements: [
+            {
+              type: 'mrkdwn',
+              text: '이름은 Slack 프로필과 자동으로 동기화됩니다.',
+            },
+          ],
         },
         {
           type: 'input',
