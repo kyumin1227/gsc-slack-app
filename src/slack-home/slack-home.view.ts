@@ -318,6 +318,36 @@ export class HomeView {
         { type: 'divider' },
         {
           type: 'header',
+          text: { type: 'plain_text', text: '🏫 반 관리', emoji: true },
+        },
+        {
+          type: 'context',
+          elements: [
+            {
+              type: 'mrkdwn',
+              text: '반을 *생성* 하거나 목록을 *조회·관리* 할 수 있어요.',
+            },
+          ],
+        },
+        {
+          type: 'actions',
+          elements: [
+            {
+              type: 'button',
+              text: { type: 'plain_text', text: '반 생성' },
+              style: 'primary',
+              action_id: 'home:open-class-create',
+            },
+            {
+              type: 'button',
+              text: { type: 'plain_text', text: '반 목록' },
+              action_id: 'home:open-class-list',
+            },
+          ],
+        },
+        { type: 'divider' },
+        {
+          type: 'header',
           text: { type: 'plain_text', text: '🏷️ 태그 관리', emoji: true },
         },
         {
