@@ -30,6 +30,7 @@ export class SlackHomeController {
   }: SlackEventMiddlewareArgs<'app_home_opened'> & AllMiddlewareArgs) {
     try {
       if (event.tab === 'home') {
+        await this.slackHomeService.syncSlackName(client, event.user);
         await client.views.publish({
           user_id: event.user,
           view: await this.slackHomeService.getHomeView(event.user),

@@ -94,7 +94,6 @@ export class UserController {
         await this.slackService.client.views.update({
           view_id: viewId,
           view: UserView.registerFormModal({
-            name: googleUser.name,
             email: googleUser.email,
             refreshToken,
             classes: activeClasses.map((c) => ({
@@ -138,7 +137,6 @@ export class UserController {
       const values = view.state.values;
 
       // 폼 데이터 추출
-      const name = values.name_block.name_input.value ?? '';
       const code = values.code_block.code_input.value ?? '';
       const role = values.role_block.role_input.selected_option
         ?.value as UserRole;
@@ -146,11 +144,15 @@ export class UserController {
       const studentClassId =
         classValue && classValue !== 'none' ? Number(classValue) : undefined;
 
-      // 워크스페이스 소유자 여부 확인
+      // 슬랙 프로필 조회 (이름 동기화 + 소유자 여부 확인)
       const userInfo = await this.slackService.client.users.info({
         user: slackUserId,
       });
       const isOwner = userInfo.user?.is_owner ?? false;
+      const slackName =
+        userInfo.user?.profile?.display_name ||
+        userInfo.user?.real_name ||
+        undefined;
 
       // 학생이거나 워크스페이스 소유자면 바로 승인
       const needsApproval = role !== UserRole.STUDENT && !isOwner;
@@ -158,7 +160,7 @@ export class UserController {
       const registrationData = {
         code,
         role,
-        name: name || undefined,
+        name: slackName,
         studentClassId,
       };
 
@@ -505,12 +507,12 @@ export class UserController {
     const role = values.role_block.role_input.selected_option?.value as
       | UserRole
       | undefined;
-    const classValue =
-      values.class_block?.class_input?.selected_option?.value;
+    const classValue = values.class_block?.class_input?.selected_option?.value;
     const studentClassId =
       classValue && classValue !== 'none' ? Number(classValue) : null;
-    const status = values.status_block.status_input.selected_option
-      ?.value as UserStatus | undefined;
+    const status = values.status_block.status_input.selected_option?.value as
+      | UserStatus
+      | undefined;
 
     await ack();
 
@@ -547,7 +549,6 @@ export class UserController {
     await client.views.open({
       trigger_id: body.trigger_id,
       view: UserView.myInfoModal({
-        name: user.name,
         code: user.code,
         role: user.role,
         status: user.status,
@@ -572,16 +573,14 @@ export class UserController {
     const slackId = body.user.id;
     const values = view.state.values;
 
-    const name = values.name_block.name_input.value ?? undefined;
     const code = values.code_block.code_input.value ?? undefined;
-    const classValue =
-      values.class_block?.class_input?.selected_option?.value;
+    const classValue = values.class_block?.class_input?.selected_option?.value;
     const studentClassId =
       classValue && classValue !== 'none' ? Number(classValue) : null;
 
     await ack();
 
-    await this.userService.updateMyInfo(slackId, { name, code, studentClassId });
+    await this.userService.updateMyInfo(slackId, { code, studentClassId });
   }
 
   // 반의 Slack 채널에 유저 초대 (채널 없거나 이미 가입된 경우 조용히 무시)
