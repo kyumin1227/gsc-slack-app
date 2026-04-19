@@ -22,14 +22,17 @@ export class StudentClassController {
 
   // /반 - 반 목록 조회
   @Command(CMD.반)
+  @Action('home:open-class-list')
   async listClasses({
     ack,
     client,
     body,
-  }: SlackCommandMiddlewareArgs & AllMiddlewareArgs) {
+  }: (SlackCommandMiddlewareArgs | SlackActionMiddlewareArgs<BlockAction>) &
+    AllMiddlewareArgs) {
     await ack();
 
-    await this.permissionService.requireAdmin(body.user_id);
+    const userId = 'user_id' in body ? body.user_id : body.user.id;
+    await this.permissionService.requireAdmin(userId);
 
     const classes = await this.studentClassService.findAllClasses();
 
@@ -50,14 +53,17 @@ export class StudentClassController {
 
   // /반생성 - 반 생성 모달
   @Command(CMD.반생성)
+  @Action('home:open-class-create')
   async openCreateModal({
     ack,
     client,
     body,
-  }: SlackCommandMiddlewareArgs & AllMiddlewareArgs) {
+  }: (SlackCommandMiddlewareArgs | SlackActionMiddlewareArgs<BlockAction>) &
+    AllMiddlewareArgs) {
     await ack();
 
-    await this.permissionService.requireAdmin(body.user_id);
+    const userId = 'user_id' in body ? body.user_id : body.user.id;
+    await this.permissionService.requireAdmin(userId);
 
     await client.views.open({
       trigger_id: body.trigger_id,
@@ -146,9 +152,9 @@ export class StudentClassController {
     );
   }
 
-  // 반 상태 토글 (활성화/졸업)
-  @Action(/^student-class:list:toggle:/)
-  async handleToggle({
+  // 반 목록 overflow (편집 / 졸업처리 / 활성화)
+  @Action('student-class:list:overflow')
+  async handleOverflow({
     ack,
     body,
     client,
@@ -156,19 +162,36 @@ export class StudentClassController {
   }: SlackActionMiddlewareArgs<BlockAction> & AllMiddlewareArgs) {
     await ack();
 
-    const action = body.actions[0] as { action_id: string; value: string };
-    const classId = parseInt(action.action_id.split(':').pop()!, 10);
-    const toggleAction = action.value;
+    const action = body.actions[0] as { selected_option: { value: string } };
+    const [op, idStr] = action.selected_option.value.split(':');
+    const classId = parseInt(idStr, 10);
 
-    if (toggleAction === 'graduate') {
+    if (op === 'edit') {
+      const cls = await this.studentClassService.findById(classId);
+      if (!cls) return;
+
+      await client.views.push({
+        trigger_id: body.trigger_id,
+        view: StudentClassView.editModal({
+          id: cls.id,
+          name: cls.name,
+          graduationYear: cls.graduationYear,
+          slackChannelId: cls.slackChannelId,
+        }),
+      });
+      return;
+    }
+
+    if (op === 'graduate') {
       await this.studentClassService.graduateClass(classId);
-    } else if (toggleAction === 'activate') {
+      logger.info(`StudentClass ${classId} graduated`);
+    } else if (op === 'activate') {
       await this.studentClassService.activateClass(classId);
+      logger.info(`StudentClass ${classId} activated`);
     }
 
     // 목록 새로고침
     const classes = await this.studentClassService.findAllClasses();
-
     if (body.view?.id) {
       await client.views.update({
         view_id: body.view.id,
@@ -184,7 +207,40 @@ export class StudentClassController {
         ),
       });
     }
+  }
 
-    logger.info(`StudentClass ${classId} toggled to ${toggleAction}`);
+  // 반 편집 제출
+  @View('student-class:modal:edit')
+  async handleEdit({
+    ack,
+    view,
+  }: SlackViewMiddlewareArgs & AllMiddlewareArgs) {
+    const { classId } = JSON.parse(view.private_metadata || '{}') as {
+      classId: number;
+    };
+    const values = view.state.values;
+
+    const graduationYearStr =
+      values.graduation_year_block.graduation_year_input.value ?? '';
+    const graduationYear = parseInt(graduationYearStr, 10);
+
+    if (isNaN(graduationYear) || graduationYear < 2000) {
+      await ack({
+        response_action: 'errors',
+        errors: { graduation_year_block: '올바른 졸업연도를 입력해주세요.' },
+      });
+      return;
+    }
+
+    const slackChannelId =
+      values.slack_channel_block.slack_channel_input.selected_conversation ??
+      null;
+
+    await ack();
+
+    await this.studentClassService.updateClass(classId, {
+      graduationYear,
+      ...(slackChannelId !== null ? { slackChannelId } : {}),
+    });
   }
 }
