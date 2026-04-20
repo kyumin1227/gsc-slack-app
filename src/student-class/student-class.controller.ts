@@ -1,4 +1,5 @@
 import { Controller } from '@nestjs/common';
+import { BusinessError, ErrorCode } from '../common/errors';
 import { Action, Command, View } from 'nestjs-slack-bolt';
 import type {
   AllMiddlewareArgs,
@@ -121,10 +122,13 @@ export class StudentClassController {
       admissionYear,
       section,
     );
-    const channelResult = await client.conversations.create({
-      name: channelName,
-      is_private: false,
-    });
+    const channelResult = await client.conversations
+      .create({ name: channelName, is_private: false })
+      .catch((e: any) => {
+        if (e?.data?.error === 'name_taken')
+          throw new BusinessError(ErrorCode.CHANNEL_NAME_TAKEN);
+        throw e;
+      });
 
     const channelId = channelResult.channel?.id;
     if (channelId) {
@@ -211,10 +215,7 @@ export class StudentClassController {
 
   // 반 편집 제출
   @View('student-class:modal:edit')
-  async handleEdit({
-    ack,
-    view,
-  }: SlackViewMiddlewareArgs & AllMiddlewareArgs) {
+  async handleEdit({ ack, view }: SlackViewMiddlewareArgs & AllMiddlewareArgs) {
     const { classId } = JSON.parse(view.private_metadata || '{}') as {
       classId: number;
     };

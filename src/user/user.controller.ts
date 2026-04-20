@@ -12,6 +12,7 @@ import type {
 import { UserView, UserListFilter, UserListModalState } from './user.view';
 import { OAuthUtil } from './google-oauth.util';
 import { UserRole, UserStatus } from './user.entity';
+import { BusinessError, ErrorCode } from '../common/errors';
 import { StudentClassService } from '../student-class/student-class.service';
 import { CMD } from '../common/slack-commands';
 import { PermissionService } from './permission.service';
@@ -470,6 +471,13 @@ export class UserController {
       this.studentClassService.findActiveClasses(),
     ]);
     if (!targetUser) return;
+
+    if (
+      targetUser.status !== UserStatus.ACTIVE &&
+      targetUser.status !== UserStatus.INACTIVE
+    ) {
+      throw new BusinessError(ErrorCode.CANNOT_EDIT_PENDING_USER);
+    }
 
     await client.views.push({
       trigger_id: body.trigger_id,
