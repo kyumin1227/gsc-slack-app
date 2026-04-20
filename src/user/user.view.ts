@@ -597,13 +597,18 @@ export class UserView {
               text: { type: 'plain_text' as const, text: STATUS_LABELS[s] },
               value: s,
             })),
-            initial_option: {
-              text: {
-                type: 'plain_text' as const,
-                text: STATUS_LABELS[prefill.status],
-              },
-              value: prefill.status,
-            },
+            ...(prefill.status === UserStatus.ACTIVE ||
+            prefill.status === UserStatus.INACTIVE
+              ? {
+                  initial_option: {
+                    text: {
+                      type: 'plain_text' as const,
+                      text: STATUS_LABELS[prefill.status],
+                    },
+                    value: prefill.status,
+                  },
+                }
+              : {}),
           },
         },
       ],
