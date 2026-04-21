@@ -52,22 +52,33 @@ export class TagView {
           tag.status === TagStatus.ACTIVE ? 'deactivate' : 'activate';
         const typeLabel = tag.isClassTag ? '(반)' : '';
 
-        blocks.push({
-          type: 'section',
-          text: {
-            type: 'mrkdwn',
-            text: `${statusEmoji} *${tag.name}* ${typeLabel}\n상태: ${STATUS_LABELS[tag.status]}`,
-          },
-          accessory: {
-            type: 'button',
+        blocks.push(
+          {
+            type: 'section',
             text: {
-              type: 'plain_text',
-              text: toggleText,
+              type: 'mrkdwn',
+              text: `${statusEmoji} *${tag.name}* ${typeLabel}\n상태: ${STATUS_LABELS[tag.status]}`,
             },
-            action_id: `tag:list:toggle:${tag.id}`,
-            value: toggleValue,
+            accessory: {
+              type: 'button',
+              text: { type: 'plain_text', text: toggleText },
+              action_id: `tag:list:toggle:${tag.id}`,
+              value: toggleValue,
+            },
           },
-        });
+          {
+            type: 'actions',
+            elements: [
+              {
+                type: 'button',
+                text: { type: 'plain_text', text: '삭제' },
+                action_id: `tag:list:delete:${tag.id}`,
+                value: tag.name,
+                style: 'danger',
+              },
+            ],
+          },
+        );
       }
     }
 
@@ -83,6 +94,26 @@ export class TagView {
         text: '닫기',
       },
       blocks,
+    };
+  }
+
+  static deleteConfirmModal(tagId: number, tagName: string): View {
+    return {
+      type: 'modal',
+      callback_id: 'tag:modal:delete',
+      private_metadata: String(tagId),
+      title: { type: 'plain_text', text: '태그 삭제' },
+      submit: { type: 'plain_text', text: '삭제' },
+      close: { type: 'plain_text', text: '취소' },
+      blocks: [
+        {
+          type: 'section',
+          text: {
+            type: 'mrkdwn',
+            text: `*${tagName}* 태그를 삭제하시겠습니까?\n\n⚠️ 시간표에서 이 태그가 제거되며 되돌릴 수 없습니다.`,
+          },
+        },
+      ],
     };
   }
 

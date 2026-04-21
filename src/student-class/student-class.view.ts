@@ -80,6 +80,10 @@ export class StudentClassView {
                 text: { type: 'plain_text', text: toggleText },
                 value: `${toggleValue}:${cls.id}`,
               },
+              {
+                text: { type: 'plain_text', text: '🗑️ 삭제' },
+                value: `delete:${cls.id}`,
+              },
             ],
           },
         } as any);
@@ -232,6 +236,26 @@ export class StudentClassView {
           hint: {
             type: 'plain_text',
             text: '숫자만 입력하세요 (예: 2027)',
+          },
+        },
+      ],
+    };
+  }
+
+  static deleteConfirmModal(classId: number, className: string): View {
+    return {
+      type: 'modal',
+      callback_id: 'student-class:modal:delete',
+      private_metadata: String(classId),
+      title: { type: 'plain_text', text: '반 삭제' },
+      submit: { type: 'plain_text', text: '삭제' },
+      close: { type: 'plain_text', text: '취소' },
+      blocks: [
+        {
+          type: 'section',
+          text: {
+            type: 'mrkdwn',
+            text: `*${className}* 반을 삭제하시겠습니까?\n\n⚠️ 연결된 태그도 함께 삭제되며 되돌릴 수 없습니다.`,
           },
         },
       ],
