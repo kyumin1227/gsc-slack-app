@@ -178,6 +178,13 @@ export class ScheduleView {
               action_id: `schedule:list:toggle:${schedule.id}`,
               value: toggleValue,
             },
+            {
+              type: 'button',
+              text: { type: 'plain_text', text: '삭제' },
+              action_id: `schedule:list:delete:${schedule.id}`,
+              value: schedule.name,
+              style: 'danger',
+            },
           ],
         },
       );
@@ -1177,6 +1184,26 @@ export class ScheduleView {
                 value: 'future',
               },
             ],
+          },
+        },
+      ],
+    };
+  }
+
+  static deleteConfirmModal(scheduleId: number, scheduleName: string): View {
+    return {
+      type: 'modal',
+      callback_id: 'schedule:modal:delete',
+      private_metadata: String(scheduleId),
+      title: { type: 'plain_text', text: '시간표 삭제' },
+      submit: { type: 'plain_text', text: '삭제' },
+      close: { type: 'plain_text', text: '취소' },
+      blocks: [
+        {
+          type: 'section',
+          text: {
+            type: 'mrkdwn',
+            text: `*${scheduleName}* 시간표를 삭제하시겠습니까?\n\n⚠️ Google Calendar도 함께 삭제되며 되돌릴 수 없습니다.`,
           },
         },
       ],

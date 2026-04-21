@@ -186,6 +186,16 @@ export class StudentClassController {
       return;
     }
 
+    if (op === 'delete') {
+      const cls = await this.studentClassService.findById(classId);
+      if (!cls) return;
+      await client.views.push({
+        trigger_id: body.trigger_id,
+        view: StudentClassView.deleteConfirmModal(classId, cls.name),
+      });
+      return;
+    }
+
     if (op === 'graduate') {
       await this.studentClassService.graduateClass(classId);
       logger.info(`StudentClass ${classId} graduated`);
@@ -242,6 +252,27 @@ export class StudentClassController {
     await this.studentClassService.updateClass(classId, {
       graduationYear,
       ...(slackChannelId !== null ? { slackChannelId } : {}),
+    });
+  }
+
+  // 반 삭제 확인 모달 제출 → 소프트 삭제
+  @View('student-class:modal:delete')
+  async handleDelete({
+    ack,
+    body,
+    view,
+    client,
+    logger,
+  }: SlackViewMiddlewareArgs & AllMiddlewareArgs) {
+    await ack();
+
+    const classId = parseInt(view.private_metadata, 10);
+    await this.studentClassService.deleteClass(classId);
+
+    logger.info(`StudentClass ${classId} deleted by ${body.user.id}`);
+    await client.chat.postMessage({
+      channel: body.user.id,
+      text: '✅ 반이 삭제되었습니다.',
     });
   }
 }

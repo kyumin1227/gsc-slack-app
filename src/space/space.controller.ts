@@ -639,4 +639,41 @@ export class SpaceController {
       text: `✅ *${roomName}* 이 ${label}되었습니다.`,
     });
   }
+
+  @Action('study-room:admin:open-delete')
+  async adminOpenDelete({
+    ack,
+    client,
+    body,
+    action,
+  }: SlackActionMiddlewareArgs<BlockAction> & AllMiddlewareArgs) {
+    await ack();
+    const { roomId, roomName } = JSON.parse(
+      (action as { value: string }).value,
+    ) as { roomId: number; roomName: string };
+
+    await client.views.push({
+      trigger_id: body.trigger_id,
+      view: SpaceView.deleteConfirmModal(roomId, roomName),
+    });
+  }
+
+  @View('study-room:modal:delete')
+  async submitDelete({
+    ack,
+    body,
+    client,
+    logger,
+  }: SlackViewMiddlewareArgs & AllMiddlewareArgs) {
+    await ack();
+
+    const roomId = parseInt(body.view.private_metadata, 10);
+    await this.spaceService.remove(roomId);
+
+    logger.info(`Space ${roomId} deleted by ${body.user.id}`);
+    await client.chat.postMessage({
+      channel: body.user.id,
+      text: '✅ 스터디룸이 삭제되었습니다.',
+    });
+  }
 }
