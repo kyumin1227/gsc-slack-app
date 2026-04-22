@@ -43,6 +43,10 @@ import { slackErrorMiddleware } from './common/slack-error.middleware';
       synchronize: process.env.DB_SYNCHRONIZE === 'true',
       migrations: [__dirname + '/migrations/*.js'],
       migrationsRun: process.env.DB_SYNCHRONIZE !== 'true',
+      ssl:
+        process.env.NODE_ENV === 'production'
+          ? { rejectUnauthorized: false }
+          : false,
     }),
     SlackModule.forRoot(
       httpReceiver
