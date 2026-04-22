@@ -49,8 +49,9 @@ resource "aws_ecs_task_definition" "app" {
       ]
 
       environment = [
-        { name = "DB_SYNCHRONIZE", value = "false" },
-        { name = "NODE_ENV",       value = "production" },
+        { name = "DB_SYNCHRONIZE",  value = "false" },
+        { name = "NODE_ENV",        value = "production" },
+        { name = "SLACK_SOCKET_MODE", value = "false" },
         { name = "DB_HOST",        value = aws_db_instance.main.address },
         { name = "DB_PORT",        value = tostring(aws_db_instance.main.port) },
         { name = "REDIS_HOST",     value = aws_elasticache_cluster.main.cache_nodes[0].address },
