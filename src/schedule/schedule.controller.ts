@@ -527,6 +527,46 @@ export class ScheduleController {
     });
   }
 
+  // 삭제 버튼 → 확인 모달 열기
+  @Action(/^schedule:list:delete:/)
+  async handleOpenDelete({
+    ack,
+    body,
+    client,
+  }: SlackActionMiddlewareArgs<BlockAction> & AllMiddlewareArgs) {
+    await ack();
+
+    const action = body.actions[0] as { action_id: string; value: string };
+    const scheduleId = parseInt(action.action_id.split(':').pop()!, 10);
+    const scheduleName = action.value;
+
+    await client.views.push({
+      trigger_id: body.trigger_id,
+      view: ScheduleView.deleteConfirmModal(scheduleId, scheduleName),
+    });
+  }
+
+  // 삭제 확인 모달 제출 → 소프트 삭제
+  @View('schedule:modal:delete')
+  async handleDelete({
+    ack,
+    body,
+    view,
+    client,
+    logger,
+  }: SlackViewMiddlewareArgs & AllMiddlewareArgs) {
+    await ack();
+
+    const scheduleId = parseInt(view.private_metadata, 10);
+    await this.scheduleService.deleteSchedule(scheduleId);
+
+    logger.info(`Schedule ${scheduleId} deleted by ${body.user.id}`);
+    await client.chat.postMessage({
+      channel: body.user.id,
+      text: '✅ 시간표가 삭제되었습니다.',
+    });
+  }
+
   // 수정 모달 제출 → 시간표 정보 업데이트
   @View('schedule:modal:edit')
   async handleEdit({

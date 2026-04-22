@@ -1,6 +1,13 @@
 import type { View } from '@slack/types';
 import { StudentClassStatus } from './student-class.entity';
 
+export interface StudentClassEditPrefill {
+  id: number;
+  name: string;
+  graduationYear: number;
+  slackChannelId?: string | null;
+}
+
 export interface StudentClassListItem {
   id: number;
   name: string;
@@ -62,15 +69,24 @@ export class StudentClassView {
             text: `${statusEmoji} *${cls.name}* (${gradeInfo})\n졸업 연도: ${cls.graduationYear} | 상태: ${STATUS_LABELS[cls.status]}${channelInfo}`,
           },
           accessory: {
-            type: 'button',
-            text: {
-              type: 'plain_text',
-              text: toggleText,
-            },
-            action_id: `student-class:list:toggle:${cls.id}`,
-            value: toggleValue,
+            type: 'overflow',
+            action_id: 'student-class:list:overflow',
+            options: [
+              {
+                text: { type: 'plain_text', text: '✏️ 편집' },
+                value: `edit:${cls.id}`,
+              },
+              {
+                text: { type: 'plain_text', text: toggleText },
+                value: `${toggleValue}:${cls.id}`,
+              },
+              {
+                text: { type: 'plain_text', text: '🗑️ 삭제' },
+                value: `delete:${cls.id}`,
+              },
+            ],
           },
-        });
+        } as any);
       }
     }
 
@@ -86,6 +102,51 @@ export class StudentClassView {
         text: '닫기',
       },
       blocks,
+    };
+  }
+
+  // 반 편집 모달
+  static editModal(prefill: StudentClassEditPrefill): View {
+    return {
+      type: 'modal',
+      callback_id: 'student-class:modal:edit',
+      private_metadata: JSON.stringify({ classId: prefill.id }),
+      title: { type: 'plain_text', text: '반 편집' },
+      submit: { type: 'plain_text', text: '저장' },
+      close: { type: 'plain_text', text: '취소' },
+      blocks: [
+        {
+          type: 'section',
+          text: { type: 'mrkdwn', text: `*${prefill.name}*` },
+        },
+        {
+          type: 'input',
+          block_id: 'graduation_year_block',
+          label: { type: 'plain_text', text: '졸업 연도' },
+          element: {
+            type: 'plain_text_input',
+            action_id: 'graduation_year_input',
+            initial_value: String(prefill.graduationYear),
+            placeholder: { type: 'plain_text', text: '숫자만 입력 (예: 2027)' },
+          },
+          hint: { type: 'plain_text', text: '숫자만 입력하세요 (예: 2027)' },
+        },
+        {
+          type: 'input',
+          block_id: 'slack_channel_block',
+          label: { type: 'plain_text', text: 'Slack 채널' },
+          optional: true,
+          element: {
+            type: 'conversations_select',
+            action_id: 'slack_channel_input',
+            placeholder: { type: 'plain_text', text: '채널을 선택하세요' },
+            filter: { include: ['public'], exclude_bot_users: true },
+            ...(prefill.slackChannelId
+              ? { initial_conversation: prefill.slackChannelId }
+              : {}),
+          },
+        },
+      ],
     };
   }
 
@@ -175,6 +236,26 @@ export class StudentClassView {
           hint: {
             type: 'plain_text',
             text: '숫자만 입력하세요 (예: 2027)',
+          },
+        },
+      ],
+    };
+  }
+
+  static deleteConfirmModal(classId: number, className: string): View {
+    return {
+      type: 'modal',
+      callback_id: 'student-class:modal:delete',
+      private_metadata: String(classId),
+      title: { type: 'plain_text', text: '반 삭제' },
+      submit: { type: 'plain_text', text: '삭제' },
+      close: { type: 'plain_text', text: '취소' },
+      blocks: [
+        {
+          type: 'section',
+          text: {
+            type: 'mrkdwn',
+            text: `*${className}* 반을 삭제하시겠습니까?\n\n⚠️ 연결된 태그도 함께 삭제되며 되돌릴 수 없습니다.`,
           },
         },
       ],

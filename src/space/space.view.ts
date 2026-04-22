@@ -567,6 +567,13 @@ export class SpaceView {
                       }
                     : undefined,
               },
+              {
+                type: 'button',
+                text: { type: 'plain_text', text: '삭제' },
+                action_id: 'study-room:admin:open-delete',
+                style: 'danger',
+                value: meta,
+              },
             ],
           },
           { type: 'divider' },
@@ -779,6 +786,26 @@ export class SpaceView {
           initialUsers: initialEditorSlackIds,
           optional: true,
         }),
+      ],
+    };
+  }
+
+  static deleteConfirmModal(roomId: number, roomName: string): View {
+    return {
+      type: 'modal',
+      callback_id: 'study-room:modal:delete',
+      private_metadata: String(roomId),
+      title: { type: 'plain_text', text: '스터디룸 삭제' },
+      submit: { type: 'plain_text', text: '삭제' },
+      close: { type: 'plain_text', text: '취소' },
+      blocks: [
+        {
+          type: 'section',
+          text: {
+            type: 'mrkdwn',
+            text: `*${roomName}* 스터디룸을 삭제하시겠습니까?\n\n⚠️ Google Calendar도 함께 삭제되며 되돌릴 수 없습니다.`,
+          },
+        },
       ],
     };
   }

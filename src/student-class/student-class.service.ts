@@ -14,6 +14,11 @@ export interface CreateStudentClassDto {
   graduationYear: number;
 }
 
+export interface UpdateStudentClassDto {
+  graduationYear?: number;
+  slackChannelId?: string | null;
+}
+
 @Injectable()
 export class StudentClassService {
   constructor(
@@ -75,6 +80,15 @@ export class StudentClassService {
     slackChannelId: string,
   ): Promise<void> {
     await this.studentClassRepository.update({ id }, { slackChannelId });
+  }
+
+  // 반 정보 수정 (졸업연도, 슬랙 채널)
+  async updateClass(
+    id: number,
+    dto: UpdateStudentClassDto,
+  ): Promise<StudentClass | null> {
+    await this.studentClassRepository.update({ id }, dto);
+    return this.findById(id);
   }
 
   // 반 활성화 (졸업 취소)

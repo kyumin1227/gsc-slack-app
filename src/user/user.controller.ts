@@ -9,12 +9,15 @@ import type {
   SlackCommandMiddlewareArgs,
   BlockAction,
 } from '@slack/bolt';
-import { UserView } from './user.view';
+import { UserView, UserListFilter, UserListModalState } from './user.view';
 import { OAuthUtil } from './google-oauth.util';
-import { UserRole } from './user.entity';
+import { UserRole, UserStatus } from './user.entity';
+import { BusinessError, ErrorCode } from '../common/errors';
 import { StudentClassService } from '../student-class/student-class.service';
 import { CMD } from '../common/slack-commands';
 import { PermissionService } from './permission.service';
+
+const PAGE_SIZE = 10;
 
 @Controller()
 export class UserController {
@@ -92,7 +95,6 @@ export class UserController {
         await this.slackService.client.views.update({
           view_id: viewId,
           view: UserView.registerFormModal({
-            name: googleUser.name,
             email: googleUser.email,
             refreshToken,
             classes: activeClasses.map((c) => ({
@@ -136,7 +138,6 @@ export class UserController {
       const values = view.state.values;
 
       // 폼 데이터 추출
-      const name = values.name_block.name_input.value ?? '';
       const code = values.code_block.code_input.value ?? '';
       const role = values.role_block.role_input.selected_option
         ?.value as UserRole;
@@ -144,11 +145,15 @@ export class UserController {
       const studentClassId =
         classValue && classValue !== 'none' ? Number(classValue) : undefined;
 
-      // 워크스페이스 소유자 여부 확인
+      // 슬랙 프로필 조회 (이름 동기화 + 소유자 여부 확인)
       const userInfo = await this.slackService.client.users.info({
         user: slackUserId,
       });
       const isOwner = userInfo.user?.is_owner ?? false;
+      const slackName =
+        userInfo.user?.profile?.display_name ||
+        userInfo.user?.real_name ||
+        undefined;
 
       // 학생이거나 워크스페이스 소유자면 바로 승인
       const needsApproval = role !== UserRole.STUDENT && !isOwner;
@@ -156,7 +161,7 @@ export class UserController {
       const registrationData = {
         code,
         role,
-        name: name || undefined,
+        name: slackName,
         studentClassId,
       };
 
@@ -289,6 +294,301 @@ export class UserController {
         ),
       });
     }
+  }
+
+  // 유저 목록 모달 빌드 헬퍼
+  private async buildUserListView(filter: UserListFilter, page: number) {
+    const { users, total } = await this.userService.findFiltered(
+      filter,
+      page * PAGE_SIZE,
+      PAGE_SIZE,
+    );
+    const activeClasses = await this.studentClassService.findActiveClasses();
+
+    return UserView.userListModal(
+      users.map((u) => ({
+        slackId: u.slackId,
+        name: u.name,
+        code: u.code,
+        role: u.role,
+        status: u.status,
+        className: u.studentClass?.name,
+      })),
+      { page, pageSize: PAGE_SIZE, total },
+      filter,
+      activeClasses.map((c) => ({
+        id: c.id,
+        name: c.name,
+        admissionYear: c.admissionYear,
+        section: c.section,
+      })),
+    );
+  }
+
+  // 관리자: 유저 관리 모달 열기
+  @Command(CMD.유저관리)
+  @Action('home:open-user-management')
+  async openUserManagement({
+    ack,
+    client,
+    body,
+  }: (SlackCommandMiddlewareArgs | SlackActionMiddlewareArgs<BlockAction>) &
+    AllMiddlewareArgs) {
+    await ack();
+
+    const userId = 'user_id' in body ? body.user_id : body.user.id;
+    await this.permissionService.requireAdmin(userId);
+
+    await client.views.open({
+      trigger_id: body.trigger_id,
+      view: await this.buildUserListView({}, 0),
+    });
+  }
+
+  // 관리자: 역할 필터 변경
+  @Action('user:admin:filter-role')
+  async handleFilterRole({
+    ack,
+    body,
+    client,
+  }: SlackActionMiddlewareArgs<BlockAction> & AllMiddlewareArgs) {
+    await ack();
+    const state: UserListModalState = JSON.parse(
+      body.view?.private_metadata || '{}',
+    );
+    const action = body.actions[0] as { selected_option: { value: string } };
+    const value = action.selected_option.value;
+    const filter: UserListFilter = {
+      ...state.filter,
+      role: value === 'all' ? undefined : (value as UserRole),
+    };
+    await client.views.update({
+      view_id: body.view!.id,
+      view: await this.buildUserListView(filter, 0),
+    });
+  }
+
+  // 관리자: 상태 필터 변경
+  @Action('user:admin:filter-status')
+  async handleFilterStatus({
+    ack,
+    body,
+    client,
+  }: SlackActionMiddlewareArgs<BlockAction> & AllMiddlewareArgs) {
+    await ack();
+    const state: UserListModalState = JSON.parse(
+      body.view?.private_metadata || '{}',
+    );
+    const action = body.actions[0] as { selected_option: { value: string } };
+    const value = action.selected_option.value;
+    const filter: UserListFilter = {
+      ...state.filter,
+      status: value === 'all' ? undefined : (value as UserStatus),
+    };
+    await client.views.update({
+      view_id: body.view!.id,
+      view: await this.buildUserListView(filter, 0),
+    });
+  }
+
+  // 관리자: 반 필터 변경
+  @Action('user:admin:filter-class')
+  async handleFilterClass({
+    ack,
+    body,
+    client,
+  }: SlackActionMiddlewareArgs<BlockAction> & AllMiddlewareArgs) {
+    await ack();
+    const state: UserListModalState = JSON.parse(
+      body.view?.private_metadata || '{}',
+    );
+    const action = body.actions[0] as { selected_option: { value: string } };
+    const value = action.selected_option.value;
+    const filter: UserListFilter = {
+      ...state.filter,
+      studentClassId: value === 'all' ? undefined : Number(value),
+    };
+    await client.views.update({
+      view_id: body.view!.id,
+      view: await this.buildUserListView(filter, 0),
+    });
+  }
+
+  // 관리자: 이전 페이지
+  @Action('user:admin:page-prev')
+  async handlePagePrev({
+    ack,
+    body,
+    client,
+  }: SlackActionMiddlewareArgs<BlockAction> & AllMiddlewareArgs) {
+    await ack();
+    const state: UserListModalState = JSON.parse(
+      body.view?.private_metadata || '{}',
+    );
+    const action = body.actions[0] as { value: string };
+    const page = Number(action.value);
+    await client.views.update({
+      view_id: body.view!.id,
+      view: await this.buildUserListView(state.filter ?? {}, page),
+    });
+  }
+
+  // 관리자: 다음 페이지
+  @Action('user:admin:page-next')
+  async handlePageNext({
+    ack,
+    body,
+    client,
+  }: SlackActionMiddlewareArgs<BlockAction> & AllMiddlewareArgs) {
+    await ack();
+    const state: UserListModalState = JSON.parse(
+      body.view?.private_metadata || '{}',
+    );
+    const action = body.actions[0] as { value: string };
+    const page = Number(action.value);
+    await client.views.update({
+      view_id: body.view!.id,
+      view: await this.buildUserListView(state.filter ?? {}, page),
+    });
+  }
+
+  // 관리자: 유저 편집 모달 열기 (유저 목록 overflow 선택)
+  @Action('user:admin:user-overflow')
+  async handleUserOverflow({
+    ack,
+    client,
+    body,
+  }: SlackActionMiddlewareArgs<BlockAction> & AllMiddlewareArgs) {
+    await ack();
+
+    const action = body.actions[0] as { selected_option: { value: string } };
+    const [op, targetSlackId] = action.selected_option.value.split(':');
+
+    if (op !== 'edit') return;
+
+    const [targetUser, activeClasses] = await Promise.all([
+      this.userService.findBySlackIdWithClass(targetSlackId),
+      this.studentClassService.findActiveClasses(),
+    ]);
+    if (!targetUser) return;
+
+    if (
+      targetUser.status !== UserStatus.ACTIVE &&
+      targetUser.status !== UserStatus.INACTIVE
+    ) {
+      throw new BusinessError(ErrorCode.CANNOT_EDIT_PENDING_USER);
+    }
+
+    await client.views.push({
+      trigger_id: body.trigger_id,
+      view: UserView.editUserModal({
+        targetSlackId,
+        name: targetUser.name,
+        code: targetUser.code,
+        role: targetUser.role,
+        status: targetUser.status,
+        studentClassId: targetUser.studentClassId,
+        classes: activeClasses.map((c) => ({
+          id: c.id,
+          name: c.name,
+          admissionYear: c.admissionYear,
+          section: c.section,
+        })),
+      }),
+    });
+  }
+
+  // 관리자: 유저 정보 수정 제출
+  @View('user:modal:edit')
+  async handleEditUser({
+    ack,
+    view,
+    client,
+  }: SlackViewMiddlewareArgs & AllMiddlewareArgs) {
+    const { targetSlackId } = JSON.parse(view.private_metadata || '{}') as {
+      targetSlackId: string;
+    };
+    const values = view.state.values;
+
+    const name = values.name_block.name_input.value ?? undefined;
+    const code = values.code_block.code_input.value ?? undefined;
+    const role = values.role_block.role_input.selected_option?.value as
+      | UserRole
+      | undefined;
+    const classValue = values.class_block?.class_input?.selected_option?.value;
+    const studentClassId =
+      classValue && classValue !== 'none' ? Number(classValue) : null;
+    const status = values.status_block.status_input.selected_option?.value as
+      | UserStatus
+      | undefined;
+
+    await ack();
+
+    await this.userService.updateUserInfo(targetSlackId, {
+      name,
+      code,
+      role,
+      studentClassId,
+      status,
+    });
+
+    await client.chat.postMessage({
+      channel: targetSlackId,
+      text: '관리자에 의해 회원 정보가 수정되었습니다.',
+    });
+  }
+
+  // 일반 유저: 내 정보 수정 모달 열기
+  @Action('home:open-my-info')
+  async openMyInfoModal({
+    ack,
+    client,
+    body,
+  }: SlackActionMiddlewareArgs<BlockAction> & AllMiddlewareArgs) {
+    await ack();
+
+    const userId = body.user.id;
+    const [user, activeClasses] = await Promise.all([
+      this.userService.findBySlackIdWithClass(userId),
+      this.studentClassService.findActiveClasses(),
+    ]);
+    if (!user) return;
+
+    await client.views.open({
+      trigger_id: body.trigger_id,
+      view: UserView.myInfoModal({
+        code: user.code,
+        role: user.role,
+        status: user.status,
+        studentClassId: user.studentClassId,
+        classes: activeClasses.map((c) => ({
+          id: c.id,
+          name: c.name,
+          admissionYear: c.admissionYear,
+          section: c.section,
+        })),
+      }),
+    });
+  }
+
+  // 일반 유저: 내 정보 수정 제출
+  @View('user:modal:my-info')
+  async handleMyInfo({
+    ack,
+    body,
+    view,
+  }: SlackViewMiddlewareArgs & AllMiddlewareArgs) {
+    const slackId = body.user.id;
+    const values = view.state.values;
+
+    const code = values.code_block.code_input.value ?? undefined;
+    const classValue = values.class_block?.class_input?.selected_option?.value;
+    const studentClassId =
+      classValue && classValue !== 'none' ? Number(classValue) : null;
+
+    await ack();
+
+    await this.userService.updateMyInfo(slackId, { code, studentClassId });
   }
 
   // 반의 Slack 채널에 유저 초대 (채널 없거나 이미 가입된 경우 조용히 무시)

@@ -135,4 +135,44 @@ export class TagController {
 
     logger.info(`Tag ${tagId} toggled to ${toggleAction}`);
   }
+
+  // 삭제 버튼 → 확인 모달 열기
+  @Action(/^tag:list:delete:/)
+  async handleOpenDelete({
+    ack,
+    body,
+    client,
+  }: SlackActionMiddlewareArgs<BlockAction> & AllMiddlewareArgs) {
+    await ack();
+
+    const action = body.actions[0] as { action_id: string; value: string };
+    const tagId = parseInt(action.action_id.split(':').pop()!, 10);
+    const tagName = action.value;
+
+    await client.views.push({
+      trigger_id: body.trigger_id,
+      view: TagView.deleteConfirmModal(tagId, tagName),
+    });
+  }
+
+  // 삭제 확인 모달 제출 → 소프트 삭제
+  @View('tag:modal:delete')
+  async handleDelete({
+    ack,
+    body,
+    view,
+    client,
+    logger,
+  }: SlackViewMiddlewareArgs & AllMiddlewareArgs) {
+    await ack();
+
+    const tagId = parseInt(view.private_metadata, 10);
+    await this.tagService.deleteTag(tagId);
+
+    logger.info(`Tag ${tagId} deleted by ${body.user.id}`);
+    await client.chat.postMessage({
+      channel: body.user.id,
+      text: '✅ 태그가 삭제되었습니다.',
+    });
+  }
 }

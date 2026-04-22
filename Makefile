@@ -1,4 +1,4 @@
-.PHONY: db local local-d dev prod down-local down-dev down-prod down-db logs logs-app backup clean
+.PHONY: db local local-d dev prod down-local down-dev down-prod down-db logs logs-app backup restore clean
 
 # DB + Redis 실행 (로컬 개발용)
 db:
@@ -47,8 +47,14 @@ logs-app:
 # DB 백업
 backup:
 	@mkdir -p backups
-	docker exec gsc-postgres pg_dump -U postgres gsc_slack_app > backups/backup_$$(date +%Y%m%d_%H%M%S).sql
+	docker exec gsc-postgres pg_dump -U postgres --data-only gsc_slack_app > backups/backup_$$(date +%Y%m%d_%H%M%S).sql
 	@echo "✅ Backup completed: backups/"
+
+# DB 복원 (사용법: make restore FILE=backups/backup_20260419_175055.sql)
+restore:
+	@[ -n "$(FILE)" ] || (echo "❌ FILE을 지정해주세요. 예: make restore FILE=backups/backup_xxx.sql" && exit 1)
+	docker exec -i gsc-postgres psql -U postgres gsc_slack_app < $(FILE)
+	@echo "✅ Restore completed: $(FILE)"
 
 # 미사용 Docker 리소스 정리
 clean:
