@@ -59,6 +59,11 @@ postgres_data
 # Backups
 backups/
 
+# Terraform
+terraform/.terraform/
+terraform/*.tfstate
+terraform/*.tfstate.backup
+
 #Claude
 .claude/
 CLAUDE.md
