@@ -4,6 +4,14 @@ export class InitialSchema1776589071378 implements MigrationInterface {
   name = 'InitialSchema1776589071378';
 
   public async up(queryRunner: QueryRunner): Promise<void> {
+    await queryRunner.query(`CREATE TYPE "public"."student_class_section_enum" AS ENUM('A', 'B')`);
+    await queryRunner.query(`CREATE TYPE "public"."student_class_status_enum" AS ENUM('active', 'graduated')`);
+    await queryRunner.query(`CREATE TYPE "public"."user_status_enum" AS ENUM('registered', 'pending_approval', 'active', 'inactive')`);
+    await queryRunner.query(`CREATE TYPE "public"."user_role_enum" AS ENUM('professor', 'ta', 'class_rep', 'key_keeper', 'student')`);
+    await queryRunner.query(`CREATE TYPE "public"."tag_status_enum" AS ENUM('active', 'inactive')`);
+    await queryRunner.query(`CREATE TYPE "public"."space_type_enum" AS ENUM('classroom', 'study_room')`);
+    await queryRunner.query(`CREATE TYPE "public"."space_status_enum" AS ENUM('active', 'inactive')`);
+    await queryRunner.query(`CREATE TYPE "public"."schedule_status_enum" AS ENUM('active', 'inactive')`);
     await queryRunner.query(
       `CREATE TABLE "student_class" ("id" SERIAL NOT NULL, "name" character varying NOT NULL, "admissionYear" integer NOT NULL, "section" "public"."student_class_section_enum" NOT NULL, "status" "public"."student_class_status_enum" NOT NULL DEFAULT 'active', "graduationYear" integer NOT NULL, "slackChannelId" character varying, "createdAt" TIMESTAMP NOT NULL DEFAULT now(), "updatedAt" TIMESTAMP NOT NULL DEFAULT now(), "deletedAt" TIMESTAMP, CONSTRAINT "UQ_429404a1cfd2f46c3830fd635ce" UNIQUE ("name"), CONSTRAINT "UQ_52382e22a97e36b6f6c3d1c8fff" UNIQUE ("admissionYear", "section"), CONSTRAINT "PK_85874ee23f2927b59ff5f769f3c" PRIMARY KEY ("id"))`,
     );
@@ -97,5 +105,13 @@ export class InitialSchema1776589071378 implements MigrationInterface {
     await queryRunner.query(`DROP TABLE "tag"`);
     await queryRunner.query(`DROP TABLE "user"`);
     await queryRunner.query(`DROP TABLE "student_class"`);
+    await queryRunner.query(`DROP TYPE "public"."schedule_status_enum"`);
+    await queryRunner.query(`DROP TYPE "public"."space_status_enum"`);
+    await queryRunner.query(`DROP TYPE "public"."space_type_enum"`);
+    await queryRunner.query(`DROP TYPE "public"."tag_status_enum"`);
+    await queryRunner.query(`DROP TYPE "public"."user_role_enum"`);
+    await queryRunner.query(`DROP TYPE "public"."user_status_enum"`);
+    await queryRunner.query(`DROP TYPE "public"."student_class_status_enum"`);
+    await queryRunner.query(`DROP TYPE "public"."student_class_section_enum"`);
   }
 }
