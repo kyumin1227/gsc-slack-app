@@ -1,0 +1,46 @@
+name: Terraform Apply
+
+on:
+  push:
+    branches:
+      - main
+    paths:
+      - "terraform/**"
+
+permissions:
+  id-token: write
+  contents: read
+
+jobs:
+  apply:
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Configure AWS credentials (OIDC)
+        uses: aws-actions/configure-aws-credentials@v4
+        with:
+          role-to-assume: ${{ secrets.AWS_ROLE_ARN }}
+          aws-region: ap-northeast-2
+
+      - name: Setup Terraform
+        uses: hashicorp/setup-terraform@v3
+
+      - name: Terraform Init
+        working-directory: terraform
+        run: |
+          terraform init \
+            -backend-config="bucket=${{ secrets.TF_STATE_BUCKET }}" \
+            -backend-config="key=gsc-slack-app/terraform.tfstate" \
+            -backend-config="region=ap-northeast-2"
+
+      - name: Terraform Apply
+        working-directory: terraform
+        run: |
+          terraform apply -auto-approve \
+            -var-file=prod.tfvars \
+            -var="secrets_arn=${{ secrets.SECRETS_ARN }}" \
+            -var="ecs_task_execution_role_arn=${{ secrets.ECS_TASK_EXECUTION_ROLE_ARN }}" \
+            -var="ecs_task_role_arn=${{ secrets.ECS_TASK_ROLE_ARN }}"

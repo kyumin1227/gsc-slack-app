@@ -1,0 +1,70 @@
+name: Terraform Plan
+
+on:
+  pull_request:
+    branches:
+      - main
+      - dev
+    paths:
+      - "terraform/**"
+
+permissions:
+  id-token: write
+  contents: read
+  pull-requests: write
+
+jobs:
+  plan:
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Configure AWS credentials (OIDC)
+        uses: aws-actions/configure-aws-credentials@v4
+        with:
+          role-to-assume: ${{ secrets.AWS_ROLE_ARN }}
+          aws-region: ap-northeast-2
+
+      - name: Setup Terraform
+        uses: hashicorp/setup-terraform@v3
+
+      - name: Terraform Init
+        working-directory: terraform
+        run: |
+          terraform init \
+            -backend-config="bucket=${{ secrets.TF_STATE_BUCKET }}" \
+            -backend-config="key=gsc-slack-app/terraform.tfstate" \
+            -backend-config="region=ap-northeast-2"
+
+      - name: Terraform Plan
+        id: plan
+        working-directory: terraform
+        run: |
+          terraform plan -no-color \
+            -var-file=prod.tfvars \
+            -var="secrets_arn=${{ secrets.SECRETS_ARN }}" \
+            -var="ecs_task_execution_role_arn=${{ secrets.ECS_TASK_EXECUTION_ROLE_ARN }}" \
+            -var="ecs_task_role_arn=${{ secrets.ECS_TASK_ROLE_ARN }}"
+        continue-on-error: true
+
+      - name: Comment plan on PR
+        uses: actions/github-script@v7
+        with:
+          script: |
+            const output = `#### Terraform Plan 결과
+            \`\`\`
+            ${{ steps.plan.outputs.stdout }}
+            \`\`\`
+            > Plan 상태: ${{ steps.plan.outcome }}`;
+            github.rest.issues.createComment({
+              issue_number: context.issue.number,
+              owner: context.repo.owner,
+              repo: context.repo.repo,
+              body: output,
+            });
+
+      - name: Fail if plan failed
+        if: steps.plan.outcome == 'failure'
+        run: exit 1
