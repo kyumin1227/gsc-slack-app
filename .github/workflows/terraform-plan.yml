@@ -53,11 +53,17 @@ jobs:
         uses: actions/github-script@v7
         with:
           script: |
-            const output = `#### Terraform Plan 결과
+            const stdout = `${{ steps.plan.outputs.stdout }}`;
+            const summary = stdout.match(/Plan: .+|No changes\..+/)?.[0] ?? '';
+            const output = `#### Terraform Plan 결과 — ${{ steps.plan.outcome == 'success' && '✅ 성공' || '❌ 실패' }}
+            > ${summary}
+            <details>
+            <summary>상세 보기</summary>
+
             \`\`\`
-            ${{ steps.plan.outputs.stdout }}
+            ${stdout}
             \`\`\`
-            > Plan 상태: ${{ steps.plan.outcome }}`;
+            </details>`;
             github.rest.issues.createComment({
               issue_number: context.issue.number,
               owner: context.repo.owner,
