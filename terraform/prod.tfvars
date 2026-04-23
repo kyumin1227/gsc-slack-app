@@ -1,5 +1,5 @@
 aws_region  = "ap-northeast-2"
-app_name    = "gsc-slack-app"
+app_name    = "bannote"
 environment = "prod"
 
 # ECS
