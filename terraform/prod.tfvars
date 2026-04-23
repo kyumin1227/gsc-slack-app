@@ -1,4 +1,5 @@
 aws_region  = "ap-northeast-2"
+app_domain  = "bannote.gsc-lab.io"
 app_name    = "bannote"
 environment = "prod"
 
