@@ -71,6 +71,12 @@ variable "cache_node_type" {
   default     = "cache.t4g.micro"
 }
 
+# ACM
+variable "acm_certificate_arn" {
+  description = "ACM certificate ARN for HTTPS listener"
+  type        = string
+}
+
 # Secrets Manager
 variable "secrets_arn" {
   description = "Secrets Manager secret ARN containing app environment variables"
