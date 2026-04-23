@@ -42,7 +42,8 @@ jobs:
             -var-file=prod.tfvars \
             -var="secrets_arn=${{ secrets.SECRETS_ARN }}" \
             -var="ecs_task_execution_role_arn=${{ secrets.ECS_TASK_EXECUTION_ROLE_ARN }}" \
-            -var="ecs_task_role_arn=${{ secrets.ECS_TASK_ROLE_ARN }}"
+            -var="ecs_task_role_arn=${{ secrets.ECS_TASK_ROLE_ARN }}" \
+            -var="acm_certificate_arn=${{ secrets.ACM_CERTIFICATE_ARN }}"
         continue-on-error: true
 
       - name: Comment plan on PR
