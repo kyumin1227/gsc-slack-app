@@ -34,28 +34,28 @@ resource "aws_ecs_task_definition" "app" {
       ]
 
       secrets = [
-        { name = "SLACK_BOT_TOKEN",                    valueFrom = "${var.secrets_arn}:SLACK_BOT_TOKEN::" },
-        { name = "SLACK_APP_TOKEN",                    valueFrom = "${var.secrets_arn}:SLACK_APP_TOKEN::" },
-        { name = "SLACK_SIGNING_SECRET",               valueFrom = "${var.secrets_arn}:SLACK_SIGNING_SECRET::" },
-        { name = "GOOGLE_CLIENT_ID",                   valueFrom = "${var.secrets_arn}:GOOGLE_CLIENT_ID::" },
-        { name = "GOOGLE_CLIENT_SECRET",               valueFrom = "${var.secrets_arn}:GOOGLE_CLIENT_SECRET::" },
-        { name = "GOOGLE_SERVICE_ACCOUNT_EMAIL",       valueFrom = "${var.secrets_arn}:GOOGLE_SERVICE_ACCOUNT_EMAIL::" },
+        { name = "SLACK_BOT_TOKEN", valueFrom = "${var.secrets_arn}:SLACK_BOT_TOKEN::" },
+        { name = "SLACK_APP_TOKEN", valueFrom = "${var.secrets_arn}:SLACK_APP_TOKEN::" },
+        { name = "SLACK_SIGNING_SECRET", valueFrom = "${var.secrets_arn}:SLACK_SIGNING_SECRET::" },
+        { name = "GOOGLE_CLIENT_ID", valueFrom = "${var.secrets_arn}:GOOGLE_CLIENT_ID::" },
+        { name = "GOOGLE_CLIENT_SECRET", valueFrom = "${var.secrets_arn}:GOOGLE_CLIENT_SECRET::" },
+        { name = "GOOGLE_SERVICE_ACCOUNT_EMAIL", valueFrom = "${var.secrets_arn}:GOOGLE_SERVICE_ACCOUNT_EMAIL::" },
         { name = "GOOGLE_SERVICE_ACCOUNT_PRIVATE_KEY", valueFrom = "${var.secrets_arn}:GOOGLE_SERVICE_ACCOUNT_PRIVATE_KEY::" },
-        { name = "DB_USERNAME",                        valueFrom = "${var.secrets_arn}:DB_USERNAME::" },
-        { name = "DB_PASSWORD",                        valueFrom = "${var.secrets_arn}:DB_PASSWORD::" },
-        { name = "DB_DATABASE",                        valueFrom = "${var.secrets_arn}:DB_DATABASE::" },
-        { name = "ENCRYPTION_SECRET",                  valueFrom = "${var.secrets_arn}:ENCRYPTION_SECRET::" },
-        { name = "REDIS_PASSWORD",                     valueFrom = "${var.secrets_arn}:REDIS_PASSWORD::" },
+        { name = "DB_USERNAME", valueFrom = "${var.secrets_arn}:DB_USERNAME::" },
+        { name = "DB_PASSWORD", valueFrom = "${var.secrets_arn}:DB_PASSWORD::" },
+        { name = "DB_DATABASE", valueFrom = "${var.secrets_arn}:DB_DATABASE::" },
+        { name = "ENCRYPTION_SECRET", valueFrom = "${var.secrets_arn}:ENCRYPTION_SECRET::" },
+        { name = "REDIS_PASSWORD", valueFrom = "${var.secrets_arn}:REDIS_PASSWORD::" },
       ]
 
       environment = [
-        { name = "DB_SYNCHRONIZE",  value = "false" },
-        { name = "NODE_ENV",        value = "production" },
+        { name = "DB_SYNCHRONIZE", value = "false" },
+        { name = "NODE_ENV", value = "production" },
         { name = "SLACK_SOCKET_MODE", value = "false" },
-        { name = "DB_HOST",        value = aws_db_instance.main.address },
-        { name = "DB_PORT",        value = tostring(aws_db_instance.main.port) },
-        { name = "REDIS_HOST",     value = aws_elasticache_cluster.main.cache_nodes[0].address },
-        { name = "REDIS_PORT",     value = tostring(aws_elasticache_cluster.main.cache_nodes[0].port) },
+        { name = "DB_HOST", value = aws_db_instance.main.address },
+        { name = "DB_PORT", value = tostring(aws_db_instance.main.port) },
+        { name = "REDIS_HOST", value = aws_elasticache_cluster.main.cache_nodes[0].address },
+        { name = "REDIS_PORT", value = tostring(aws_elasticache_cluster.main.cache_nodes[0].port) },
       ]
 
       logConfiguration = {

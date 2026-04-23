@@ -14,3 +14,4 @@ db_instance_class = "db.t4g.micro"
 
 # ElastiCache
 cache_node_type = "cache.t4g.micro"
+
