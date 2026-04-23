@@ -71,6 +71,12 @@ variable "cache_node_type" {
   default     = "cache.t4g.micro"
 }
 
+# Domain
+variable "app_domain" {
+  description = "Application domain (e.g. app.example.com)"
+  type        = string
+}
+
 # ACM
 variable "acm_certificate_arn" {
   description = "ACM certificate ARN for HTTPS listener"
