@@ -1,4 +1,5 @@
 import { Injectable, Logger } from '@nestjs/common';
+import { formatClassLabel } from '../common/class-label.util';
 import { InjectRepository } from '@nestjs/typeorm';
 import { Repository } from 'typeorm';
 import { Space, SpaceStatus, SpaceType } from './space.entity';
@@ -163,14 +164,12 @@ export class SpaceService {
     ).filter((u): u is NonNullable<typeof u> => u !== null);
 
     const attendeeEmails = attendees.map((u) => u.email);
-    const currentYear = new Date().getFullYear();
     const description = attendees
       .map((u) => {
-        const admissionYear = u.studentClass?.name?.split('-')[0];
-        const gradePart = admissionYear
-          ? ` (${currentYear - parseInt(admissionYear) + 1}학년)`
+        const classPart = u.studentClass
+          ? ` (${formatClassLabel({ admissionYear: u.studentClass.admissionYear, section: u.studentClass.section })})`
           : '';
-        return `${u.name}${gradePart} | ${u.code ?? '-'} | ${u.email}`;
+        return `${u.name}${classPart} | ${u.code ?? '-'} | ${u.email}`;
       })
       .join('\n');
 
@@ -298,14 +297,12 @@ export class SpaceService {
     ).filter((u): u is NonNullable<typeof u> => u !== null);
 
     const attendeeEmails = attendees.map((u) => u.email);
-    const currentYear = new Date().getFullYear();
     const description = attendees
       .map((u) => {
-        const admissionYear = u.studentClass?.name?.split('-')[0];
-        const gradePart = admissionYear
-          ? ` (${currentYear - parseInt(admissionYear) + 1}학년)`
+        const classPart = u.studentClass
+          ? ` (${formatClassLabel({ admissionYear: u.studentClass.admissionYear, section: u.studentClass.section })})`
           : '';
-        return `${u.name}${gradePart} | ${u.code ?? '-'} | ${u.email}`;
+        return `${u.name}${classPart} | ${u.code ?? '-'} | ${u.email}`;
       })
       .join('\n');
 

@@ -1,5 +1,6 @@
 import type { View } from '@slack/types';
 import { StudentClassStatus } from './student-class.entity';
+import { formatClassLabel } from '../common/class-label.util';
 
 export interface StudentClassEditPrefill {
   id: number;
@@ -11,6 +12,7 @@ export interface StudentClassEditPrefill {
 export interface StudentClassListItem {
   id: number;
   name: string;
+  section: string;
   admissionYear: number;
   graduationYear: number;
   status: StudentClassStatus;
@@ -54,10 +56,11 @@ export class StudentClassView {
         const toggleValue =
           cls.status === StudentClassStatus.ACTIVE ? 'graduate' : 'activate';
 
-        const gradeInfo =
-          cls.status === StudentClassStatus.GRADUATED
-            ? '졸업'
-            : `${new Date().getFullYear() - cls.admissionYear + 1}학년`;
+        const gradeLabel = formatClassLabel({
+          admissionYear: cls.admissionYear,
+          section: cls.section,
+          graduated: cls.status === StudentClassStatus.GRADUATED,
+        });
         const channelInfo = cls.slackChannelId
           ? ` | 채널: <#${cls.slackChannelId}>`
           : '';
@@ -66,7 +69,7 @@ export class StudentClassView {
           type: 'section',
           text: {
             type: 'mrkdwn',
-            text: `${statusEmoji} *${cls.name}* (${gradeInfo})\n졸업 연도: ${cls.graduationYear} | 상태: ${STATUS_LABELS[cls.status]}${channelInfo}`,
+            text: `${statusEmoji} *${gradeLabel}*\n졸업 연도: ${cls.graduationYear} | 상태: ${STATUS_LABELS[cls.status]}${channelInfo}`,
           },
           accessory: {
             type: 'overflow',
