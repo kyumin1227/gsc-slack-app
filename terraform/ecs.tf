@@ -57,6 +57,7 @@ resource "aws_ecs_task_definition" "app" {
         { name = "DB_PORT", value = tostring(aws_db_instance.main.port) },
         { name = "REDIS_HOST", value = aws_elasticache_cluster.main.cache_nodes[0].address },
         { name = "REDIS_PORT", value = tostring(aws_elasticache_cluster.main.cache_nodes[0].port) },
+        { name = "GOOGLE_WEBHOOK_URL", value = "https://${var.app_domain}" },
       ]
 
       logConfiguration = {
