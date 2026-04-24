@@ -3,6 +3,7 @@ import { InjectRepository } from '@nestjs/typeorm';
 import { Repository } from 'typeorm';
 import { Tag, TagStatus } from './tag.entity';
 import { StudentClassStatus } from '../student-class/student-class.entity';
+import { formatClassLabel } from '../common/class-label.util';
 
 export interface CreateTagDto {
   name: string;
@@ -107,10 +108,11 @@ export class TagService {
   // 표시용 이름 생성 (반 태그에 학년 정보 추가)
   static buildDisplayName(tag: Tag): string {
     if (!tag.studentClass) return tag.name;
-    if (tag.studentClass.status === StudentClassStatus.GRADUATED) {
-      return `${tag.name} (졸업)`;
-    }
-    const grade = new Date().getFullYear() - tag.studentClass.admissionYear + 1;
-    return `${tag.name} (${grade}학년)`;
+    const label = formatClassLabel({
+      admissionYear: tag.studentClass.admissionYear,
+      section: tag.studentClass.section,
+      graduated: tag.studentClass.status === StudentClassStatus.GRADUATED,
+    });
+    return label;
   }
 }
