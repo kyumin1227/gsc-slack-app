@@ -8,7 +8,6 @@ import {
 } from '@nestjs/common';
 import { CACHE_MANAGER } from '@nestjs/cache-manager';
 import type { Cache } from 'cache-manager';
-import { ChannelService } from '../channel/channel.service';
 import { GoogleCalendarService } from '../google/google-calendar.service';
 import { ScheduleService } from './schedule.service';
 import {
@@ -25,7 +24,6 @@ export class ScheduleWatchController {
 
   constructor(
     private readonly scheduleService: ScheduleService,
-    private readonly channelService: ChannelService,
     private readonly notificationService: ScheduleNotificationService,
     private readonly spaceMirrorService: SpaceMirrorService,
     private readonly googleCalendarService: GoogleCalendarService,
@@ -51,12 +49,6 @@ export class ScheduleWatchController {
       this.logger.warn(`Unknown channelId: ${channelId}`);
       return;
     }
-
-    // 연결된 Slack 채널 없으면 조기 종료
-    const slackChannelIds = await this.channelService.getSlackChannelIds(
-      schedule.id,
-    );
-    if (slackChannelIds.length === 0) return;
 
     if (!schedule.syncToken) {
       this.logger.warn(
