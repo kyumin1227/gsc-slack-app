@@ -43,6 +43,7 @@ export class StudentClassController {
         classes.map((c) => ({
           id: c.id,
           name: c.name,
+          section: c.section,
           admissionYear: c.admissionYear,
           graduationYear: c.graduationYear,
           status: c.status,
@@ -213,6 +214,7 @@ export class StudentClassController {
           classes.map((c) => ({
             id: c.id,
             name: c.name,
+            section: c.section,
             admissionYear: c.admissionYear,
             graduationYear: c.graduationYear,
             status: c.status,

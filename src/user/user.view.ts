@@ -1,5 +1,6 @@
 import type { View } from '@slack/types';
 import { UserRole, UserStatus } from './user.entity';
+import { formatClassLabel } from '../common/class-label.util';
 
 export interface ClassOption {
   id: number;
@@ -220,12 +221,10 @@ export class UserView {
             options:
               prefill.classes.length > 0
                 ? prefill.classes.map((cls) => {
-                    const grade =
-                      new Date().getFullYear() - cls.admissionYear + 1;
                     return {
                       text: {
                         type: 'plain_text' as const,
-                        text: `${grade}학년 ${cls.section}반`,
+                        text: formatClassLabel(cls),
                       },
                       value: String(cls.id),
                     };
@@ -351,16 +350,13 @@ export class UserView {
     ];
     const classFilterOptions = [
       { text: { type: 'plain_text' as const, text: '반 전체' }, value: 'all' },
-      ...classOptions.map((c) => {
-        const grade = new Date().getFullYear() - c.admissionYear + 1;
-        return {
-          text: {
-            type: 'plain_text' as const,
-            text: `${grade}학년 ${c.section}반`,
-          },
-          value: String(c.id),
-        };
-      }),
+      ...classOptions.map((c) => ({
+        text: {
+          type: 'plain_text' as const,
+          text: formatClassLabel(c),
+        },
+        value: String(c.id),
+      })),
     ];
 
     const blocks: View['blocks'] = [
@@ -494,16 +490,13 @@ export class UserView {
   static editUserModal(prefill: EditUserPrefill): View {
     const classOptions =
       prefill.classes.length > 0
-        ? prefill.classes.map((cls) => {
-            const grade = new Date().getFullYear() - cls.admissionYear + 1;
-            return {
-              text: {
-                type: 'plain_text' as const,
-                text: `${grade}학년 ${cls.section}반`,
-              },
-              value: String(cls.id),
-            };
-          })
+        ? prefill.classes.map((cls) => ({
+            text: {
+              type: 'plain_text' as const,
+              text: formatClassLabel(cls),
+            },
+            value: String(cls.id),
+          }))
         : [
             {
               text: { type: 'plain_text' as const, text: '등록된 반 없음' },
@@ -619,16 +612,13 @@ export class UserView {
   static myInfoModal(prefill: MyInfoPrefill): View {
     const classOptions =
       prefill.classes.length > 0
-        ? prefill.classes.map((cls) => {
-            const grade = new Date().getFullYear() - cls.admissionYear + 1;
-            return {
-              text: {
-                type: 'plain_text' as const,
-                text: `${grade}학년 ${cls.section}반`,
-              },
-              value: String(cls.id),
-            };
-          })
+        ? prefill.classes.map((cls) => ({
+            text: {
+              type: 'plain_text' as const,
+              text: formatClassLabel(cls),
+            },
+            value: String(cls.id),
+          }))
         : [
             {
               text: { type: 'plain_text' as const, text: '등록된 반 없음' },
