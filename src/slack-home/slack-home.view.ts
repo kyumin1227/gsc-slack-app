@@ -108,6 +108,11 @@ export class HomeView {
             },
             {
               type: 'button',
+              text: { type: 'plain_text', text: '교수 시간표' },
+              action_id: 'home:open-professor-schedule',
+            },
+            {
+              type: 'button',
               text: { type: 'plain_text', text: '교실 시간표' },
               action_id: 'home:open-classroom-schedule',
             },
@@ -226,6 +231,11 @@ export class HomeView {
               text: { type: 'plain_text', text: '과목 시간표' },
               style: 'primary',
               action_id: 'home:open-subscribe',
+            },
+            {
+              type: 'button',
+              text: { type: 'plain_text', text: '교수 시간표' },
+              action_id: 'home:open-professor-schedule',
             },
             {
               type: 'button',

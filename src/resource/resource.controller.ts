@@ -441,6 +441,24 @@ export class ResourceController {
     });
   }
 
+  @Action('home:open-professor-schedule')
+  async openProfessorSchedule({
+    ack,
+    client,
+    body,
+  }: SlackActionMiddlewareArgs<BlockAction> & AllMiddlewareArgs) {
+    await ack();
+
+    const professors = await this.resourceService.findAllByType(
+      ResourceType.PROFESSOR,
+      true,
+    );
+    await client.views.open({
+      trigger_id: body.trigger_id,
+      view: ResourceView.professorScheduleModal(professors),
+    });
+  }
+
   // ========== 리소스 관리 (어드민) ==========
 
   @Command(CMD.스터디룸)

@@ -805,6 +805,79 @@ export class ResourceView {
     };
   }
 
+  static professorScheduleModal(resources: Resource[]): View {
+    const combinedCalendarUrl =
+      resources.length > 0
+        ? 'https://calendar.google.com/calendar/embed?' +
+          resources
+            .map(
+              (c, i) =>
+                `src=${encodeURIComponent(c.calendarId)}&color=${ROOM_COLORS[i % ROOM_COLORS.length]}`,
+            )
+            .join('&') +
+          '&ctz=Asia%2FSeoul&mode=WEEK'
+        : undefined;
+
+    const blocks: View['blocks'] = [];
+
+    if (combinedCalendarUrl) {
+      blocks.push({
+        type: 'actions',
+        elements: [
+          {
+            type: 'button',
+            text: { type: 'plain_text', text: '전체 교수 일정 보기 ❐' },
+            url: combinedCalendarUrl,
+            action_id: 'space:action:view-professor-all',
+          },
+        ],
+      });
+    }
+
+    if (resources.length === 0) {
+      blocks.push({
+        type: 'section',
+        text: { type: 'mrkdwn', text: '등록된 교수 캘린더가 없습니다.' },
+      });
+    } else {
+      for (const [i, resource] of resources.entries()) {
+        const color = ROOM_COLORS[i % ROOM_COLORS.length];
+        const calendarUrl = `https://calendar.google.com/calendar/embed?src=${encodeURIComponent(resource.calendarId)}&color=${color}&ctz=Asia%2FSeoul&mode=WEEK`;
+        const aliasText =
+          resource.aliases?.length > 0
+            ? `\n별칭: ${resource.aliases.join(', ')}`
+            : '';
+
+        blocks.push(
+          {
+            type: 'section',
+            text: {
+              type: 'mrkdwn',
+              text: resource.description
+                ? `*${resource.name}*${aliasText}\n${resource.description}`
+                : `*${resource.name}*${aliasText}`,
+            },
+            accessory: {
+              type: 'button',
+              text: { type: 'plain_text', text: '일정 보기 ❐' },
+              url: calendarUrl,
+              action_id: `space:action:view-professor-${resource.id}`,
+            },
+          },
+          { type: 'divider' },
+        );
+      }
+    }
+
+    return {
+      type: 'modal',
+      callback_id: 'space:modal:professor-schedule',
+      title: { type: 'plain_text', text: '교수 시간표' },
+      close: { type: 'plain_text', text: '닫기' },
+      blocks,
+    };
+  }
+
   static editorsModal(
     resource: Resource,
     initialEditorSlackIds: string[] = [],
