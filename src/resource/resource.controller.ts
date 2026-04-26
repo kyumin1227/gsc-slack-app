@@ -1,4 +1,4 @@
-import { Controller } from '@nestjs/common';
+import { Controller, Logger } from '@nestjs/common';
 import { Action, Command, View } from 'nestjs-slack-bolt';
 import type {
   AllMiddlewareArgs,
@@ -18,6 +18,8 @@ import { PermissionService } from '../user/permission.service';
 
 @Controller()
 export class ResourceController {
+  private readonly logger = new Logger(ResourceController.name);
+
   constructor(
     private readonly resourceService: ResourceService,
     private readonly userService: UserService,
@@ -276,13 +278,10 @@ export class ResourceController {
     await ack();
 
     const userId = 'user_id' in body ? body.user_id : body.user.id;
-    const user = await this.userService.findBySlackId(userId);
 
     const [bookings, consultations] = await Promise.all([
       this.resourceService.getMyBookings(userId),
-      user?.email
-        ? this.resourceService.getProfessorConsultations(user.email)
-        : Promise.resolve([]),
+      this.resourceService.getProfessorConsultations(userId),
     ]);
 
     await client.views.open({
@@ -447,6 +446,36 @@ export class ResourceController {
     ack,
   }: SlackActionMiddlewareArgs<BlockAction> & AllMiddlewareArgs) {
     await ack();
+  }
+
+  @Action(/^consultation:cancel:/)
+  async cancelConsultation({
+    ack,
+    client,
+    body,
+  }: SlackActionMiddlewareArgs<BlockAction> & AllMiddlewareArgs) {
+    await ack();
+
+    const userId = body.user.id;
+    const eventId = (body.actions[0] as any).action_id.replace('consultation:cancel:', '');
+
+    try {
+      await this.resourceService.cancelConsultation(userId, eventId);
+      await client.views.update({
+        view_id: body.view!.id,
+        view: await this.buildMyBookingsView(userId),
+      });
+    } catch (e) {
+      this.logger.error('교수 상담 취소 실패', e);
+    }
+  }
+
+  private async buildMyBookingsView(userId: string) {
+    const [bookings, consultations] = await Promise.all([
+      this.resourceService.getMyBookings(userId),
+      this.resourceService.getProfessorConsultations(userId),
+    ]);
+    return ResourceView.myBookingsModal(bookings, consultations);
   }
 
   @Action('home:open-classroom-schedule')

@@ -385,22 +385,44 @@ export class ResourceView {
         const startStr = `${String(start.getUTCHours()).padStart(2, '0')}:${String(start.getUTCMinutes()).padStart(2, '0')}`;
         const endStr = `${String(end.getUTCHours()).padStart(2, '0')}:${String(end.getUTCMinutes()).padStart(2, '0')}`;
 
-        const sectionBlock: any = {
-          type: 'section',
-          text: {
-            type: 'mrkdwn',
-            text: `*${c.summary}*\n${c.professorName} | ${dateStr} ${startStr}~${endStr}`,
+        blocks.push(
+          {
+            type: 'section',
+            text: {
+              type: 'mrkdwn',
+              text: `*${c.summary}*\n${dateStr} ${startStr}~${endStr}`,
+            },
           },
-        };
-        if (c.htmlLink) {
-          sectionBlock.accessory = {
-            type: 'button',
-            text: { type: 'plain_text', text: '캘린더에서 보기 ❐' },
-            url: c.htmlLink,
-            action_id: `consultation:view-${start.getTime()}`,
-          };
-        }
-        blocks.push(sectionBlock, { type: 'divider' });
+          {
+            type: 'actions',
+            elements: [
+              ...(c.htmlLink
+                ? [
+                    {
+                      type: 'button' as const,
+                      text: { type: 'plain_text' as const, text: '캘린더에서 보기 ❐' },
+                      url: c.htmlLink,
+                      action_id: `consultation:view-${start.getTime()}`,
+                    },
+                  ]
+                : []),
+              {
+                type: 'button' as const,
+                text: { type: 'plain_text' as const, text: '취소' },
+                style: 'danger' as const,
+                action_id: `consultation:cancel:${c.eventId}`,
+                confirm: {
+                  title: { type: 'plain_text' as const, text: '상담 취소' },
+                  text: { type: 'mrkdwn' as const, text: `*${c.summary}* 예약을 취소할까요?\n교수님께 취소 알림이 전송됩니다.` },
+                  confirm: { type: 'plain_text' as const, text: '취소하기' },
+                  deny: { type: 'plain_text' as const, text: '돌아가기' },
+                  style: 'danger' as const,
+                },
+              },
+            ],
+          },
+          { type: 'divider' },
+        );
       }
     }
 

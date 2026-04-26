@@ -25,7 +25,7 @@ export interface BookResourceDto {
 }
 
 export interface ConsultationItem {
-  professorName: string;
+  eventId: string;
   summary: string;
   startTime: Date;
   endTime: Date;
@@ -276,40 +276,51 @@ export class ResourceService {
   }
 
   async getProfessorConsultations(
-    userEmail: string,
+    slackId: string,
   ): Promise<ConsultationItem[]> {
-    const professors = await this.findAllByType(ResourceType.PROFESSOR, true);
+    const user = await this.userService.findBySlackId(slackId);
+    if (!user) return [];
+
+    const refreshToken = this.userService.getDecryptedRefreshToken(user);
+    if (!refreshToken) return [];
+
     const now = new Date();
     const future = new Date(now.getTime() + 90 * 24 * 60 * 60 * 1000);
-    const results: ConsultationItem[] = [];
 
-    await Promise.all(
-      professors.map(async (prof) => {
-        const events = await this.googleCalendarService.listEventsInRange(
-          prof.calendarId,
-          now,
-          future,
-        );
-        for (const ev of events) {
-          if (ev.status === 'cancelled') continue;
-          const isAttendee = ev.attendees?.some(
-            (a) => a.email?.toLowerCase() === userEmail.toLowerCase(),
-          );
-          if (!isAttendee) continue;
-          const start = new Date(ev.start?.dateTime ?? ev.start?.date ?? '');
-          const end = new Date(ev.end?.dateTime ?? ev.end?.date ?? '');
-          results.push({
-            professorName: prof.name,
-            summary: ev.summary ?? '(제목 없음)',
-            startTime: start,
-            endTime: end,
-            htmlLink: ev.htmlLink ?? undefined,
-          });
-        }
-      }),
+    const events = await this.googleCalendarService.listUserPrimaryEvents(
+      refreshToken,
+      now,
+      future,
     );
 
-    return results.sort((a, b) => a.startTime.getTime() - b.startTime.getTime());
+    const results: ConsultationItem[] = [];
+    for (const ev of events) {
+      if (ev.status === 'cancelled') continue;
+      if (ev.extendedProperties?.shared?.['goo.createdBySet'] !== 'default_cita') continue;
+      const start = new Date(ev.start?.dateTime ?? ev.start?.date ?? '');
+      const end = new Date(ev.end?.dateTime ?? ev.end?.date ?? '');
+      results.push({
+        eventId: ev.id!,
+        summary: ev.summary ?? '(제목 없음)',
+        startTime: start,
+        endTime: end,
+        htmlLink: ev.htmlLink ?? undefined,
+      });
+    }
+
+    return results.sort(
+      (a, b) => a.startTime.getTime() - b.startTime.getTime(),
+    );
+  }
+
+  async cancelConsultation(slackId: string, eventId: string): Promise<void> {
+    const user = await this.userService.findBySlackId(slackId);
+    if (!user) throw new BusinessError(ErrorCode.USER_NOT_FOUND);
+
+    const refreshToken = this.userService.getDecryptedRefreshToken(user);
+    if (!refreshToken) throw new BusinessError(ErrorCode.CALENDAR_WRITER_NO_TOKEN);
+
+    await this.googleCalendarService.cancelConsultationEvent(refreshToken, eventId);
   }
 
   async addEditor(id: number, email: string): Promise<void> {
