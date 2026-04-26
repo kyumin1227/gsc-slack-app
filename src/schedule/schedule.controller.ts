@@ -787,7 +787,12 @@ export class ScheduleController {
     const title = values.title_block.title_input.value ?? '';
     const description =
       values.description_block?.description_input?.value ?? undefined;
-    const location = values.location_block?.location_input?.value ?? undefined;
+    const roomVal = values.location_block?.location_input?.value?.trim() ?? '';
+    const professorVal =
+      values.professor_block?.professor_input?.value?.trim() ?? '';
+    const location = professorVal
+      ? `${roomVal} / ${professorVal}`
+      : roomVal || undefined;
     const startDate =
       values.start_date_block.start_date_input.selected_date ?? '';
     const endDate = values.end_date_block.end_date_input.selected_date ?? '';
@@ -1102,7 +1107,12 @@ export class ScheduleController {
     const title = values.title_block.title_input.value ?? undefined;
     const description =
       values.description_block.description_input.value ?? undefined;
-    const location = values.location_block.location_input.value ?? undefined;
+    const roomVal2 = values.location_block?.location_input?.value?.trim() ?? '';
+    const professorVal2 =
+      values.professor_block?.professor_input?.value?.trim() ?? '';
+    const location = professorVal2
+      ? `${roomVal2} / ${professorVal2}`
+      : roomVal2 || undefined;
     const startTime =
       values.start_time_block.start_time_input.selected_time ?? undefined;
     const endTime =

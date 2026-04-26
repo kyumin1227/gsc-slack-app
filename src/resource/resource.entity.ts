@@ -8,22 +8,23 @@ import {
   Index,
 } from 'typeorm';
 
-export enum SpaceType {
+export enum ResourceType {
   CLASSROOM = 'classroom',
   STUDY_ROOM = 'study_room',
+  PROFESSOR = 'professor',
 }
 
-export enum SpaceStatus {
+export enum ResourceStatus {
   ACTIVE = 'active',
   INACTIVE = 'inactive',
 }
 
-@Index('unique_default_space', ['isDefault'], {
+@Index('unique_default_resource', ['isDefault'], {
   unique: true,
   where: '"isDefault" = true',
 })
-@Entity('space')
-export class Space {
+@Entity('resource')
+export class Resource {
   @PrimaryGeneratedColumn()
   id: number;
 
@@ -38,23 +39,26 @@ export class Space {
 
   @Column({
     type: 'enum',
-    enum: SpaceType,
-    default: SpaceType.STUDY_ROOM,
+    enum: ResourceType,
+    default: ResourceType.STUDY_ROOM,
   })
-  type: SpaceType;
+  type: ResourceType;
 
   @Column({ nullable: true })
   description: string;
 
   @Column({
     type: 'enum',
-    enum: SpaceStatus,
-    default: SpaceStatus.ACTIVE,
+    enum: ResourceStatus,
+    default: ResourceStatus.ACTIVE,
   })
-  status: SpaceStatus;
+  status: ResourceStatus;
 
   @Column({ default: false })
   isDefault: boolean = false;
+
+  @Column({ type: 'varchar', nullable: true })
+  bookingUrl: string | null;
 
   @CreateDateColumn()
   createdAt: Date;

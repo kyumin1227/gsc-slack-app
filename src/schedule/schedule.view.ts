@@ -769,7 +769,18 @@ export class ScheduleView {
           element: {
             type: 'plain_text_input',
             action_id: 'location_input',
-            placeholder: { type: 'plain_text', text: '예: 공학관 301호' },
+            placeholder: { type: 'plain_text', text: '예: 세미나실 A' },
+          },
+        },
+        {
+          type: 'input',
+          block_id: 'professor_block',
+          label: { type: 'plain_text', text: '교수' },
+          optional: true,
+          element: {
+            type: 'plain_text_input',
+            action_id: 'professor_input',
+            placeholder: { type: 'plain_text', text: '예: 홍길동' },
           },
         },
         {
@@ -1060,6 +1071,15 @@ export class ScheduleView {
     const initialDays = group.daysOfWeek
       ? DAY_OPTIONS.filter((o) => group.daysOfWeek!.includes(parseInt(o.value)))
       : undefined;
+    const locationSlash = (group.location ?? '').indexOf('/');
+    const initialRoom =
+      locationSlash === -1
+        ? (group.location ?? '').trim()
+        : (group.location ?? '').slice(0, locationSlash).trim();
+    const initialProfessor =
+      locationSlash === -1
+        ? ''
+        : (group.location ?? '').slice(locationSlash + 1).trim();
 
     return {
       type: 'modal',
@@ -1104,8 +1124,20 @@ export class ScheduleView {
           element: {
             type: 'plain_text_input',
             action_id: 'location_input',
-            ...(group.location ? { initial_value: group.location } : {}),
-            placeholder: { type: 'plain_text', text: '장소' },
+            ...(initialRoom ? { initial_value: initialRoom } : {}),
+            placeholder: { type: 'plain_text', text: '예: 세미나실 A' },
+          },
+        },
+        {
+          type: 'input',
+          block_id: 'professor_block',
+          label: { type: 'plain_text', text: '교수' },
+          optional: true,
+          element: {
+            type: 'plain_text_input',
+            action_id: 'professor_input',
+            ...(initialProfessor ? { initial_value: initialProfessor } : {}),
+            placeholder: { type: 'plain_text', text: '예: 홍길동' },
           },
         },
         {

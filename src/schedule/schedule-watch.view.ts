@@ -64,6 +64,19 @@ function formatDateTimeFromSnapshot(snapshot: EventSnapshot): string {
   return `${formatDate(startDateTime)} ${formatTime(startDateTime)} - ${formatTime(endDateTime)}`;
 }
 
+function parseLocationParts(location: string): {
+  room: string;
+  professor: string | null;
+} {
+  const slashIdx = location.indexOf('/');
+  if (slashIdx === -1)
+    return { room: location.trim(), professor: null };
+  return {
+    room: location.slice(0, slashIdx).trim(),
+    professor: location.slice(slashIdx + 1).trim() || null,
+  };
+}
+
 export function hasRelevantChanges(
   before: EventSnapshot,
   after: calendar_v3.Schema$Event,
@@ -130,14 +143,34 @@ export function buildCalendarNotificationBlocks(
     dateTimeText = `🗓️ *일시*\n${formatDate(startDt)} *${formatTime(startDt)} - ${formatTime(endDt)}*`;
   }
 
-  // 장소
+  // 장소 / 교수 분리
   const afterLocation = event.location ?? '';
+  const { room: afterRoom, professor: afterProfessor } =
+    parseLocationParts(afterLocation);
   const locationChanged = diff && (diff.location ?? '') !== afterLocation;
-  let locationText: string;
-  if (locationChanged) {
-    locationText = `📍 *장소* ✏️\n~${diff!.location || '미지정'}~ → *${afterLocation || '미지정'}*`;
+
+  let roomText: string;
+  let professorText: string | null = null;
+
+  if (locationChanged && diff) {
+    const { room: beforeRoom, professor: beforeProfessor } =
+      parseLocationParts(diff.location ?? '');
+
+    roomText =
+      beforeRoom !== afterRoom
+        ? `📍 *장소* ✏️\n~${beforeRoom || '미지정'}~ → *${afterRoom || '미지정'}*`
+        : `📍 *장소*\n${afterRoom || '_장소 미지정_'}`;
+
+    if (beforeProfessor !== afterProfessor) {
+      professorText = `👨‍🏫 *교수* ✏️\n~${beforeProfessor || '미지정'}~ → *${afterProfessor || '미지정'}*`;
+    } else if (afterProfessor) {
+      professorText = `👨‍🏫 *교수*\n${afterProfessor}`;
+    }
   } else {
-    locationText = `📍 *장소*\n${afterLocation || '_장소 미지정_'}`;
+    roomText = `📍 *장소*\n${afterRoom || '_장소 미지정_'}`;
+    if (afterProfessor) {
+      professorText = `👨‍🏫 *교수*\n${afterProfessor}`;
+    }
   }
 
   // 설명
@@ -160,24 +193,23 @@ export function buildCalendarNotificationBlocks(
     { type: 'divider' },
     {
       type: 'section',
-      text: {
-        type: 'mrkdwn',
-        text: titleText,
-      },
-    },
-    {
-      type: 'section',
       fields: [
-        {
-          type: 'mrkdwn',
-          text: dateTimeText,
-        },
-        {
-          type: 'mrkdwn',
-          text: locationText,
-        },
+        { type: 'mrkdwn', text: titleText },
+        { type: 'mrkdwn', text: dateTimeText },
       ],
     },
+    professorText
+      ? {
+          type: 'section',
+          fields: [
+            { type: 'mrkdwn', text: roomText },
+            { type: 'mrkdwn', text: professorText },
+          ],
+        }
+      : {
+          type: 'section',
+          text: { type: 'mrkdwn', text: roomText },
+        },
     {
       type: 'section',
       fields: [

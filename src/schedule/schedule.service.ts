@@ -1023,6 +1023,18 @@ async function runInChunks<T, R>(
   return allResults;
 }
 
+function parseLocationParts(location: string): {
+  room: string;
+  professor: string | null;
+} {
+  const slashIdx = location.indexOf('/');
+  if (slashIdx === -1) return { room: location.trim(), professor: null };
+  return {
+    room: location.slice(0, slashIdx).trim(),
+    professor: location.slice(slashIdx + 1).trim() || null,
+  };
+}
+
 function buildRecurringDeleteBlocks(
   scheduleName: string,
   group: RecurrenceGroup,
@@ -1051,6 +1063,10 @@ function buildRecurringDeleteBlocks(
       ? `⚠️ ${deletedCount}/${totalCount}개 삭제 완료`
       : `총 ${deletedCount}개 삭제`;
 
+  const { room: delRoom, professor: delProfessor } = parseLocationParts(
+    group.location ?? '',
+  );
+
   return [
     {
       type: 'header',
@@ -1063,18 +1079,11 @@ function buildRecurringDeleteBlocks(
     { type: 'divider' },
     {
       type: 'section',
-      text: { type: 'mrkdwn', text: `📌 *일정 제목*\n*${group.title}*` },
-    },
-    {
-      type: 'section',
       fields: [
+        { type: 'mrkdwn', text: `📌 *일정 제목*\n*${group.title}*` },
         {
           type: 'mrkdwn',
           text: `🕐 *시간*\n${fmtTime(group.startTime, group.endTime)}`,
-        },
-        {
-          type: 'mrkdwn',
-          text: `📅 *요일*\n${fmtDays(group.daysOfWeek)}`,
         },
       ],
     },
@@ -1087,10 +1096,28 @@ function buildRecurringDeleteBlocks(
         },
         {
           type: 'mrkdwn',
-          text: `📍 *장소*\n${group.location || '_미지정_'}`,
+          text: `📅 *요일*\n${fmtDays(group.daysOfWeek)}`,
         },
       ],
     },
+    delProfessor
+      ? {
+          type: 'section',
+          fields: [
+            {
+              type: 'mrkdwn',
+              text: `📍 *장소*\n${delRoom || '_미지정_'}`,
+            },
+            { type: 'mrkdwn', text: `👨‍🏫 *교수*\n${delProfessor}` },
+          ],
+        }
+      : {
+          type: 'section',
+          text: {
+            type: 'mrkdwn',
+            text: `📍 *장소*\n${delRoom || '_미지정_'}`,
+          },
+        },
     {
       type: 'section',
       fields: [
@@ -1168,12 +1195,36 @@ function buildRecurringUpdateBlocks(
     ? `🗓️ *기간* ✏️\n~${fmtPeriod(group.startDate, group.endDate)}~ \n→ *${fmtPeriod(newStartDate, newEndDate)}*`
     : `🗓️ *기간*\n${fmtPeriod(group.startDate, group.endDate)}`;
 
-  // 장소
+  // 장소 / 교수
   const locationChanged =
     dto.location !== undefined && dto.location !== group.location;
-  const locationText = locationChanged
-    ? `📍 *장소* ✏️\n~${group.location || '미지정'}~ → *${dto.location || '미지정'}*`
-    : `📍 *장소*\n${group.location || '_미지정_'}`;
+  const afterLocation = dto.location ?? group.location ?? '';
+  const { room: afterRoom, professor: afterProfessor } =
+    parseLocationParts(afterLocation);
+
+  let roomText: string;
+  let professorText: string | null = null;
+
+  if (locationChanged) {
+    const { room: beforeRoom, professor: beforeProfessor } =
+      parseLocationParts(group.location ?? '');
+
+    roomText =
+      beforeRoom !== afterRoom
+        ? `📍 *장소* ✏️\n~${beforeRoom || '미지정'}~ → *${afterRoom || '미지정'}*`
+        : `📍 *장소*\n${afterRoom || '_미지정_'}`;
+
+    if (beforeProfessor !== afterProfessor) {
+      professorText = `👨‍🏫 *교수* ✏️\n~${beforeProfessor || '미지정'}~ → *${afterProfessor || '미지정'}*`;
+    } else if (afterProfessor) {
+      professorText = `👨‍🏫 *교수*\n${afterProfessor}`;
+    }
+  } else {
+    roomText = `📍 *장소*\n${afterRoom || '_미지정_'}`;
+    if (afterProfessor) {
+      professorText = `👨‍🏫 *교수*\n${afterProfessor}`;
+    }
+  }
 
   // 처리 결과
   const scopeText = scope === 'all' ? '전체' : '오늘 이후';
@@ -1194,22 +1245,30 @@ function buildRecurringUpdateBlocks(
     { type: 'divider' },
     {
       type: 'section',
-      text: { type: 'mrkdwn', text: titleText },
-    },
-    {
-      type: 'section',
       fields: [
+        { type: 'mrkdwn', text: titleText },
         { type: 'mrkdwn', text: timeText },
-        { type: 'mrkdwn', text: daysText },
       ],
     },
     {
       type: 'section',
       fields: [
         { type: 'mrkdwn', text: periodText },
-        { type: 'mrkdwn', text: locationText },
+        { type: 'mrkdwn', text: daysText },
       ],
     },
+    professorText
+      ? {
+          type: 'section',
+          fields: [
+            { type: 'mrkdwn', text: roomText },
+            { type: 'mrkdwn', text: professorText },
+          ],
+        }
+      : {
+          type: 'section',
+          text: { type: 'mrkdwn', text: roomText },
+        },
     {
       type: 'section',
       fields: [
@@ -1265,6 +1324,10 @@ function buildRecurringCreationBlocks(
       ? `⚠️ ${successCount}/${totalCount}개 생성 완료`
       : `총 ${successCount}개 생성`;
 
+  const { room: crtRoom, professor: crtProfessor } = parseLocationParts(
+    dto.location ?? '',
+  );
+
   return [
     {
       type: 'header',
@@ -1277,18 +1340,11 @@ function buildRecurringCreationBlocks(
     { type: 'divider' },
     {
       type: 'section',
-      text: { type: 'mrkdwn', text: `📌 *일정 제목*\n*${dto.title}*` },
-    },
-    {
-      type: 'section',
       fields: [
+        { type: 'mrkdwn', text: `📌 *일정 제목*\n*${dto.title}*` },
         {
           type: 'mrkdwn',
           text: `🕐 *시간*\n${fmtTime(dto.startTime, dto.endTime)}`,
-        },
-        {
-          type: 'mrkdwn',
-          text: `📅 *요일*\n${fmtDays(dto.daysOfWeek)}`,
         },
       ],
     },
@@ -1301,10 +1357,25 @@ function buildRecurringCreationBlocks(
         },
         {
           type: 'mrkdwn',
-          text: `📍 *장소*\n${dto.location || '_미지정_'}`,
+          text: `📅 *요일*\n${fmtDays(dto.daysOfWeek)}`,
         },
       ],
     },
+    crtProfessor
+      ? {
+          type: 'section',
+          fields: [
+            { type: 'mrkdwn', text: `📍 *장소*\n${crtRoom || '_미지정_'}` },
+            { type: 'mrkdwn', text: `👨‍🏫 *교수*\n${crtProfessor}` },
+          ],
+        }
+      : {
+          type: 'section',
+          text: {
+            type: 'mrkdwn',
+            text: `📍 *장소*\n${crtRoom || '_미지정_'}`,
+          },
+        },
     {
       type: 'section',
       fields: [
