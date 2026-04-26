@@ -102,23 +102,23 @@ export class HomeView {
           elements: [
             {
               type: 'button',
-              text: { type: 'plain_text', text: '과목 시간표' },
+              text: { type: 'plain_text', text: '과목별' },
               style: 'primary',
               action_id: 'home:open-subscribe',
             },
             {
               type: 'button',
-              text: { type: 'plain_text', text: '교수 시간표' },
+              text: { type: 'plain_text', text: '교수별' },
               action_id: 'home:open-professor-schedule',
             },
             {
               type: 'button',
-              text: { type: 'plain_text', text: '교실 시간표' },
+              text: { type: 'plain_text', text: '교실별' },
               action_id: 'home:open-classroom-schedule',
             },
             {
               type: 'button',
-              text: { type: 'plain_text', text: '태그 시간표' },
+              text: { type: 'plain_text', text: '태그별' },
               action_id: 'home:open-tag-schedule',
             },
           ],
@@ -126,7 +126,7 @@ export class HomeView {
         { type: 'divider' },
         {
           type: 'header',
-          text: { type: 'plain_text', text: '📚 스터디룸', emoji: true },
+          text: { type: 'plain_text', text: '📋 예약', emoji: true },
         },
         {
           type: 'context',
@@ -142,13 +142,14 @@ export class HomeView {
           elements: [
             {
               type: 'button',
-              text: { type: 'plain_text', text: '스터디룸 예약' },
+              text: { type: 'plain_text', text: '스터디룸' },
               style: 'primary',
               action_id: 'home:open-booking',
             },
             {
               type: 'button',
-              text: { type: 'plain_text', text: '교수 상담 예약' },
+              text: { type: 'plain_text', text: '교수 상담' },
+              style: 'primary',
               action_id: 'home:open-professor-booking-pages',
             },
             {
@@ -224,7 +225,7 @@ export class HomeView {
           elements: [
             {
               type: 'mrkdwn',
-              text: '시간표를 *구독* 하거나 *생성·수정* 할 수 있어요. 교실별/태그별 일정도 모아볼 수 있어요.',
+              text: '수업 일정을 조회하거나 구독할 수 있어요. 교수/교실/태그별로 시간표를 모아볼 수 있어요.',
             },
           ],
         },
@@ -233,35 +234,60 @@ export class HomeView {
           elements: [
             {
               type: 'button',
-              text: { type: 'plain_text', text: '과목 시간표' },
+              text: { type: 'plain_text', text: '과목별' },
               style: 'primary',
               action_id: 'home:open-subscribe',
             },
             {
               type: 'button',
-              text: { type: 'plain_text', text: '교수 시간표' },
+              text: { type: 'plain_text', text: '교수별' },
               action_id: 'home:open-professor-schedule',
             },
             {
               type: 'button',
-              text: { type: 'plain_text', text: '교실 시간표' },
+              text: { type: 'plain_text', text: '교실별' },
               action_id: 'home:open-classroom-schedule',
             },
             {
               type: 'button',
-              text: { type: 'plain_text', text: '태그 시간표' },
+              text: { type: 'plain_text', text: '태그별' },
               action_id: 'home:open-tag-schedule',
             },
+          ],
+        },
+        { type: 'divider' },
+        {
+          type: 'header',
+          text: { type: 'plain_text', text: '📋 예약', emoji: true },
+        },
+        {
+          type: 'context',
+          elements: [
+            {
+              type: 'mrkdwn',
+              text: '스터디룸 예약, 교수 상담 예약이 가능해요. 내 예약 현황도 여기서 확인할 수 있어요.',
+            },
+          ],
+        },
+        {
+          type: 'actions',
+          elements: [
             {
               type: 'button',
-              text: { type: 'plain_text', text: '생성' },
+              text: { type: 'plain_text', text: '스터디룸' },
               style: 'primary',
-              action_id: 'home:open-create-schedule',
+              action_id: 'home:open-booking',
             },
             {
               type: 'button',
-              text: { type: 'plain_text', text: '수정' },
-              action_id: 'home:open-schedule-list',
+              text: { type: 'plain_text', text: '교수 상담' },
+              style: 'primary',
+              action_id: 'home:open-professor-booking-pages',
+            },
+            {
+              type: 'button',
+              text: { type: 'plain_text', text: '내 예약' },
+              action_id: 'home:open-my-bookings',
             },
           ],
         },
@@ -275,7 +301,7 @@ export class HomeView {
           elements: [
             {
               type: 'mrkdwn',
-              text: '반복 수업 일정을 *생성* 하거나 *수정·삭제* 할 수 있어요.',
+              text: '과목 캘린더에 반복 수업 일정을 *생성* 하거나 *수정·삭제* 할 수 있어요.',
             },
           ],
         },
@@ -304,6 +330,47 @@ export class HomeView {
         { type: 'divider' },
         {
           type: 'header',
+          text: { type: 'plain_text', text: '🗂️ 캘린더 관리', emoji: true },
+        },
+        {
+          type: 'context',
+          elements: [
+            {
+              type: 'mrkdwn',
+              text: '과목 시간표와 스터디룸·교수 캘린더를 *생성·관리* 할 수 있어요.',
+            },
+          ],
+        },
+        {
+          type: 'actions',
+          elements: [
+            {
+              type: 'button',
+              text: { type: 'plain_text', text: '과목 생성' },
+              style: 'primary',
+              action_id: 'home:open-create-schedule',
+            },
+            {
+              type: 'button',
+              text: { type: 'plain_text', text: '과목 목록' },
+              action_id: 'home:open-schedule-list',
+            },
+            {
+              type: 'button',
+              text: { type: 'plain_text', text: '리소스 생성' },
+              style: 'primary',
+              action_id: 'home:open-create-study-room',
+            },
+            {
+              type: 'button',
+              text: { type: 'plain_text', text: '리소스 목록' },
+              action_id: 'home:open-study-room-manage',
+            },
+          ],
+        },
+        { type: 'divider' },
+        {
+          type: 'header',
           text: { type: 'plain_text', text: '👥 유저 관리', emoji: true },
         },
         {
@@ -320,7 +387,7 @@ export class HomeView {
           elements: [
             {
               type: 'button',
-              text: { type: 'plain_text', text: '유저 관리' },
+              text: { type: 'plain_text', text: '유저 목록' },
               action_id: 'home:open-user-management',
             },
             {
@@ -340,7 +407,7 @@ export class HomeView {
           elements: [
             {
               type: 'mrkdwn',
-              text: '반을 *생성* 하거나 목록을 *조회·관리* 할 수 있어요.',
+              text: '반을 *생성* 하거나 목록에서 *관리* 할 수 있어요.',
             },
           ],
         },
@@ -370,7 +437,7 @@ export class HomeView {
           elements: [
             {
               type: 'mrkdwn',
-              text: '시간표 분류에 사용할 태그를 *조회* 하고 *생성* 할 수 있어요.',
+              text: '시간표 분류에 사용할 태그를 *생성* 하거나 목록에서 *관리* 할 수 있어요.',
             },
           ],
         },
@@ -387,52 +454,6 @@ export class HomeView {
               type: 'button',
               text: { type: 'plain_text', text: '태그 목록' },
               action_id: 'home:open-tags',
-            },
-          ],
-        },
-        { type: 'divider' },
-        {
-          type: 'header',
-          text: { type: 'plain_text', text: '🏠 스터디룸', emoji: true },
-        },
-        {
-          type: 'context',
-          elements: [
-            {
-              type: 'mrkdwn',
-              text: '스터디룸 예약, 교수 상담 예약이 가능해요. 내 예약 현황도 여기서 확인할 수 있어요.',
-            },
-          ],
-        },
-        {
-          type: 'actions',
-          elements: [
-            {
-              type: 'button',
-              text: { type: 'plain_text', text: '스터디룸 예약' },
-              style: 'primary',
-              action_id: 'home:open-booking',
-            },
-            {
-              type: 'button',
-              text: { type: 'plain_text', text: '교수 상담 예약' },
-              action_id: 'home:open-professor-booking-pages',
-            },
-            {
-              type: 'button',
-              text: { type: 'plain_text', text: '내 예약' },
-              action_id: 'home:open-my-bookings',
-            },
-            {
-              type: 'button',
-              text: { type: 'plain_text', text: '생성' },
-              style: 'primary',
-              action_id: 'home:open-create-study-room',
-            },
-            {
-              type: 'button',
-              text: { type: 'plain_text', text: '수정' },
-              action_id: 'home:open-study-room-manage',
             },
           ],
         },
