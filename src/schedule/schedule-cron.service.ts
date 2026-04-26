@@ -4,8 +4,8 @@ import { CACHE_MANAGER } from '@nestjs/cache-manager';
 import type { Cache } from 'cache-manager';
 import { calendar_v3 } from 'googleapis';
 import { ScheduleService } from './schedule.service';
-import { SpaceMirrorService } from '../space/space-mirror.service';
-import { SpaceService } from '../space/space.service';
+import { ResourceMirrorService } from '../resource/resource-mirror.service';
+import { ResourceService } from '../resource/resource.service';
 import { GoogleCalendarService } from '../google/google-calendar.service';
 
 const CRON_SUPPRESS_KEY = 'suppress:cron:sync';
@@ -16,8 +16,8 @@ export class ScheduleCronService {
 
   constructor(
     private readonly scheduleService: ScheduleService,
-    private readonly spaceMirrorService: SpaceMirrorService,
-    private readonly spaceService: SpaceService,
+    private readonly resourceMirrorService: ResourceMirrorService,
+    private readonly resourceService: ResourceService,
     private readonly googleCalendarService: GoogleCalendarService,
     @Inject(CACHE_MANAGER) private readonly cache: Cache,
   ) {}
@@ -53,6 +53,7 @@ export class ScheduleCronService {
       let failed = 0;
 
       // 전방 패스: 소스 이벤트 미러링 + 유효한 미러 이벤트 ID 수집
+      // TODO: 하나의 이벤트에 여러개의 미러 이벤트가 생성될 수 있으므로 조금 더 효율적인 확인을 위해 로직 수정 필요
       const validMirrorEventIds = new Set<string>();
 
       for (const schedule of schedules) {
@@ -72,46 +73,52 @@ export class ScheduleCronService {
 
         for (const event of events) {
           if (!event.id) continue;
-          if (this.spaceMirrorService.isMirroredEvent(event)) continue;
+          if (this.resourceMirrorService.isMirroredEvent(event)) continue;
           if (event.recurringEventId) continue;
 
           // 잘못된 mirror가 삭제되지 않는것 보다, 정상적인 mirror를 삭제하는 것이 더 큰 문제라고 판단하여 원본과 연결된 미러 id 선보존
-          const existingId =
-            event.extendedProperties?.private?.['mirroredEventId'];
-          if (existingId) validMirrorEventIds.add(existingId);
+          const existingTargetsRaw =
+            event.extendedProperties?.private?.['mirroredTargets'];
+          if (existingTargetsRaw) {
+            try {
+              const targets: { calendarId: string; eventId: string }[] =
+                JSON.parse(existingTargetsRaw);
+              for (const t of targets) {
+                if (t.eventId) validMirrorEventIds.add(t.eventId);
+              }
+            } catch {
+              // malformed JSON — skip pre-seeding for this event
+            }
+          }
 
-          const mirrorId = await this.spaceMirrorService
+          await this.resourceMirrorService
             .mirrorEvent(event, schedule.calendarId)
+            .then(() => synced++)
             .catch((err: Error) => {
               failed++;
               this.logger.warn(
                 `Mirror sync failed for event ${event.id}: ${err.message}`,
               );
-              return null;
             });
-
-          if (mirrorId) {
-            validMirrorEventIds.add(mirrorId);
-            synced++;
-          }
         }
       }
 
       // 역방향 패스: 소스가 사라진 미러 이벤트 삭제
       let removed = 0;
-      const spaces = await this.spaceService.findAll(true);
+      const resources = await this.resourceService.findAll(true);
 
-      for (const space of spaces) {
+      for (const resource of resources) {
         let mirrorEvents: calendar_v3.Schema$Event[];
         try {
-          mirrorEvents = await this.googleCalendarService.listMirrorEventsInRange(
-            space.calendarId,
-            timeMin,
-            timeMax,
-          );
+          mirrorEvents =
+            await this.googleCalendarService.listMirrorEventsInRange(
+              resource.calendarId,
+              timeMin,
+              timeMax,
+            );
         } catch (err: any) {
           this.logger.warn(
-            `Failed to list mirror events for space ${space.id}: ${err.message}`,
+            `Failed to list mirror events for resource ${resource.id}: ${err.message}`,
           );
           continue;
         }
@@ -120,10 +127,8 @@ export class ScheduleCronService {
           if (!mirror.id) continue;
 
           if (!validMirrorEventIds.has(mirror.id)) {
-            await this.googleCalendarService.deleteEventAsServiceAccount(
-              space.calendarId,
-              mirror.id,
-            )
+            await this.googleCalendarService
+              .deleteEventAsServiceAccount(resource.calendarId, mirror.id)
               .then(() => removed++)
               .catch((err: Error) => {
                 this.logger.warn(

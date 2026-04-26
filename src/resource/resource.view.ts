@@ -1,6 +1,6 @@
 import type { View } from '@slack/types';
-import { Space, SpaceStatus, SpaceType } from './space.entity';
-import { BookingItem } from './space.service';
+import { Resource, ResourceStatus, ResourceType } from './resource.entity';
+import { BookingItem } from './resource.service';
 import { toKST } from '../utils/date.util';
 import { multiUsersSelectBlock } from '../common/blocks';
 
@@ -33,15 +33,15 @@ const DURATION_OPTIONS = (() => {
   return options;
 })();
 
-export class SpaceView {
-  static listModal(spaces: Space[]): View {
+export class ResourceView {
+  static listModal(resources: Resource[]): View {
     const combinedCalendarUrl =
-      spaces.length > 0
+      resources.length > 0
         ? 'https://calendar.google.com/calendar/embed?' +
-          spaces
+          resources
             .map(
-              (space, i) =>
-                `src=${encodeURIComponent(space.calendarId)}&color=${ROOM_COLORS[i % ROOM_COLORS.length]}`,
+              (r, i) =>
+                `src=${encodeURIComponent(r.calendarId)}&color=${ROOM_COLORS[i % ROOM_COLORS.length]}`,
             )
             .join('&') +
           '&ctz=Asia%2FSeoul&mode=WEEK'
@@ -66,23 +66,23 @@ export class SpaceView {
       { type: 'divider' },
     ];
 
-    if (spaces.length === 0) {
+    if (resources.length === 0) {
       blocks.push({
         type: 'section',
         text: { type: 'mrkdwn', text: '등록된 스터디룸이 없습니다.' },
       });
     } else {
-      for (const [i, space] of spaces.entries()) {
+      for (const [i, resource] of resources.entries()) {
         const color = ROOM_COLORS[i % ROOM_COLORS.length];
-        const calendarUrl = `https://calendar.google.com/calendar/embed?src=${encodeURIComponent(space.calendarId)}&color=${color}&ctz=Asia%2FSeoul&mode=WEEK`;
+        const calendarUrl = `https://calendar.google.com/calendar/embed?src=${encodeURIComponent(resource.calendarId)}&color=${color}&ctz=Asia%2FSeoul&mode=WEEK`;
         blocks.push(
           {
             type: 'section',
             text: {
               type: 'mrkdwn',
-              text: space.description
-                ? `*${space.name}*\n${space.description}`
-                : `*${space.name}*`,
+              text: resource.description
+                ? `*${resource.name}*\n${resource.description}`
+                : `*${resource.name}*`,
             },
           },
           {
@@ -93,7 +93,7 @@ export class SpaceView {
                 text: { type: 'plain_text', text: '예약' },
                 style: 'primary',
                 action_id: 'study-room:action:book',
-                value: String(space.id),
+                value: String(resource.id),
               },
               {
                 type: 'button',
@@ -133,7 +133,7 @@ export class SpaceView {
             action_id: 'name_input',
             placeholder: {
               type: 'plain_text',
-              text: '공간 이름을 입력하세요',
+              text: '공간 이름 또는 교수 이름',
             },
           },
         },
@@ -154,6 +154,10 @@ export class SpaceView {
                 text: { type: 'plain_text', text: '교실 (시간표 자동 복제)' },
                 value: 'classroom',
               },
+              {
+                text: { type: 'plain_text', text: '교수 (일정 미러링)' },
+                value: 'professor',
+              },
             ],
           },
         },
@@ -164,12 +168,15 @@ export class SpaceView {
           optional: true,
           hint: {
             type: 'plain_text',
-            text: '쉼표로 구분해서 입력하세요. 시간표 이벤트의 location과 매핑됩니다. 예: 301강,301호,301',
+            text: '쉼표로 구분해서 입력하세요. 이벤트 location의 / 앞(공간), / 뒤(교수)와 매핑됩니다.',
           },
           element: {
             type: 'plain_text_input',
             action_id: 'aliases_input',
-            placeholder: { type: 'plain_text', text: '301강, 301호, 301' },
+            placeholder: {
+              type: 'plain_text',
+              text: '301강, 301호, 홍길동, Hong',
+            },
           },
         },
         {
@@ -211,18 +218,18 @@ export class SpaceView {
     };
   }
 
-  static bookingModal(space: Space, calculatedEndTime?: string): View {
+  static bookingModal(resource: Resource, calculatedEndTime?: string): View {
     return {
       type: 'modal',
       callback_id: 'study-room:modal:book',
       title: { type: 'plain_text', text: '예약하기' },
       submit: { type: 'plain_text', text: '예약' },
       close: { type: 'plain_text', text: '취소' },
-      private_metadata: JSON.stringify({ roomId: space.id }),
+      private_metadata: JSON.stringify({ roomId: resource.id }),
       blocks: [
         {
           type: 'section',
-          text: { type: 'mrkdwn', text: `*${space.name}*` },
+          text: { type: 'mrkdwn', text: `*${resource.name}*` },
         },
         { type: 'divider' },
         {
@@ -311,7 +318,7 @@ export class SpaceView {
         const meta = JSON.stringify({
           calendarId: booking.calendarId,
           eventId: booking.eventId,
-          roomName: booking.spaceName,
+          roomName: booking.resourceName,
           startIso: booking.startTime.toISOString(),
           endIso: booking.endTime.toISOString(),
         });
@@ -321,7 +328,7 @@ export class SpaceView {
             type: 'section',
             text: {
               type: 'mrkdwn',
-              text: `*${booking.summary}*\n${booking.spaceName} | ${dateStr} ${startStr}~${endStr}`,
+              text: `*${booking.summary}*\n${booking.resourceName} | ${dateStr} ${startStr}~${endStr}`,
             },
           },
           {
@@ -477,14 +484,14 @@ export class SpaceView {
     };
   }
 
-  static manageModal(spaces: Space[]): View {
+  static manageModal(resources: Resource[]): View {
     const blocks: View['blocks'] = [
       {
         type: 'actions',
         elements: [
           {
             type: 'button',
-            text: { type: 'plain_text', text: '+ 새 스터디룸 등록' },
+            text: { type: 'plain_text', text: '+ 새 리소스 등록' },
             action_id: 'study-room:admin:open-create',
             style: 'primary',
           },
@@ -493,28 +500,35 @@ export class SpaceView {
       { type: 'divider' },
     ];
 
-    if (spaces.length === 0) {
+    if (resources.length === 0) {
       blocks.push({
         type: 'section',
-        text: { type: 'mrkdwn', text: '등록된 스터디룸이 없습니다.' },
+        text: { type: 'mrkdwn', text: '등록된 리소스가 없습니다.' },
       });
     } else {
-      for (const space of spaces) {
+      const typeLabels: Record<ResourceType, string> = {
+        [ResourceType.STUDY_ROOM]: '스터디룸',
+        [ResourceType.CLASSROOM]: '교실',
+        [ResourceType.PROFESSOR]: '교수',
+      };
+
+      for (const resource of resources) {
         const meta = JSON.stringify({
-          roomId: space.id,
-          roomName: space.name,
-          calendarId: space.calendarId,
+          roomId: resource.id,
+          roomName: resource.name,
+          calendarId: resource.calendarId,
         });
         const statusLabel =
-          space.status === SpaceStatus.ACTIVE ? '활성' : '비활성';
-        const defaultLabel = space.isDefault ? ' `기본 공간`' : '';
+          resource.status === ResourceStatus.ACTIVE ? '활성' : '비활성';
+        const defaultLabel = resource.isDefault ? ' `기본 공간`' : '';
+        const typeLabel = typeLabels[resource.type] ?? resource.type;
 
         blocks.push(
           {
             type: 'section',
             text: {
               type: 'mrkdwn',
-              text: `*${space.name}* \`${statusLabel}\`${defaultLabel}${space.description ? `\n${space.description}` : ''}`,
+              text: `*${resource.name}* \`${typeLabel}\` \`${statusLabel}\`${defaultLabel}${resource.description ? `\n${resource.description}` : ''}`,
             },
           },
           {
@@ -536,10 +550,12 @@ export class SpaceView {
                 type: 'button',
                 text: {
                   type: 'plain_text',
-                  text: space.isDefault ? '기본 공간 해제' : '기본 공간 지정',
+                  text: resource.isDefault
+                    ? '기본 공간 해제'
+                    : '기본 공간 지정',
                 },
                 action_id: 'study-room:admin:toggle-default',
-                style: space.isDefault ? undefined : 'primary',
+                style: resource.isDefault ? undefined : 'primary',
                 value: meta,
               },
               {
@@ -547,19 +563,23 @@ export class SpaceView {
                 text: {
                   type: 'plain_text',
                   text:
-                    space.status === SpaceStatus.ACTIVE ? '비활성화' : '활성화',
+                    resource.status === ResourceStatus.ACTIVE
+                      ? '비활성화'
+                      : '활성화',
                 },
                 action_id: 'study-room:admin:toggle-status',
                 style:
-                  space.status === SpaceStatus.ACTIVE ? 'danger' : 'primary',
+                  resource.status === ResourceStatus.ACTIVE
+                    ? 'danger'
+                    : 'primary',
                 value: meta,
                 confirm:
-                  space.status === SpaceStatus.ACTIVE
+                  resource.status === ResourceStatus.ACTIVE
                     ? {
                         title: { type: 'plain_text', text: '비활성화 확인' },
                         text: {
                           type: 'mrkdwn',
-                          text: `*${space.name}*을 비활성화하시겠습니까?\n예약 목록에서 숨겨집니다.`,
+                          text: `*${resource.name}*을 비활성화하시겠습니까?\n예약 목록에서 숨겨집니다.`,
                         },
                         confirm: { type: 'plain_text', text: '비활성화' },
                         deny: { type: 'plain_text', text: '취소' },
@@ -584,23 +604,45 @@ export class SpaceView {
     return {
       type: 'modal',
       callback_id: 'study-room:modal:manage',
-      title: { type: 'plain_text', text: '스터디룸 관리' },
+      title: { type: 'plain_text', text: '리소스 관리' },
       close: { type: 'plain_text', text: '닫기' },
       blocks,
     };
   }
 
-  static editModal(space: Space): View {
+  static editModal(resource: Resource): View {
+    const typeOptions = [
+      {
+        text: { type: 'plain_text' as const, text: '스터디룸 (예약 가능)' },
+        value: 'study_room',
+      },
+      {
+        text: { type: 'plain_text' as const, text: '교실 (시간표 자동 복제)' },
+        value: 'classroom',
+      },
+      {
+        text: { type: 'plain_text' as const, text: '교수 (일정 미러링)' },
+        value: 'professor',
+      },
+    ];
+
+    const currentTypeLabel =
+      resource.type === ResourceType.CLASSROOM
+        ? '교실 (시간표 자동 복제)'
+        : resource.type === ResourceType.PROFESSOR
+          ? '교수 (일정 미러링)'
+          : '스터디룸 (예약 가능)';
+
     return {
       type: 'modal',
       callback_id: 'study-room:modal:edit',
-      title: { type: 'plain_text', text: '스터디룸 수정' },
+      title: { type: 'plain_text', text: '리소스 수정' },
       submit: { type: 'plain_text', text: '저장' },
       close: { type: 'plain_text', text: '취소' },
       private_metadata: JSON.stringify({
-        roomId: space.id,
-        roomName: space.name,
-        calendarId: space.calendarId,
+        roomId: resource.id,
+        roomName: resource.name,
+        calendarId: resource.calendarId,
       }),
       blocks: [
         {
@@ -610,7 +652,7 @@ export class SpaceView {
           element: {
             type: 'plain_text_input',
             action_id: 'name_input',
-            initial_value: space.name,
+            initial_value: resource.name,
           },
         },
         {
@@ -620,25 +662,10 @@ export class SpaceView {
           element: {
             type: 'static_select',
             action_id: 'type_select',
-            options: [
-              {
-                text: { type: 'plain_text', text: '스터디룸 (예약 가능)' },
-                value: 'study_room',
-              },
-              {
-                text: { type: 'plain_text', text: '교실 (시간표 자동 복제)' },
-                value: 'classroom',
-              },
-            ],
+            options: typeOptions,
             initial_option: {
-              text: {
-                type: 'plain_text',
-                text:
-                  space.type === SpaceType.CLASSROOM
-                    ? '교실 (시간표 자동 복제)'
-                    : '스터디룸 (예약 가능)',
-              },
-              value: space.type,
+              text: { type: 'plain_text', text: currentTypeLabel },
+              value: resource.type,
             },
           },
         },
@@ -649,12 +676,12 @@ export class SpaceView {
           optional: true,
           hint: {
             type: 'plain_text',
-            text: '쉼표로 구분해서 입력하세요. 시간표 이벤트의 location과 매핑됩니다. 예: 301강,301호,301',
+            text: '쉼표로 구분해서 입력하세요. 교수 유형은 / 뒤 텍스트로 매핑됩니다.',
           },
           element: {
             type: 'plain_text_input',
             action_id: 'aliases_input',
-            initial_value: space.aliases?.join(', ') ?? '',
+            initial_value: resource.aliases?.join(', ') ?? '',
             placeholder: { type: 'plain_text', text: '301강, 301호, 301' },
           },
         },
@@ -667,7 +694,7 @@ export class SpaceView {
             type: 'plain_text_input',
             action_id: 'description_input',
             multiline: true,
-            initial_value: space.description ?? '',
+            initial_value: resource.description ?? '',
             placeholder: {
               type: 'plain_text',
               text: '시설 정보, 수용 인원 등',
@@ -684,19 +711,20 @@ export class SpaceView {
             options: [
               {
                 text: { type: 'plain_text', text: '활성' },
-                value: SpaceStatus.ACTIVE,
+                value: ResourceStatus.ACTIVE,
               },
               {
                 text: { type: 'plain_text', text: '비활성' },
-                value: SpaceStatus.INACTIVE,
+                value: ResourceStatus.INACTIVE,
               },
             ],
             initial_option: {
               text: {
                 type: 'plain_text',
-                text: space.status === SpaceStatus.ACTIVE ? '활성' : '비활성',
+                text:
+                  resource.status === ResourceStatus.ACTIVE ? '활성' : '비활성',
               },
-              value: space.status,
+              value: resource.status,
             },
           },
         },
@@ -704,11 +732,11 @@ export class SpaceView {
     };
   }
 
-  static classroomScheduleModal(classrooms: Space[]): View {
+  static classroomScheduleModal(resources: Resource[]): View {
     const combinedCalendarUrl =
-      classrooms.length > 0
+      resources.length > 0
         ? 'https://calendar.google.com/calendar/embed?' +
-          classrooms
+          resources
             .map(
               (c, i) =>
                 `src=${encodeURIComponent(c.calendarId)}&color=${ROOM_COLORS[i % ROOM_COLORS.length]}`,
@@ -719,18 +747,32 @@ export class SpaceView {
 
     const blocks: View['blocks'] = [];
 
-    if (classrooms.length === 0) {
+    if (combinedCalendarUrl) {
+      blocks.push({
+        type: 'actions',
+        elements: [
+          {
+            type: 'button',
+            text: { type: 'plain_text', text: '전체 교실 일정 보기 ❐' },
+            url: combinedCalendarUrl,
+            action_id: 'space:action:view-classroom-all',
+          },
+        ],
+      });
+    }
+
+    if (resources.length === 0) {
       blocks.push({
         type: 'section',
         text: { type: 'mrkdwn', text: '등록된 교실이 없습니다.' },
       });
     } else {
-      for (const [i, classroom] of classrooms.entries()) {
+      for (const [i, resource] of resources.entries()) {
         const color = ROOM_COLORS[i % ROOM_COLORS.length];
-        const calendarUrl = `https://calendar.google.com/calendar/embed?src=${encodeURIComponent(classroom.calendarId)}&color=${color}&ctz=Asia%2FSeoul&mode=WEEK`;
+        const calendarUrl = `https://calendar.google.com/calendar/embed?src=${encodeURIComponent(resource.calendarId)}&color=${color}&ctz=Asia%2FSeoul&mode=WEEK`;
         const aliasText =
-          classroom.aliases?.length > 0
-            ? `\n별칭: ${classroom.aliases.join(', ')}`
+          resource.aliases?.length > 0
+            ? `\n별칭: ${resource.aliases.join(', ')}`
             : '';
 
         blocks.push(
@@ -738,15 +780,15 @@ export class SpaceView {
             type: 'section',
             text: {
               type: 'mrkdwn',
-              text: classroom.description
-                ? `*${classroom.name}*${aliasText}\n${classroom.description}`
-                : `*${classroom.name}*${aliasText}`,
+              text: resource.description
+                ? `*${resource.name}*${aliasText}\n${resource.description}`
+                : `*${resource.name}*${aliasText}`,
             },
             accessory: {
               type: 'button',
               text: { type: 'plain_text', text: '일정 보기 ❐' },
               url: calendarUrl,
-              action_id: `space:action:view-classroom-${classroom.id}`,
+              action_id: `space:action:view-classroom-${resource.id}`,
             },
           },
           { type: 'divider' },
@@ -763,8 +805,81 @@ export class SpaceView {
     };
   }
 
+  static professorScheduleModal(resources: Resource[]): View {
+    const combinedCalendarUrl =
+      resources.length > 0
+        ? 'https://calendar.google.com/calendar/embed?' +
+          resources
+            .map(
+              (c, i) =>
+                `src=${encodeURIComponent(c.calendarId)}&color=${ROOM_COLORS[i % ROOM_COLORS.length]}`,
+            )
+            .join('&') +
+          '&ctz=Asia%2FSeoul&mode=WEEK'
+        : undefined;
+
+    const blocks: View['blocks'] = [];
+
+    if (combinedCalendarUrl) {
+      blocks.push({
+        type: 'actions',
+        elements: [
+          {
+            type: 'button',
+            text: { type: 'plain_text', text: '전체 교수 일정 보기 ❐' },
+            url: combinedCalendarUrl,
+            action_id: 'space:action:view-professor-all',
+          },
+        ],
+      });
+    }
+
+    if (resources.length === 0) {
+      blocks.push({
+        type: 'section',
+        text: { type: 'mrkdwn', text: '등록된 교수 캘린더가 없습니다.' },
+      });
+    } else {
+      for (const [i, resource] of resources.entries()) {
+        const color = ROOM_COLORS[i % ROOM_COLORS.length];
+        const calendarUrl = `https://calendar.google.com/calendar/embed?src=${encodeURIComponent(resource.calendarId)}&color=${color}&ctz=Asia%2FSeoul&mode=WEEK`;
+        const aliasText =
+          resource.aliases?.length > 0
+            ? `\n별칭: ${resource.aliases.join(', ')}`
+            : '';
+
+        blocks.push(
+          {
+            type: 'section',
+            text: {
+              type: 'mrkdwn',
+              text: resource.description
+                ? `*${resource.name}*${aliasText}\n${resource.description}`
+                : `*${resource.name}*${aliasText}`,
+            },
+            accessory: {
+              type: 'button',
+              text: { type: 'plain_text', text: '일정 보기 ❐' },
+              url: calendarUrl,
+              action_id: `space:action:view-professor-${resource.id}`,
+            },
+          },
+          { type: 'divider' },
+        );
+      }
+    }
+
+    return {
+      type: 'modal',
+      callback_id: 'space:modal:professor-schedule',
+      title: { type: 'plain_text', text: '교수 시간표' },
+      close: { type: 'plain_text', text: '닫기' },
+      blocks,
+    };
+  }
+
   static editorsModal(
-    space: Space,
+    resource: Resource,
     initialEditorSlackIds: string[] = [],
   ): View {
     return {
@@ -774,8 +889,8 @@ export class SpaceView {
       submit: { type: 'plain_text', text: '저장' },
       close: { type: 'plain_text', text: '취소' },
       private_metadata: JSON.stringify({
-        roomId: space.id,
-        calendarId: space.calendarId,
+        roomId: resource.id,
+        calendarId: resource.calendarId,
       }),
       blocks: [
         multiUsersSelectBlock({
@@ -795,7 +910,7 @@ export class SpaceView {
       type: 'modal',
       callback_id: 'study-room:modal:delete',
       private_metadata: String(roomId),
-      title: { type: 'plain_text', text: '스터디룸 삭제' },
+      title: { type: 'plain_text', text: '리소스 삭제' },
       submit: { type: 'plain_text', text: '삭제' },
       close: { type: 'plain_text', text: '취소' },
       blocks: [
@@ -803,7 +918,7 @@ export class SpaceView {
           type: 'section',
           text: {
             type: 'mrkdwn',
-            text: `*${roomName}* 스터디룸을 삭제하시겠습니까?\n\n⚠️ Google Calendar도 함께 삭제되며 되돌릴 수 없습니다.`,
+            text: `*${roomName}*을 삭제하시겠습니까?\n\n⚠️ Google Calendar도 함께 삭제되며 되돌릴 수 없습니다.`,
           },
         },
       ],

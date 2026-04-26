@@ -11,7 +11,7 @@ import { UserModule } from '../user/user.module';
 import { TagModule } from '../tag/tag.module';
 import { Tag } from '../tag/tag.entity';
 import { ChannelModule } from '../channel/channel.module';
-import { SpaceModule } from '../space/space.module';
+import { ResourceModule } from '../resource/resource.module';
 import { GoogleModule } from '../google/google.module';
 
 @Module({
@@ -20,11 +20,15 @@ import { GoogleModule } from '../google/google.module';
     forwardRef(() => UserModule),
     forwardRef(() => TagModule),
     ChannelModule,
-    SpaceModule,
+    ResourceModule,
     GoogleModule,
   ],
   controllers: [ScheduleController, ScheduleWatchController],
-  providers: [ScheduleService, ScheduleCronService, ScheduleNotificationService],
+  providers: [
+    ScheduleService,
+    ScheduleCronService,
+    ScheduleNotificationService,
+  ],
   exports: [ScheduleService],
 })
 export class ScheduleModule {}
