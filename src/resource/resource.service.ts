@@ -24,6 +24,14 @@ export interface BookResourceDto {
   attendeeSlackIds: string[];
 }
 
+export interface ConsultationItem {
+  eventId: string;
+  summary: string;
+  startTime: Date;
+  endTime: Date;
+  htmlLink?: string;
+}
+
 export interface BookingItem {
   calendarId: string;
   eventId: string;
@@ -261,9 +269,58 @@ export class ResourceService {
       status?: ResourceStatus;
       aliases?: string[];
       type?: ResourceType;
+      bookingUrl?: string | null;
     },
   ): Promise<void> {
     await this.resourceRepository.update(id, dto as any);
+  }
+
+  async getProfessorConsultations(
+    slackId: string,
+  ): Promise<ConsultationItem[]> {
+    const user = await this.userService.findBySlackId(slackId);
+    if (!user) return [];
+
+    const refreshToken = this.userService.getDecryptedRefreshToken(user);
+    if (!refreshToken) return [];
+
+    const now = new Date();
+    const future = new Date(now.getTime() + 90 * 24 * 60 * 60 * 1000);
+
+    const events = await this.googleCalendarService.listUserPrimaryEvents(
+      refreshToken,
+      now,
+      future,
+    );
+
+    const results: ConsultationItem[] = [];
+    for (const ev of events) {
+      if (ev.status === 'cancelled') continue;
+      if (ev.extendedProperties?.shared?.['goo.createdBySet'] !== 'default_cita') continue;
+      const start = new Date(ev.start?.dateTime ?? ev.start?.date ?? '');
+      const end = new Date(ev.end?.dateTime ?? ev.end?.date ?? '');
+      results.push({
+        eventId: ev.id!,
+        summary: ev.summary ?? '(제목 없음)',
+        startTime: start,
+        endTime: end,
+        htmlLink: ev.htmlLink ?? undefined,
+      });
+    }
+
+    return results.sort(
+      (a, b) => a.startTime.getTime() - b.startTime.getTime(),
+    );
+  }
+
+  async cancelConsultation(slackId: string, eventId: string): Promise<void> {
+    const user = await this.userService.findBySlackId(slackId);
+    if (!user) throw new BusinessError(ErrorCode.USER_NOT_FOUND);
+
+    const refreshToken = this.userService.getDecryptedRefreshToken(user);
+    if (!refreshToken) throw new BusinessError(ErrorCode.CALENDAR_WRITER_NO_TOKEN);
+
+    await this.googleCalendarService.cancelConsultationEvent(refreshToken, eventId);
   }
 
   async addEditor(id: number, email: string): Promise<void> {

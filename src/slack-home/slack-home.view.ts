@@ -133,7 +133,7 @@ export class HomeView {
           elements: [
             {
               type: 'mrkdwn',
-              text: '스터디룸 일정을 확인하고 *예약* 할 수 있어요. 내 예약을 확인하고 *수정·취소* 도 가능해요.',
+              text: '스터디룸 예약, 교수 상담 예약이 가능해요. 내 예약 현황도 여기서 확인할 수 있어요.',
             },
           ],
         },
@@ -142,13 +142,18 @@ export class HomeView {
           elements: [
             {
               type: 'button',
-              text: { type: 'plain_text', text: '예약하기' },
+              text: { type: 'plain_text', text: '스터디룸 예약' },
               style: 'primary',
               action_id: 'home:open-booking',
             },
             {
               type: 'button',
-              text: { type: 'plain_text', text: '예약 수정' },
+              text: { type: 'plain_text', text: '교수 상담 예약' },
+              action_id: 'home:open-professor-booking-pages',
+            },
+            {
+              type: 'button',
+              text: { type: 'plain_text', text: '내 예약' },
               action_id: 'home:open-my-bookings',
             },
           ],
@@ -395,7 +400,7 @@ export class HomeView {
           elements: [
             {
               type: 'mrkdwn',
-              text: '스터디룸을 *예약* 하거나 *생성·수정* 할 수 있어요. 내 예약을 확인하고 *수정·취소* 도 가능해요.',
+              text: '스터디룸 예약, 교수 상담 예약이 가능해요. 내 예약 현황도 여기서 확인할 수 있어요.',
             },
           ],
         },
@@ -404,13 +409,18 @@ export class HomeView {
           elements: [
             {
               type: 'button',
-              text: { type: 'plain_text', text: '예약하기' },
+              text: { type: 'plain_text', text: '스터디룸 예약' },
               style: 'primary',
               action_id: 'home:open-booking',
             },
             {
               type: 'button',
-              text: { type: 'plain_text', text: '예약 수정' },
+              text: { type: 'plain_text', text: '교수 상담 예약' },
+              action_id: 'home:open-professor-booking-pages',
+            },
+            {
+              type: 'button',
+              text: { type: 'plain_text', text: '내 예약' },
               action_id: 'home:open-my-bookings',
             },
             {

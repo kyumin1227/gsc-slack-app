@@ -725,6 +725,36 @@ export class GoogleCalendarService {
     return busy.length > 0;
   }
 
+  // 유저 토큰으로 본인 primary 캘린더에서 기간 내 이벤트 조회
+  async listUserPrimaryEvents(
+    refreshToken: string,
+    timeMin: Date,
+    timeMax: Date,
+  ): Promise<calendar_v3.Schema$Event[]> {
+    const calendar = this.getUserCalendarClient(refreshToken);
+    const events: calendar_v3.Schema$Event[] = [];
+    let pageToken: string | undefined;
+
+    while (true) {
+      const response = await calendar.events.list({
+        calendarId: 'primary',
+        timeMin: timeMin.toISOString(),
+        timeMax: timeMax.toISOString(),
+        showDeleted: false,
+        singleEvents: true,
+        maxResults: 2500,
+        ...(pageToken ? { pageToken } : {}),
+      });
+
+      events.push(...(response.data.items ?? []));
+
+      if (!response.data.nextPageToken) break;
+      pageToken = response.data.nextPageToken;
+    }
+
+    return events;
+  }
+
   // 특정 사용자가 참석자인 이벤트 목록 조회 (여러 캘린더, 서비스 계정 사용)
   async getUserBookings(
     calendarIds: string[],
@@ -776,6 +806,19 @@ export class GoogleCalendarService {
   ): Promise<void> {
     const calendar = this.getUserCalendarClient(refreshToken);
     await calendar.events.delete({ calendarId, eventId, sendUpdates: 'none' });
+  }
+
+  // 교수 상담 취소 — primary 캘린더에서 삭제하고 교수에게 취소 알림 발송
+  async cancelConsultationEvent(
+    refreshToken: string,
+    eventId: string,
+  ): Promise<void> {
+    const calendar = this.getUserCalendarClient(refreshToken);
+    await calendar.events.delete({
+      calendarId: 'primary',
+      eventId,
+      sendUpdates: 'all',
+    });
   }
 
   // 이벤트 수정 (부분 업데이트)

@@ -1,6 +1,6 @@
 import type { View } from '@slack/types';
 import { Resource, ResourceStatus, ResourceType } from './resource.entity';
-import { BookingItem } from './resource.service';
+import { BookingItem, ConsultationItem } from './resource.service';
 import { toKST } from '../utils/date.util';
 import { multiUsersSelectBlock } from '../common/blocks';
 
@@ -300,15 +300,24 @@ export class ResourceView {
     };
   }
 
-  static myBookingsModal(bookings: BookingItem[]): View {
+  static myBookingsModal(
+    bookings: BookingItem[],
+    consultations: ConsultationItem[] = [],
+  ): View {
     const blocks: View['blocks'] = [];
 
-    if (bookings.length === 0) {
+    if (bookings.length === 0 && consultations.length === 0) {
       blocks.push({
         type: 'section',
         text: { type: 'mrkdwn', text: '예약 내역이 없습니다.' },
       });
-    } else {
+    }
+
+    if (bookings.length > 0) {
+      blocks.push({
+        type: 'header',
+        text: { type: 'plain_text', text: '📚 스터디룸 예약', emoji: true },
+      });
       for (const booking of bookings) {
         const start = toKST(booking.startTime);
         const end = toKST(booking.endTime);
@@ -355,6 +364,59 @@ export class ResourceView {
                   confirm: { type: 'plain_text', text: '취소하기' },
                   deny: { type: 'plain_text', text: '돌아가기' },
                   style: 'danger',
+                },
+              },
+            ],
+          },
+          { type: 'divider' },
+        );
+      }
+    }
+
+    if (consultations.length > 0) {
+      blocks.push({
+        type: 'header',
+        text: { type: 'plain_text', text: '👨‍🏫 교수 상담 예약', emoji: true },
+      });
+      for (const c of consultations) {
+        const start = toKST(c.startTime);
+        const end = toKST(c.endTime);
+        const dateStr = `${start.getUTCFullYear()}.${String(start.getUTCMonth() + 1).padStart(2, '0')}.${String(start.getUTCDate()).padStart(2, '0')}`;
+        const startStr = `${String(start.getUTCHours()).padStart(2, '0')}:${String(start.getUTCMinutes()).padStart(2, '0')}`;
+        const endStr = `${String(end.getUTCHours()).padStart(2, '0')}:${String(end.getUTCMinutes()).padStart(2, '0')}`;
+
+        blocks.push(
+          {
+            type: 'section',
+            text: {
+              type: 'mrkdwn',
+              text: `*${c.summary}*\n${dateStr} ${startStr}~${endStr}`,
+            },
+          },
+          {
+            type: 'actions',
+            elements: [
+              ...(c.htmlLink
+                ? [
+                    {
+                      type: 'button' as const,
+                      text: { type: 'plain_text' as const, text: '캘린더에서 보기 ❐' },
+                      url: c.htmlLink,
+                      action_id: `consultation:view-${start.getTime()}`,
+                    },
+                  ]
+                : []),
+              {
+                type: 'button' as const,
+                text: { type: 'plain_text' as const, text: '취소' },
+                style: 'danger' as const,
+                action_id: `consultation:cancel:${c.eventId}`,
+                confirm: {
+                  title: { type: 'plain_text' as const, text: '상담 취소' },
+                  text: { type: 'mrkdwn' as const, text: `*${c.summary}* 예약을 취소할까요?\n교수님께 취소 알림이 전송됩니다.` },
+                  confirm: { type: 'plain_text' as const, text: '취소하기' },
+                  deny: { type: 'plain_text' as const, text: '돌아가기' },
+                  style: 'danger' as const,
                 },
               },
             ],
@@ -703,6 +765,34 @@ export class ResourceView {
         },
         {
           type: 'input',
+          block_id: 'booking_url_block',
+          label: { type: 'plain_text', text: '예약 페이지 URL (교수 전용)' },
+          optional: true,
+          hint: {
+            type: 'plain_text',
+            text: '교수 유형에서만 사용. Google Calendar 예약 페이지 링크를 입력하세요.',
+          },
+          element: {
+            type: 'plain_text_input',
+            action_id: 'booking_url_input',
+            initial_value: resource.bookingUrl ?? '',
+            placeholder: {
+              type: 'plain_text',
+              text: 'https://calendar.google.com/calendar/appointments/...',
+            },
+          },
+        },
+        {
+          type: 'context',
+          elements: [
+            {
+              type: 'mrkdwn',
+              text: '📎 교수 예약 페이지 설정 방법 → <https://support.google.com/calendar/answer/10729749|Google Calendar 가이드>',
+            },
+          ],
+        },
+        {
+          type: 'input',
           block_id: 'status_block',
           label: { type: 'plain_text', text: '상태' },
           element: {
@@ -873,6 +963,63 @@ export class ResourceView {
       type: 'modal',
       callback_id: 'space:modal:professor-schedule',
       title: { type: 'plain_text', text: '교수 시간표' },
+      close: { type: 'plain_text', text: '닫기' },
+      blocks,
+    };
+  }
+
+  static professorBookingPagesModal(professors: Resource[]): View {
+    const blocks: View['blocks'] = [];
+
+    const withUrl = professors.filter((p) => p.bookingUrl);
+
+    if (withUrl.length === 0) {
+      blocks.push({
+        type: 'section',
+        text: {
+          type: 'mrkdwn',
+          text: '등록된 교수 예약 페이지가 없습니다.\n관리자에게 문의해주세요.',
+        },
+      });
+    } else {
+      blocks.push({
+        type: 'context',
+        elements: [
+          {
+            type: 'mrkdwn',
+            text: 'Google Calendar 예약 페이지에서 상담 일정을 예약할 수 있어요.',
+          },
+        ],
+      });
+
+      for (const prof of withUrl) {
+        const aliasText =
+          prof.aliases?.length > 0 ? `\n별칭: ${prof.aliases.join(', ')}` : '';
+        blocks.push(
+          {
+            type: 'section',
+            text: {
+              type: 'mrkdwn',
+              text: prof.description
+                ? `*${prof.name}*${aliasText}\n${prof.description}`
+                : `*${prof.name}*${aliasText}`,
+            },
+            accessory: {
+              type: 'button',
+              text: { type: 'plain_text', text: '예약하기 ❐' },
+              url: prof.bookingUrl!,
+              action_id: `professor:booking:${prof.id}`,
+            },
+          },
+          { type: 'divider' },
+        );
+      }
+    }
+
+    return {
+      type: 'modal',
+      callback_id: 'professor:modal:booking-pages',
+      title: { type: 'plain_text', text: '교수 상담 예약' },
       close: { type: 'plain_text', text: '닫기' },
       blocks,
     };
