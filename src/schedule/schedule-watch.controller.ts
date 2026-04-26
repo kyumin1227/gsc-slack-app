@@ -15,7 +15,7 @@ import {
   DebounceEntry,
 } from './schedule-notification.service';
 import { detectChangeType, hasRelevantChanges } from './schedule-watch.view';
-import { SpaceMirrorService } from '../space/space-mirror.service';
+import { ResourceMirrorService } from '../resource/resource-mirror.service';
 import { EventSnapshot } from './schedule-notification.service';
 
 @Controller('google/calendar')
@@ -25,7 +25,7 @@ export class ScheduleWatchController {
   constructor(
     private readonly scheduleService: ScheduleService,
     private readonly notificationService: ScheduleNotificationService,
-    private readonly spaceMirrorService: SpaceMirrorService,
+    private readonly spaceMirrorService: ResourceMirrorService,
     private readonly googleCalendarService: GoogleCalendarService,
     @Inject(CACHE_MANAGER) private readonly cache: Cache,
   ) {}
