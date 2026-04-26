@@ -57,6 +57,9 @@ export class Resource {
   @Column({ default: false })
   isDefault: boolean = false;
 
+  @Column({ type: 'varchar', nullable: true })
+  bookingUrl: string | null;
+
   @CreateDateColumn()
   createdAt: Date;
 

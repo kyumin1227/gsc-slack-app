@@ -276,10 +276,36 @@ export class ResourceController {
     await ack();
 
     const userId = 'user_id' in body ? body.user_id : body.user.id;
-    const bookings = await this.resourceService.getMyBookings(userId);
+    const user = await this.userService.findBySlackId(userId);
+
+    const [bookings, consultations] = await Promise.all([
+      this.resourceService.getMyBookings(userId),
+      user?.email
+        ? this.resourceService.getProfessorConsultations(user.email)
+        : Promise.resolve([]),
+    ]);
+
     await client.views.open({
       trigger_id: body.trigger_id,
-      view: ResourceView.myBookingsModal(bookings),
+      view: ResourceView.myBookingsModal(bookings, consultations),
+    });
+  }
+
+  @Action('home:open-professor-booking-pages')
+  async openProfessorBookingPages({
+    ack,
+    client,
+    body,
+  }: SlackActionMiddlewareArgs<BlockAction> & AllMiddlewareArgs) {
+    await ack();
+
+    const professors = await this.resourceService.findAllByType(
+      ResourceType.PROFESSOR,
+      true,
+    );
+    await client.views.open({
+      trigger_id: body.trigger_id,
+      view: ResourceView.professorBookingPagesModal(professors),
     });
   }
 
@@ -416,7 +442,7 @@ export class ResourceController {
   }
 
   // URL 링크 버튼 — Slack 경고 방지용 ack
-  @Action(/^space:action:view-|^study-room:action:view-calendar$/)
+  @Action(/^space:action:view-|^study-room:action:view-calendar$|^professor:booking:|^consultation:view-/)
   async ackViewLinkButtons({
     ack,
   }: SlackActionMiddlewareArgs<BlockAction> & AllMiddlewareArgs) {
@@ -536,6 +562,8 @@ export class ResourceController {
       values.description_block.description_input.value ?? null;
     const status = values.status_block.status_select.selected_option
       ?.value as ResourceStatus;
+    const bookingUrl =
+      values.booking_url_block?.booking_url_input?.value?.trim() || null;
 
     await this.resourceService.rename(roomId, name);
     await this.resourceService.updateInfo(roomId, {
@@ -543,6 +571,7 @@ export class ResourceController {
       status,
       aliases,
       type,
+      bookingUrl,
     });
     await client.chat.postMessage({
       channel: body.user.id,

@@ -24,6 +24,14 @@ export interface BookResourceDto {
   attendeeSlackIds: string[];
 }
 
+export interface ConsultationItem {
+  professorName: string;
+  summary: string;
+  startTime: Date;
+  endTime: Date;
+  htmlLink?: string;
+}
+
 export interface BookingItem {
   calendarId: string;
   eventId: string;
@@ -261,9 +269,47 @@ export class ResourceService {
       status?: ResourceStatus;
       aliases?: string[];
       type?: ResourceType;
+      bookingUrl?: string | null;
     },
   ): Promise<void> {
     await this.resourceRepository.update(id, dto as any);
+  }
+
+  async getProfessorConsultations(
+    userEmail: string,
+  ): Promise<ConsultationItem[]> {
+    const professors = await this.findAllByType(ResourceType.PROFESSOR, true);
+    const now = new Date();
+    const future = new Date(now.getTime() + 90 * 24 * 60 * 60 * 1000);
+    const results: ConsultationItem[] = [];
+
+    await Promise.all(
+      professors.map(async (prof) => {
+        const events = await this.googleCalendarService.listEventsInRange(
+          prof.calendarId,
+          now,
+          future,
+        );
+        for (const ev of events) {
+          if (ev.status === 'cancelled') continue;
+          const isAttendee = ev.attendees?.some(
+            (a) => a.email?.toLowerCase() === userEmail.toLowerCase(),
+          );
+          if (!isAttendee) continue;
+          const start = new Date(ev.start?.dateTime ?? ev.start?.date ?? '');
+          const end = new Date(ev.end?.dateTime ?? ev.end?.date ?? '');
+          results.push({
+            professorName: prof.name,
+            summary: ev.summary ?? '(제목 없음)',
+            startTime: start,
+            endTime: end,
+            htmlLink: ev.htmlLink ?? undefined,
+          });
+        }
+      }),
+    );
+
+    return results.sort((a, b) => a.startTime.getTime() - b.startTime.getTime());
   }
 
   async addEditor(id: number, email: string): Promise<void> {
