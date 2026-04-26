@@ -38,7 +38,7 @@ export class User {
   @Column()
   name: string;
 
-  @Column({ nullable: true })
+  @Column({ unique: true })
   code: string;
 
   @Column({
