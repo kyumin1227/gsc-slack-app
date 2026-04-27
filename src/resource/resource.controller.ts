@@ -441,7 +441,7 @@ export class ResourceController {
   }
 
   // URL 링크 버튼 — Slack 경고 방지용 ack
-  @Action(/^space:action:view-|^study-room:action:view-calendar$|^professor:booking:|^consultation:view-/)
+  @Action(/^space:action:view-|^professor:booking:|^consultation:view-/)
   async ackViewLinkButtons({
     ack,
   }: SlackActionMiddlewareArgs<BlockAction> & AllMiddlewareArgs) {
