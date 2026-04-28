@@ -60,9 +60,17 @@ export class ScheduleView {
       total: number;
       selectedStatus?: string;
       selectedTagIds?: number[];
+      mutedScheduleIds?: Set<number>;
     },
   ): View {
-    const { page, totalPages, total, selectedStatus, selectedTagIds } = meta;
+    const {
+      page,
+      totalPages,
+      total,
+      selectedStatus,
+      selectedTagIds,
+      mutedScheduleIds = new Set(),
+    } = meta;
 
     const tagOptions = tags.map((t) => ({
       text: {
@@ -178,6 +186,17 @@ export class ScheduleView {
               action_id: `schedule:list:toggle:${schedule.id}`,
               value: toggleValue,
             },
+            mutedScheduleIds.has(schedule.id)
+              ? {
+                  type: 'button',
+                  text: { type: 'plain_text', text: '🔔 알림 켜기' },
+                  action_id: `schedule:list:unmute:${schedule.id}`,
+                }
+              : {
+                  type: 'button',
+                  text: { type: 'plain_text', text: '🔕 알림 끄기 (30분)' },
+                  action_id: `schedule:list:mute:${schedule.id}`,
+                },
             {
               type: 'button',
               text: { type: 'plain_text', text: '삭제' },
@@ -306,11 +325,12 @@ export class ScheduleView {
         block_id: 'notification_channels_block',
         optional: true,
         element: {
-          type: 'multi_channels_select',
+          type: 'multi_conversations_select',
           action_id: 'channels_select',
           placeholder: { type: 'plain_text', text: '알림 받을 채널 선택' },
+          filter: { include: ['public', 'private'] },
           ...(notificationChannelIds.length > 0
-            ? { initial_channels: notificationChannelIds }
+            ? { initial_conversations: notificationChannelIds }
             : {}),
         },
         label: { type: 'plain_text', text: '알림 채널' },

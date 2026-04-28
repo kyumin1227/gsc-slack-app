@@ -15,6 +15,7 @@ import { ChannelService } from '../channel/channel.service';
 import { UserStatus, User } from '../user/user.entity';
 import { PermissionService } from '../user/permission.service';
 import { GoogleCalendarService } from '../google/google-calendar.service';
+import { ScheduleNotificationService } from './schedule-notification.service';
 
 const CALENDAR_COLORS = [
   '%234285F4',
@@ -43,6 +44,7 @@ export class ScheduleController {
     private readonly channelService: ChannelService,
     private readonly permissionService: PermissionService,
     private readonly googleCalendarService: GoogleCalendarService,
+    private readonly scheduleNotificationService: ScheduleNotificationService,
   ) {}
 
   // 활성 사용자 확인 헬퍼
@@ -84,37 +86,40 @@ export class ScheduleController {
 
     const displayTagMap = new Map(displayTags.map((t) => [t.id, t.name]));
 
-    const schedulesWithMeta = await Promise.all(
-      schedules.map(async (s) => {
-        const [channels, acl] = await Promise.all([
-          this.channelService.getSlackChannelIds(s.id),
-          this.googleCalendarService
-            .getCalendarAcl(s.calendarId)
-            .catch(() => []),
-        ]);
+    const [schedulesWithMeta, mutedScheduleIds] = await Promise.all([
+      Promise.all(
+        schedules.map(async (s) => {
+          const [channels, acl] = await Promise.all([
+            this.channelService.getSlackChannelIds(s.id),
+            this.googleCalendarService
+              .getCalendarAcl(s.calendarId)
+              .catch(() => []),
+          ]);
 
-        const writerEmails = acl
-          .filter((e) => e.role === 'writer' || e.role === 'owner')
-          .map((e) => e.email);
-        const writers =
-          await this.userService.mapEmailsToSlackIds(writerEmails);
+          const writerEmails = acl
+            .filter((e) => e.role === 'writer' || e.role === 'owner')
+            .map((e) => e.email);
+          const writers =
+            await this.userService.mapEmailsToSlackIds(writerEmails);
 
-        return {
-          id: s.id,
-          name: s.name,
-          description: s.description,
-          status: s.status,
-          tags: s.tags.map((t) => ({
-            id: t.id,
-            name: displayTagMap.get(t.id) ?? t.name,
-          })),
-          createdBy: { name: s.createdBy?.name ?? '알 수 없음' },
-          channels,
-          writers,
-          createdAt: s.createdAt,
-        };
-      }),
-    );
+          return {
+            id: s.id,
+            name: s.name,
+            description: s.description,
+            status: s.status,
+            tags: s.tags.map((t) => ({
+              id: t.id,
+              name: displayTagMap.get(t.id) ?? t.name,
+            })),
+            createdBy: { name: s.createdBy?.name ?? '알 수 없음' },
+            channels,
+            writers,
+            createdAt: s.createdAt,
+          };
+        }),
+      ),
+      this.scheduleNotificationService.getMutedSet(schedules.map((s) => s.id)),
+    ]);
 
     return ScheduleView.listModal(schedulesWithMeta, displayTags, {
       page: safePage,
@@ -122,6 +127,7 @@ export class ScheduleController {
       total,
       selectedStatus: status,
       selectedTagIds: tagIds,
+      mutedScheduleIds,
     });
   }
 
@@ -510,6 +516,48 @@ export class ScheduleController {
   }
 
   // 삭제 버튼 → 확인 모달 열기
+  @Action(/^schedule:list:mute:/)
+  async handleMute({
+    ack,
+    body,
+    client,
+  }: SlackActionMiddlewareArgs<BlockAction> & AllMiddlewareArgs) {
+    await ack();
+
+    const action = body.actions[0] as { action_id: string };
+    const scheduleId = parseInt(action.action_id.split(':').pop()!, 10);
+
+    await this.scheduleNotificationService.mute(scheduleId);
+
+    if (body.view?.id) {
+      await client.views.update({
+        view_id: body.view.id,
+        view: await this.buildListModal(0, 'all', []),
+      });
+    }
+  }
+
+  @Action(/^schedule:list:unmute:/)
+  async handleUnmute({
+    ack,
+    body,
+    client,
+  }: SlackActionMiddlewareArgs<BlockAction> & AllMiddlewareArgs) {
+    await ack();
+
+    const action = body.actions[0] as { action_id: string };
+    const scheduleId = parseInt(action.action_id.split(':').pop()!, 10);
+
+    await this.scheduleNotificationService.unmute(scheduleId);
+
+    if (body.view?.id) {
+      await client.views.update({
+        view_id: body.view.id,
+        view: await this.buildListModal(0, 'all', []),
+      });
+    }
+  }
+
   @Action(/^schedule:list:delete:/)
   async handleOpenDelete({
     ack,
