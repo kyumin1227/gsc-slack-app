@@ -102,7 +102,7 @@ export class HomeView {
           elements: [
             {
               type: 'button',
-              text: { type: 'plain_text', text: '과목별' },
+              text: { type: 'plain_text', text: '과목 구독' },
               style: 'primary',
               action_id: 'home:open-subscribe',
             },
@@ -234,7 +234,7 @@ export class HomeView {
           elements: [
             {
               type: 'button',
-              text: { type: 'plain_text', text: '과목별' },
+              text: { type: 'plain_text', text: '과목 구독' },
               style: 'primary',
               action_id: 'home:open-subscribe',
             },
