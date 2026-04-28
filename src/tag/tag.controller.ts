@@ -1,15 +1,13 @@
 import { Controller } from '@nestjs/common';
-import { Action, Command, View } from 'nestjs-slack-bolt';
+import { Action, View } from 'nestjs-slack-bolt';
 import type {
   AllMiddlewareArgs,
-  SlackCommandMiddlewareArgs,
   SlackActionMiddlewareArgs,
   SlackViewMiddlewareArgs,
   BlockAction,
 } from '@slack/bolt';
 import { TagService } from './tag.service';
 import { TagView } from './tag.view';
-import { CMD } from '../common/slack-commands';
 import { PermissionService } from '../user/permission.service';
 
 @Controller()
@@ -19,18 +17,15 @@ export class TagController {
     private readonly permissionService: PermissionService,
   ) {}
 
-  // /태그 - 태그 목록 조회
-  @Command(CMD.태그)
   @Action('home:open-tags')
   async listTags({
     ack,
     client,
     body,
-  }: (SlackCommandMiddlewareArgs | SlackActionMiddlewareArgs<BlockAction>) &
-    AllMiddlewareArgs) {
+  }: SlackActionMiddlewareArgs<BlockAction> & AllMiddlewareArgs) {
     await ack();
 
-    const userId = 'user_id' in body ? body.user_id : body.user.id;
+    const userId = body.user.id;
     await this.permissionService.requireAdmin(userId);
 
     const tags = await this.tagService.findDisplayTags();
@@ -41,18 +36,15 @@ export class TagController {
     });
   }
 
-  // /태그생성 - 태그 생성 모달
-  @Command(CMD.태그생성)
   @Action('home:open-create-tag')
   async openCreateModal({
     ack,
     client,
     body,
-  }: (SlackCommandMiddlewareArgs | SlackActionMiddlewareArgs<BlockAction>) &
-    AllMiddlewareArgs) {
+  }: SlackActionMiddlewareArgs<BlockAction> & AllMiddlewareArgs) {
     await ack();
 
-    const userId = 'user_id' in body ? body.user_id : body.user.id;
+    const userId = body.user.id;
     await this.permissionService.requireAdmin(userId);
 
     await client.views.open({

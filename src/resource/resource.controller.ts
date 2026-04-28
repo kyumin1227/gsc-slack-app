@@ -1,8 +1,7 @@
 import { Controller, Logger } from '@nestjs/common';
-import { Action, Command, View } from 'nestjs-slack-bolt';
+import { Action, View } from 'nestjs-slack-bolt';
 import type {
   AllMiddlewareArgs,
-  SlackCommandMiddlewareArgs,
   SlackActionMiddlewareArgs,
   SlackViewMiddlewareArgs,
   BlockAction,
@@ -13,7 +12,6 @@ import { ResourceStatus, ResourceType } from './resource.entity';
 import { UserService } from '../user/user.service';
 import { UserStatus } from '../user/user.entity';
 import { GoogleCalendarService } from '../google/google-calendar.service';
-import { CMD } from '../common/slack-commands';
 import { PermissionService } from '../user/permission.service';
 
 @Controller()
@@ -27,17 +25,15 @@ export class ResourceController {
     private readonly googleCalendarService: GoogleCalendarService,
   ) {}
 
-  @Command(CMD.스터디룸생성)
   @Action('home:open-create-study-room')
   async openCreateModal({
     ack,
     client,
     body,
-  }: (SlackCommandMiddlewareArgs | SlackActionMiddlewareArgs<BlockAction>) &
-    AllMiddlewareArgs) {
+  }: SlackActionMiddlewareArgs<BlockAction> & AllMiddlewareArgs) {
     await ack();
 
-    const userId = 'user_id' in body ? body.user_id : body.user.id;
+    const userId = body.user.id;
     await this.permissionService.requireAdmin(userId);
 
     await client.views.open({
@@ -92,27 +88,18 @@ export class ResourceController {
     });
   }
 
-  @Command(CMD.예약)
   @Action('home:open-booking')
   async openList({
     ack,
     client,
     body,
-  }: (SlackCommandMiddlewareArgs | SlackActionMiddlewareArgs<BlockAction>) &
-    AllMiddlewareArgs) {
+  }: SlackActionMiddlewareArgs<BlockAction> & AllMiddlewareArgs) {
     await ack();
 
-    const userId = 'user_id' in body ? body.user_id : body.user.id;
+    const userId = body.user.id;
 
     const user = await this.userService.findBySlackId(userId);
     if (!user || user.status !== UserStatus.ACTIVE) {
-      if ('channel_id' in body) {
-        await client.chat.postEphemeral({
-          channel: body.channel_id,
-          user: userId,
-          text: '활성화된 사용자만 이용 가능합니다. 먼저 회원가입을 완료해주세요.',
-        });
-      }
       return;
     }
 
@@ -267,17 +254,15 @@ export class ResourceController {
     });
   }
 
-  @Command(CMD.내예약)
   @Action('home:open-my-bookings')
   async openMyBookings({
     ack,
     client,
     body,
-  }: (SlackCommandMiddlewareArgs | SlackActionMiddlewareArgs<BlockAction>) &
-    AllMiddlewareArgs) {
+  }: SlackActionMiddlewareArgs<BlockAction> & AllMiddlewareArgs) {
     await ack();
 
-    const userId = 'user_id' in body ? body.user_id : body.user.id;
+    const userId = body.user.id;
 
     const [bookings, consultations] = await Promise.all([
       this.resourceService.getMyBookings(userId),
@@ -519,17 +504,15 @@ export class ResourceController {
 
   // ========== 리소스 관리 (어드민) ==========
 
-  @Command(CMD.스터디룸)
   @Action('home:open-study-room-manage')
   async openManageModal({
     ack,
     client,
     body,
-  }: (SlackCommandMiddlewareArgs | SlackActionMiddlewareArgs<BlockAction>) &
-    AllMiddlewareArgs) {
+  }: SlackActionMiddlewareArgs<BlockAction> & AllMiddlewareArgs) {
     await ack();
 
-    const userId = 'user_id' in body ? body.user_id : body.user.id;
+    const userId = body.user.id;
     await this.permissionService.requireAdmin(userId);
 
     const resources = await this.resourceService.findAll();
