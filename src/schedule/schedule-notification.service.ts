@@ -25,7 +25,7 @@ export interface DebounceEntry {
 }
 
 const DEBOUNCE_KEY_PREFIX = 'calendar:debounce:';
-const DEBOUNCE_MS = 3 * 60 * 1000;
+const DEBOUNCE_MS = 10 * 60 * 1000;
 const ENTRY_TTL_MS = 60 * 60 * 1000; // 1시간 안전 TTL
 
 const pendingKey = (key: string) => `${DEBOUNCE_KEY_PREFIX}${key}`;
