@@ -63,7 +63,14 @@ export class ScheduleView {
       mutedScheduleIds?: Set<number>;
     },
   ): View {
-    const { page, totalPages, total, selectedStatus, selectedTagIds, mutedScheduleIds = new Set() } = meta;
+    const {
+      page,
+      totalPages,
+      total,
+      selectedStatus,
+      selectedTagIds,
+      mutedScheduleIds = new Set(),
+    } = meta;
 
     const tagOptions = tags.map((t) => ({
       text: {
@@ -318,11 +325,12 @@ export class ScheduleView {
         block_id: 'notification_channels_block',
         optional: true,
         element: {
-          type: 'multi_channels_select',
+          type: 'multi_conversations_select',
           action_id: 'channels_select',
           placeholder: { type: 'plain_text', text: '알림 받을 채널 선택' },
+          filter: { include: ['public', 'private'] },
           ...(notificationChannelIds.length > 0
-            ? { initial_channels: notificationChannelIds }
+            ? { initial_conversations: notificationChannelIds }
             : {}),
         },
         label: { type: 'plain_text', text: '알림 채널' },

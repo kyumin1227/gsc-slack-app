@@ -143,7 +143,7 @@ export class StudentClassView {
             type: 'conversations_select',
             action_id: 'slack_channel_input',
             placeholder: { type: 'plain_text', text: '채널을 선택하세요' },
-            filter: { include: ['public'], exclude_bot_users: true },
+            filter: { include: ['public', 'private'] },
             ...(prefill.slackChannelId
               ? { initial_conversation: prefill.slackChannelId }
               : {}),
