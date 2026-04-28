@@ -25,10 +25,13 @@ export interface DebounceEntry {
 }
 
 const DEBOUNCE_KEY_PREFIX = 'calendar:debounce:';
+const MUTE_KEY_PREFIX = 'calendar:mute:';
 const DEBOUNCE_MS = 10 * 60 * 1000;
+const MUTE_TTL_MS = 30 * 60 * 1000;
 const ENTRY_TTL_MS = 60 * 60 * 1000; // 1시간 안전 TTL
 
 const pendingKey = (key: string) => `${DEBOUNCE_KEY_PREFIX}${key}`;
+const muteKey = (scheduleId: number) => `${MUTE_KEY_PREFIX}${scheduleId}`;
 
 @Injectable()
 export class ScheduleNotificationService {
@@ -113,6 +116,11 @@ export class ScheduleNotificationService {
       return;
     }
 
+    if (await this.isMuted(entry.scheduleId)) {
+      this.logger.log(`Notification suppressed (muted): ${key}`);
+      return;
+    }
+
     const slackChannelIds = await this.channelService.getSlackChannelIds(
       entry.scheduleId,
     );
@@ -165,6 +173,27 @@ export class ScheduleNotificationService {
     } catch {
       return undefined;
     }
+  }
+
+  async mute(scheduleId: number): Promise<void> {
+    await this.cache.set(muteKey(scheduleId), true, MUTE_TTL_MS);
+    this.logger.log(`Schedule ${scheduleId} muted`);
+  }
+
+  async unmute(scheduleId: number): Promise<void> {
+    await this.cache.del(muteKey(scheduleId));
+    this.logger.log(`Schedule ${scheduleId} unmuted`);
+  }
+
+  async isMuted(scheduleId: number): Promise<boolean> {
+    return (await this.cache.get<boolean>(muteKey(scheduleId))) === true;
+  }
+
+  async getMutedSet(scheduleIds: number[]): Promise<Set<number>> {
+    const results = await Promise.all(
+      scheduleIds.map(async (id) => ({ id, muted: await this.isMuted(id) })),
+    );
+    return new Set(results.filter((r) => r.muted).map((r) => r.id));
   }
 
   // 외부에서 현재 대기 entry 조회 (컨트롤러에서 중복 확인용)
