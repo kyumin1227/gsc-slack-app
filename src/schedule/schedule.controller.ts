@@ -1,8 +1,7 @@
 import { Controller } from '@nestjs/common';
-import { Action, Command, View } from 'nestjs-slack-bolt';
+import { Action, View } from 'nestjs-slack-bolt';
 import type {
   AllMiddlewareArgs,
-  SlackCommandMiddlewareArgs,
   SlackActionMiddlewareArgs,
   SlackViewMiddlewareArgs,
   BlockAction,
@@ -14,7 +13,6 @@ import { TagService } from '../tag/tag.service';
 import { TagView } from '../tag/tag.view';
 import { ChannelService } from '../channel/channel.service';
 import { UserStatus, User } from '../user/user.entity';
-import { CMD } from '../common/slack-commands';
 import { PermissionService } from '../user/permission.service';
 import { GoogleCalendarService } from '../google/google-calendar.service';
 
@@ -127,18 +125,15 @@ export class ScheduleController {
     });
   }
 
-  // /시간표 - 시간표 목록 조회
-  @Command(CMD.시간표)
   @Action('home:open-schedule-list')
   async listSchedules({
     ack,
     client,
     body,
-  }: (SlackCommandMiddlewareArgs | SlackActionMiddlewareArgs<BlockAction>) &
-    AllMiddlewareArgs) {
+  }: SlackActionMiddlewareArgs<BlockAction> & AllMiddlewareArgs) {
     await ack();
 
-    const userId = 'user_id' in body ? body.user_id : body.user.id;
+    const userId = body.user.id;
     await this.permissionService.requireAdmin(userId);
 
     await client.views.open({
@@ -147,18 +142,15 @@ export class ScheduleController {
     });
   }
 
-  // /시간표생성 - 시간표 생성 모달
-  @Command(CMD.시간표생성)
   @Action('home:open-create-schedule')
   async openCreateModal({
     ack,
     client,
     body,
-  }: (SlackCommandMiddlewareArgs | SlackActionMiddlewareArgs<BlockAction>) &
-    AllMiddlewareArgs) {
+  }: SlackActionMiddlewareArgs<BlockAction> & AllMiddlewareArgs) {
     await ack();
 
-    const userId = 'user_id' in body ? body.user_id : body.user.id;
+    const userId = body.user.id;
     await this.permissionService.requireAdmin(userId);
 
     const tags = await this.tagService.findDisplayTags();
@@ -322,28 +314,18 @@ export class ScheduleController {
     }
   }
 
-  // /구독 - 시간표 구독 (태그 선택)
-  @Command(CMD.구독)
   @Action('home:open-subscribe')
   async openSubscribeModal({
     ack,
     client,
     body,
-  }: (SlackCommandMiddlewareArgs | SlackActionMiddlewareArgs<BlockAction>) &
-    AllMiddlewareArgs) {
+  }: SlackActionMiddlewareArgs<BlockAction> & AllMiddlewareArgs) {
     await ack();
 
-    const userId = 'user_id' in body ? body.user_id : body.user.id;
+    const userId = body.user.id;
 
-    const { isActive, message } = await this.checkActiveUser(userId);
+    const { isActive } = await this.checkActiveUser(userId);
     if (!isActive) {
-      if ('channel_id' in body) {
-        await client.chat.postEphemeral({
-          channel: body.channel_id,
-          user: userId,
-          text: message!,
-        });
-      }
       return;
     }
 
@@ -746,18 +728,15 @@ export class ScheduleController {
     }
   }
 
-  // /반복일정생성 - 반복 일정 생성 모달
-  @Command(CMD.반복일정생성)
   @Action('home:open-create-recurrence')
   async openCreateRecurringModal({
     ack,
     client,
     body,
-  }: (SlackCommandMiddlewareArgs | SlackActionMiddlewareArgs<BlockAction>) &
-    AllMiddlewareArgs) {
+  }: SlackActionMiddlewareArgs<BlockAction> & AllMiddlewareArgs) {
     await ack();
 
-    const userId = 'user_id' in body ? body.user_id : body.user.id;
+    const userId = body.user.id;
     await this.permissionService.requireAdmin(userId);
 
     const schedules = await this.scheduleService.findActiveSchedules();
@@ -870,31 +849,21 @@ export class ScheduleController {
     });
   }
 
-  // /반복일정삭제 - 반복 일정 삭제 모달
-  @Command(CMD.반복일정삭제)
   @Action('home:open-delete-recurrence')
   async openDeleteRecurringModal({
     ack,
     client,
     body,
-  }: (SlackCommandMiddlewareArgs | SlackActionMiddlewareArgs<BlockAction>) &
-    AllMiddlewareArgs) {
+  }: SlackActionMiddlewareArgs<BlockAction> & AllMiddlewareArgs) {
     await ack();
 
-    const userId = 'user_id' in body ? body.user_id : body.user.id;
+    const userId = body.user.id;
     await this.permissionService.requireAdmin(userId);
 
     const schedules =
       await this.scheduleService.findSchedulesWithRecurrenceGroups();
 
     if (schedules.length === 0) {
-      if ('channel_id' in body) {
-        await client.chat.postEphemeral({
-          channel: body.channel_id,
-          user: userId,
-          text: '삭제할 반복 일정이 없습니다.',
-        });
-      }
       return;
     }
 
@@ -977,31 +946,21 @@ export class ScheduleController {
     });
   }
 
-  // /반복일정수정 - 반복 일정 수정 모달
-  @Command(CMD.반복일정수정)
   @Action('home:open-edit-recurrence')
   async openEditRecurringModal({
     ack,
     client,
     body,
-  }: (SlackCommandMiddlewareArgs | SlackActionMiddlewareArgs<BlockAction>) &
-    AllMiddlewareArgs) {
+  }: SlackActionMiddlewareArgs<BlockAction> & AllMiddlewareArgs) {
     await ack();
 
-    const userId = 'user_id' in body ? body.user_id : body.user.id;
+    const userId = body.user.id;
     await this.permissionService.requireAdmin(userId);
 
     const schedules =
       await this.scheduleService.findSchedulesWithRecurrenceGroups();
 
     if (schedules.length === 0) {
-      if ('channel_id' in body) {
-        await client.chat.postEphemeral({
-          channel: body.channel_id,
-          user: userId,
-          text: '수정할 반복 일정이 없습니다.',
-        });
-      }
       return;
     }
 

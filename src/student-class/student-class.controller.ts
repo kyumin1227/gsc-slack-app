@@ -1,9 +1,8 @@
 import { Controller } from '@nestjs/common';
 import { BusinessError, ErrorCode } from '../common/errors';
-import { Action, Command, View } from 'nestjs-slack-bolt';
+import { Action, View } from 'nestjs-slack-bolt';
 import type {
   AllMiddlewareArgs,
-  SlackCommandMiddlewareArgs,
   SlackActionMiddlewareArgs,
   SlackViewMiddlewareArgs,
   BlockAction,
@@ -11,7 +10,6 @@ import type {
 import { StudentClassService } from './student-class.service';
 import { StudentClassView } from './student-class.view';
 import { ClassSection } from './student-class.entity';
-import { CMD } from '../common/slack-commands';
 import { PermissionService } from '../user/permission.service';
 
 @Controller()
@@ -21,18 +19,15 @@ export class StudentClassController {
     private readonly permissionService: PermissionService,
   ) {}
 
-  // /반 - 반 목록 조회
-  @Command(CMD.반)
   @Action('home:open-class-list')
   async listClasses({
     ack,
     client,
     body,
-  }: (SlackCommandMiddlewareArgs | SlackActionMiddlewareArgs<BlockAction>) &
-    AllMiddlewareArgs) {
+  }: SlackActionMiddlewareArgs<BlockAction> & AllMiddlewareArgs) {
     await ack();
 
-    const userId = 'user_id' in body ? body.user_id : body.user.id;
+    const userId = body.user.id;
     await this.permissionService.requireAdmin(userId);
 
     const classes = await this.studentClassService.findAllClasses();
@@ -53,18 +48,15 @@ export class StudentClassController {
     });
   }
 
-  // /반생성 - 반 생성 모달
-  @Command(CMD.반생성)
   @Action('home:open-class-create')
   async openCreateModal({
     ack,
     client,
     body,
-  }: (SlackCommandMiddlewareArgs | SlackActionMiddlewareArgs<BlockAction>) &
-    AllMiddlewareArgs) {
+  }: SlackActionMiddlewareArgs<BlockAction> & AllMiddlewareArgs) {
     await ack();
 
-    const userId = 'user_id' in body ? body.user_id : body.user.id;
+    const userId = body.user.id;
     await this.permissionService.requireAdmin(userId);
 
     await client.views.open({
