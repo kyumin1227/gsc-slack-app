@@ -60,9 +60,10 @@ export class ScheduleView {
       total: number;
       selectedStatus?: string;
       selectedTagIds?: number[];
+      mutedScheduleIds?: Set<number>;
     },
   ): View {
-    const { page, totalPages, total, selectedStatus, selectedTagIds } = meta;
+    const { page, totalPages, total, selectedStatus, selectedTagIds, mutedScheduleIds = new Set() } = meta;
 
     const tagOptions = tags.map((t) => ({
       text: {
@@ -178,6 +179,17 @@ export class ScheduleView {
               action_id: `schedule:list:toggle:${schedule.id}`,
               value: toggleValue,
             },
+            mutedScheduleIds.has(schedule.id)
+              ? {
+                  type: 'button',
+                  text: { type: 'plain_text', text: '🔔 알림 켜기' },
+                  action_id: `schedule:list:unmute:${schedule.id}`,
+                }
+              : {
+                  type: 'button',
+                  text: { type: 'plain_text', text: '🔕 알림 끄기 (30분)' },
+                  action_id: `schedule:list:mute:${schedule.id}`,
+                },
             {
               type: 'button',
               text: { type: 'plain_text', text: '삭제' },
