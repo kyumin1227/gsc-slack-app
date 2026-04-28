@@ -457,7 +457,10 @@ export class ResourceController {
     await ack();
 
     const userId = body.user.id;
-    const eventId = (body.actions[0] as any).action_id.replace('consultation:cancel:', '');
+    const eventId = (body.actions[0] as any).action_id.replace(
+      'consultation:cancel:',
+      '',
+    );
 
     try {
       await this.resourceService.cancelConsultation(userId, eventId);

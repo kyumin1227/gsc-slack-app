@@ -866,19 +866,14 @@ export class ResourceView {
       for (const [i, resource] of resources.entries()) {
         const color = ROOM_COLORS[i % ROOM_COLORS.length];
         const calendarUrl = `https://calendar.google.com/calendar/embed?src=${encodeURIComponent(resource.calendarId)}&color=${color}&ctz=Asia%2FSeoul&mode=WEEK`;
-        const aliasText =
-          resource.aliases?.length > 0
-            ? `\n별칭: ${resource.aliases.join(', ')}`
-            : '';
-
         blocks.push(
           {
             type: 'section',
             text: {
               type: 'mrkdwn',
               text: resource.description
-                ? `*${resource.name}*${aliasText}\n${resource.description}`
-                : `*${resource.name}*${aliasText}`,
+                ? `*${resource.name}*\n${resource.description}`
+                : `*${resource.name}*`,
             },
             accessory: {
               type: 'button',
@@ -939,19 +934,14 @@ export class ResourceView {
       for (const [i, resource] of resources.entries()) {
         const color = ROOM_COLORS[i % ROOM_COLORS.length];
         const calendarUrl = `https://calendar.google.com/calendar/embed?src=${encodeURIComponent(resource.calendarId)}&color=${color}&ctz=Asia%2FSeoul&mode=WEEK`;
-        const aliasText =
-          resource.aliases?.length > 0
-            ? `\n별칭: ${resource.aliases.join(', ')}`
-            : '';
-
         blocks.push(
           {
             type: 'section',
             text: {
               type: 'mrkdwn',
               text: resource.description
-                ? `*${resource.name}*${aliasText}\n${resource.description}`
-                : `*${resource.name}*${aliasText}`,
+                ? `*${resource.name}*\n${resource.description}`
+                : `*${resource.name}*`,
             },
             accessory: {
               type: 'button',
@@ -999,16 +989,14 @@ export class ResourceView {
       });
 
       for (const prof of withUrl) {
-        const aliasText =
-          prof.aliases?.length > 0 ? `\n별칭: ${prof.aliases.join(', ')}` : '';
         blocks.push(
           {
             type: 'section',
             text: {
               type: 'mrkdwn',
               text: prof.description
-                ? `*${prof.name}*${aliasText}\n${prof.description}`
-                : `*${prof.name}*${aliasText}`,
+                ? `*${prof.name}*\n${prof.description}`
+                : `*${prof.name}*`,
             },
             accessory: {
               type: 'button',
