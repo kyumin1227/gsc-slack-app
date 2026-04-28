@@ -1,12 +1,11 @@
 import { Controller, Get, Logger, Query, Res } from '@nestjs/common';
 import { UserService } from './user.service';
-import { Action, Command, SlackService, View } from 'nestjs-slack-bolt';
+import { Action, SlackService, View } from 'nestjs-slack-bolt';
 import type { Response } from 'express';
 import type {
   AllMiddlewareArgs,
   SlackActionMiddlewareArgs,
   SlackViewMiddlewareArgs,
-  SlackCommandMiddlewareArgs,
   BlockAction,
 } from '@slack/bolt';
 import { UserView, UserListFilter, UserListModalState } from './user.view';
@@ -14,7 +13,6 @@ import { OAuthUtil } from './google-oauth.util';
 import { UserRole, UserStatus } from './user.entity';
 import { BusinessError, ErrorCode } from '../common/errors';
 import { StudentClassService } from '../student-class/student-class.service';
-import { CMD } from '../common/slack-commands';
 import { PermissionService } from './permission.service';
 
 const PAGE_SIZE = 10;
@@ -202,19 +200,15 @@ export class UserController {
     }
   }
 
-  // 관리자: /승인 명령어 - 승인 대기 목록 모달
-  // 조교(TA) 이상 권한 필요
-  @Command(CMD.승인)
   @Action('home:open-approval')
   async openApprovalModal({
     ack,
     client,
     body,
-  }: (SlackCommandMiddlewareArgs | SlackActionMiddlewareArgs<BlockAction>) &
-    AllMiddlewareArgs) {
+  }: SlackActionMiddlewareArgs<BlockAction> & AllMiddlewareArgs) {
     await ack();
 
-    const userId = 'user_id' in body ? body.user_id : body.user.id;
+    const userId = body.user.id;
 
     await this.permissionService.requireAdmin(userId);
 
@@ -325,18 +319,15 @@ export class UserController {
     );
   }
 
-  // 관리자: 유저 관리 모달 열기
-  @Command(CMD.유저관리)
   @Action('home:open-user-management')
   async openUserManagement({
     ack,
     client,
     body,
-  }: (SlackCommandMiddlewareArgs | SlackActionMiddlewareArgs<BlockAction>) &
-    AllMiddlewareArgs) {
+  }: SlackActionMiddlewareArgs<BlockAction> & AllMiddlewareArgs) {
     await ack();
 
-    const userId = 'user_id' in body ? body.user_id : body.user.id;
+    const userId = body.user.id;
     await this.permissionService.requireAdmin(userId);
 
     await client.views.open({
