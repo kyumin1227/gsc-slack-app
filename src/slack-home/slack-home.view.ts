@@ -178,7 +178,7 @@ export class HomeView {
                 elements: [
                   {
                     type: 'mrkdwn' as const,
-                    text: '내 반 태그가 달린 과목의 알림 채널, 반복 일정을 관리할 수 있어요.',
+                    text: '내 반 태그가 달린 과목의 알림 채널·반복 일정을 관리하고, 반원 목록 조회 및 가입 승인을 할 수 있어요.',
                   },
                 ],
               },
