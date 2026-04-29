@@ -1,6 +1,12 @@
+import { readFileSync } from 'fs';
+import { join } from 'path';
 import type { View } from '@slack/types';
 import type { User } from '../user/user.entity';
 import { UserRole } from '../user/user.entity';
+
+const APP_VERSION: string = JSON.parse(
+  readFileSync(join(__dirname, '../../package.json'), 'utf-8'),
+).version;
 
 export class HomeView {
   static registration(): View {
@@ -64,11 +70,6 @@ export class HomeView {
   }
 
   static activeStudent(user: User): View {
-    const className = user.studentClass?.name ?? '';
-    const infoLine = [user.code, user.email, className]
-      .filter(Boolean)
-      .join('  |  ');
-
     const isClassRep = user.role === UserRole.CLASS_REP;
 
     return {
@@ -203,9 +204,8 @@ export class HomeView {
                   },
                 ],
               },
-              { type: 'divider' as const },
             ]
-          : []),
+          : [{ type: 'divider' as const }]),
         {
           type: 'actions',
           elements: [
@@ -238,6 +238,15 @@ export class HomeView {
               text: { type: 'plain_text', text: '✨ 기능 제안' },
               action_id: 'home:request-feature',
               url: 'https://github.com/kyumin1227/gsc-slack-app/issues/new?template=feature_request.yml',
+            },
+          ],
+        },
+        {
+          type: 'context',
+          elements: [
+            {
+              type: 'mrkdwn',
+              text: `v${APP_VERSION}  ·  © 2026 GSC`,
             },
           ],
         },
@@ -536,6 +545,15 @@ export class HomeView {
               text: { type: 'plain_text', text: '✨ 기능 제안' },
               action_id: 'home:request-feature',
               url: 'https://github.com/kyumin1227/gsc-slack-app/issues/new?template=feature_request.yml',
+            },
+          ],
+        },
+        {
+          type: 'context',
+          elements: [
+            {
+              type: 'mrkdwn',
+              text: `v${APP_VERSION}  ·  © 2026 GSC`,
             },
           ],
         },
