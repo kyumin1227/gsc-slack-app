@@ -607,4 +607,158 @@ export class UserController {
       }
     }
   }
+
+  // ========== 반 대표 유저 관리 ==========
+
+  private async getClassRepStudentClassId(slackUserId: string): Promise<number | null> {
+    const user = await this.userService.findBySlackIdWithClass(slackUserId);
+    if (!user || user.role !== UserRole.CLASS_REP || !user.studentClassId) return null;
+    return user.studentClassId;
+  }
+
+  @Action('home:open-class-rep-user-list')
+  async classRepOpenUserList({
+    ack,
+    body,
+    client,
+  }: SlackActionMiddlewareArgs<BlockAction> & AllMiddlewareArgs) {
+    await ack();
+
+    const studentClassId = await this.getClassRepStudentClassId(body.user.id);
+    if (!studentClassId) return;
+
+    const user = await this.userService.findBySlackIdWithClass(body.user.id);
+    const className = user?.studentClass?.name ?? '';
+    const { users, total } = await this.userService.findByStudentClassId(studentClassId, 0, PAGE_SIZE);
+
+    await client.views.open({
+      trigger_id: body.trigger_id,
+      view: UserView.classRepUserListModal(
+        users.map((u) => ({
+          slackId: u.slackId,
+          name: u.name,
+          code: u.code,
+          role: u.role,
+          status: u.status,
+          className: u.studentClass?.name,
+        })),
+        { page: 0, pageSize: PAGE_SIZE, total },
+        className,
+      ),
+    });
+  }
+
+  @Action('user:class-rep:page-prev')
+  @Action('user:class-rep:page-next')
+  async classRepPageUserList({
+    ack,
+    body,
+    client,
+  }: SlackActionMiddlewareArgs<BlockAction> & AllMiddlewareArgs) {
+    await ack();
+
+    const studentClassId = await this.getClassRepStudentClassId(body.user.id);
+    if (!studentClassId) return;
+
+    const action = body.actions[0] as { value: string };
+    const page = parseInt(action.value, 10);
+
+    const user = await this.userService.findBySlackIdWithClass(body.user.id);
+    const className = user?.studentClass?.name ?? '';
+    const { users, total } = await this.userService.findByStudentClassId(
+      studentClassId,
+      page * PAGE_SIZE,
+      PAGE_SIZE,
+    );
+
+    if (body.view?.id) {
+      await client.views.update({
+        view_id: body.view.id,
+        view: UserView.classRepUserListModal(
+          users.map((u) => ({
+            slackId: u.slackId,
+            name: u.name,
+            code: u.code,
+            role: u.role,
+            status: u.status,
+            className: u.studentClass?.name,
+          })),
+          { page, pageSize: PAGE_SIZE, total },
+          className,
+        ),
+      });
+    }
+  }
+
+  @Action('home:open-class-rep-approval')
+  async classRepOpenApproval({
+    ack,
+    body,
+    client,
+  }: SlackActionMiddlewareArgs<BlockAction> & AllMiddlewareArgs) {
+    await ack();
+
+    const studentClassId = await this.getClassRepStudentClassId(body.user.id);
+    if (!studentClassId) return;
+
+    const pendingUsers = await this.userService.findPendingApprovalByStudentClassId(studentClassId);
+
+    await client.views.open({
+      trigger_id: body.trigger_id,
+      view: UserView.classRepPendingApprovalModal(
+        pendingUsers.map((u) => ({
+          slackId: u.slackId,
+          name: u.name,
+          email: u.email,
+          code: u.code,
+          role: u.role,
+          className: u.studentClass?.name,
+        })),
+      ),
+    });
+  }
+
+  @Action(/^user:class-rep:approve:/)
+  async classRepApproveUser({
+    ack,
+    body,
+    client,
+  }: SlackActionMiddlewareArgs<BlockAction> & AllMiddlewareArgs) {
+    await ack();
+
+    const studentClassId = await this.getClassRepStudentClassId(body.user.id);
+    if (!studentClassId) return;
+
+    const action = body.actions[0] as { action_id: string };
+    const targetSlackId = action.action_id.split(':').pop()!;
+
+    // 해당 유저가 자기 반인지 확인
+    const targetUser = await this.userService.findBySlackId(targetSlackId);
+    if (!targetUser || targetUser.studentClassId !== studentClassId) return;
+
+    await this.userService.approveUser(targetSlackId);
+    await this.inviteToClassChannel(targetSlackId, targetUser.studentClassId);
+
+    await this.slackService.client.chat.postMessage({
+      channel: targetSlackId,
+      text: '가입이 승인되었습니다! 이제 서비스를 이용할 수 있습니다.',
+    });
+
+    if (body.view?.id) {
+      const pendingUsers = await this.userService.findPendingApprovalByStudentClassId(studentClassId);
+      await client.views.update({
+        view_id: body.view.id,
+        view: UserView.classRepPendingApprovalModal(
+          pendingUsers.map((u) => ({
+            slackId: u.slackId,
+            name: u.name,
+            email: u.email,
+            code: u.code,
+            role: u.role,
+            className: u.studentClass?.name,
+          })),
+        ),
+      });
+    }
+  }
 }

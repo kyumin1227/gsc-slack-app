@@ -187,12 +187,19 @@ export class HomeView {
                 elements: [
                   {
                     type: 'button' as const,
-                    text: {
-                      type: 'plain_text' as const,
-                      text: '시간표 관리',
-                    },
+                    text: { type: 'plain_text' as const, text: '시간표 관리' },
                     style: 'primary' as const,
                     action_id: 'home:open-class-rep-schedules',
+                  },
+                  {
+                    type: 'button' as const,
+                    text: { type: 'plain_text' as const, text: '반원 목록' },
+                    action_id: 'home:open-class-rep-user-list',
+                  },
+                  {
+                    type: 'button' as const,
+                    text: { type: 'plain_text' as const, text: '가입 승인' },
+                    action_id: 'home:open-class-rep-approval',
                   },
                 ],
               },
