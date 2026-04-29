@@ -25,13 +25,15 @@ export interface DebounceEntry {
 }
 
 const DEBOUNCE_KEY_PREFIX = 'calendar:debounce:';
-const MUTE_KEY_PREFIX = 'calendar:mute:';
+const MANUAL_MUTE_PREFIX = 'calendar:mute:manual:';
+const AUTO_MUTE_PREFIX = 'calendar:mute:auto:';
 const DEBOUNCE_MS = 10 * 60 * 1000;
 const MUTE_TTL_MS = 30 * 60 * 1000;
 const ENTRY_TTL_MS = 60 * 60 * 1000; // 1시간 안전 TTL
 
 const pendingKey = (key: string) => `${DEBOUNCE_KEY_PREFIX}${key}`;
-const muteKey = (scheduleId: number) => `${MUTE_KEY_PREFIX}${scheduleId}`;
+const manualMuteKey = (scheduleId: number) => `${MANUAL_MUTE_PREFIX}${scheduleId}`;
+const autoMuteKey = (scheduleId: number) => `${AUTO_MUTE_PREFIX}${scheduleId}`;
 
 @Injectable()
 export class ScheduleNotificationService {
@@ -175,23 +177,44 @@ export class ScheduleNotificationService {
     }
   }
 
+  // 수동 토글 — 30분 TTL, 수동 해제 가능
   async mute(scheduleId: number): Promise<void> {
-    await this.cache.set(muteKey(scheduleId), true, MUTE_TTL_MS);
-    this.logger.log(`Schedule ${scheduleId} muted`);
+    await this.cache.set(manualMuteKey(scheduleId), true, MUTE_TTL_MS);
+    this.logger.log(`Schedule ${scheduleId} manually muted`);
   }
 
   async unmute(scheduleId: number): Promise<void> {
-    await this.cache.del(muteKey(scheduleId));
-    this.logger.log(`Schedule ${scheduleId} unmuted`);
+    await this.cache.del(manualMuteKey(scheduleId));
+    this.logger.log(`Schedule ${scheduleId} manually unmuted`);
   }
 
+  // 반복 일정 작업 시 자동 무음 — 30분 TTL, 자동 만료
+  async autoMute(scheduleId: number): Promise<void> {
+    await this.cache.set(autoMuteKey(scheduleId), true, MUTE_TTL_MS);
+    this.logger.log(`Schedule ${scheduleId} auto-muted`);
+  }
+
+  // 수동 무음 여부만 (토글 버튼 상태용)
+  async isManuallyMuted(scheduleId: number): Promise<boolean> {
+    return (await this.cache.get<boolean>(manualMuteKey(scheduleId))) === true;
+  }
+
+  // 수동 또는 자동 무음 여부 (알림 발송 차단용)
   async isMuted(scheduleId: number): Promise<boolean> {
-    return (await this.cache.get<boolean>(muteKey(scheduleId))) === true;
+    const [manual, auto] = await Promise.all([
+      this.cache.get<boolean>(manualMuteKey(scheduleId)),
+      this.cache.get<boolean>(autoMuteKey(scheduleId)),
+    ]);
+    return manual === true || auto === true;
   }
 
+  // 토글 버튼 상태 표시용 — 수동 무음만 반영
   async getMutedSet(scheduleIds: number[]): Promise<Set<number>> {
     const results = await Promise.all(
-      scheduleIds.map(async (id) => ({ id, muted: await this.isMuted(id) })),
+      scheduleIds.map(async (id) => ({
+        id,
+        muted: await this.isManuallyMuted(id),
+      })),
     );
     return new Set(results.filter((r) => r.muted).map((r) => r.id));
   }
