@@ -178,6 +178,44 @@ export class ScheduleService {
     });
   }
 
+  // 반 대표 슬랙 ID로 자기 반 태그가 달린 활성 스케줄 조회
+  async findSchedulesByClassRepSlackId(
+    slackUserId: string,
+  ): Promise<Schedule[]> {
+    const user = await this.userService.findBySlackIdWithClass(slackUserId);
+    if (!user?.studentClassId) return [];
+
+    const tag = await this.tagRepository.findOne({
+      where: { studentClassId: user.studentClassId },
+    });
+    if (!tag) return [];
+
+    return this.findActiveSchedulesByTagId(tag.id);
+  }
+
+  // 반 대표가 해당 과목에 대한 권한이 있는지 확인 (자기 반 태그 포함 여부)
+  async isClassRepAuthorizedForSchedule(
+    slackUserId: string,
+    scheduleId: number,
+  ): Promise<boolean> {
+    const user = await this.userService.findBySlackIdWithClass(slackUserId);
+    if (!user?.studentClassId) return false;
+
+    const tag = await this.tagRepository.findOne({
+      where: { studentClassId: user.studentClassId },
+    });
+    if (!tag) return false;
+
+    const count = await this.scheduleRepository
+      .createQueryBuilder('schedule')
+      .innerJoin('schedule.tags', 'tag')
+      .where('schedule.id = :scheduleId', { scheduleId })
+      .andWhere('tag.id = :tagId', { tagId: tag.id })
+      .getCount();
+
+    return count > 0;
+  }
+
   // 태그가 없는 활성 스케줄 목록 조회
   async findActiveSchedulesWithoutTags(): Promise<Schedule[]> {
     return this.scheduleRepository
@@ -594,7 +632,10 @@ export class ScheduleService {
     const slackChannelIds = await this.channelService.getSlackChannelIds(
       dto.scheduleId,
     );
-    if (slackChannelIds.length > 0 && !(await this.scheduleNotificationService.isManuallyMuted(dto.scheduleId))) {
+    if (
+      slackChannelIds.length > 0 &&
+      !(await this.scheduleNotificationService.isManuallyMuted(dto.scheduleId))
+    ) {
       const writerDisplay = await this.resolveWriterDisplay(
         schedule.calendarId,
       );
@@ -736,7 +777,11 @@ export class ScheduleService {
     const executorDisplay = executorSlackId
       ? `<@${executorSlackId}>`
       : '알 수 없음';
-    if (!(await this.scheduleNotificationService.isManuallyMuted(group.scheduleId))) {
+    if (
+      !(await this.scheduleNotificationService.isManuallyMuted(
+        group.scheduleId,
+      ))
+    ) {
       await Promise.allSettled(
         slackChannelIds.map((channel) =>
           this.slack.chat.postMessage({
@@ -912,7 +957,11 @@ export class ScheduleService {
       ? `<@${executorSlackId}>`
       : '알 수 없음';
 
-    if (!(await this.scheduleNotificationService.isManuallyMuted(group.scheduleId))) {
+    if (
+      !(await this.scheduleNotificationService.isManuallyMuted(
+        group.scheduleId,
+      ))
+    ) {
       await Promise.allSettled(
         slackChannelIds.map((channel) =>
           this.slack.chat.postMessage({
@@ -1219,8 +1268,9 @@ function buildRecurringUpdateBlocks(
   let professorText: string | null = null;
 
   if (locationChanged) {
-    const { room: beforeRoom, professor: beforeProfessor } =
-      parseLocationParts(group.location ?? '');
+    const { room: beforeRoom, professor: beforeProfessor } = parseLocationParts(
+      group.location ?? '',
+    );
 
     roomText =
       beforeRoom !== afterRoom
