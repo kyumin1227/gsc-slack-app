@@ -1,5 +1,6 @@
 import type { View } from '@slack/types';
 import type { User } from '../user/user.entity';
+import { UserRole } from '../user/user.entity';
 
 export class HomeView {
   static registration(): View {
@@ -67,6 +68,8 @@ export class HomeView {
     const infoLine = [user.code, user.email, className]
       .filter(Boolean)
       .join('  |  ');
+
+    const isClassRep = user.role === UserRole.CLASS_REP;
 
     return {
       type: 'home',
@@ -160,6 +163,49 @@ export class HomeView {
           ],
         },
         { type: 'divider' },
+        ...(isClassRep
+          ? [
+              {
+                type: 'header' as const,
+                text: {
+                  type: 'plain_text' as const,
+                  text: '👑 반 대표',
+                  emoji: true,
+                },
+              },
+              {
+                type: 'context' as const,
+                elements: [
+                  {
+                    type: 'mrkdwn' as const,
+                    text: '내 반 태그가 달린 과목의 알림 채널·반복 일정을 관리하고, 반원 목록 조회 및 가입 승인을 할 수 있어요.',
+                  },
+                ],
+              },
+              {
+                type: 'actions' as const,
+                elements: [
+                  {
+                    type: 'button' as const,
+                    text: { type: 'plain_text' as const, text: '시간표 관리' },
+                    style: 'primary' as const,
+                    action_id: 'home:open-class-rep-schedules',
+                  },
+                  {
+                    type: 'button' as const,
+                    text: { type: 'plain_text' as const, text: '반원 목록' },
+                    action_id: 'home:open-class-rep-user-list',
+                  },
+                  {
+                    type: 'button' as const,
+                    text: { type: 'plain_text' as const, text: '가입 승인' },
+                    action_id: 'home:open-class-rep-approval',
+                  },
+                ],
+              },
+              { type: 'divider' as const },
+            ]
+          : []),
         {
           type: 'actions',
           elements: [
