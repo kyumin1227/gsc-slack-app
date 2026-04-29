@@ -841,7 +841,17 @@ export class ResourceView {
           '&ctz=Asia%2FSeoul&mode=WEEK'
         : undefined;
 
-    const blocks: View['blocks'] = [];
+    const blocks: View['blocks'] = [
+      {
+        type: 'context',
+        elements: [
+          {
+            type: 'mrkdwn',
+            text: '⚠️ 로직 변경으로 현재 일부 일정이 정확하지 않을 수 있습니다. \n빠른 시일 내에 수정하겠습니다.',
+          },
+        ],
+      },
+    ];
 
     if (combinedCalendarUrl) {
       blocks.push({
@@ -909,7 +919,17 @@ export class ResourceView {
           '&ctz=Asia%2FSeoul&mode=WEEK'
         : undefined;
 
-    const blocks: View['blocks'] = [];
+    const blocks: View['blocks'] = [
+      {
+        type: 'context',
+        elements: [
+          {
+            type: 'mrkdwn',
+            text: '⚠️ 로직 변경으로 현재 일부 일정이 정확하지 않을 수 있습니다. \n빠른 시일 내에 수정하겠습니다.',
+          },
+        ],
+      },
+    ];
 
     if (combinedCalendarUrl) {
       blocks.push({
