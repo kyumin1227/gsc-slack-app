@@ -14,6 +14,7 @@ import { WebClient } from '@slack/web-api';
 import { KnownBlock } from '@slack/web-api';
 import { randomUUID } from 'crypto';
 import { RRule, Weekday } from 'rrule';
+import { ScheduleNotificationService } from './schedule-notification.service';
 
 export interface CreateScheduleDto {
   name: string;
@@ -72,6 +73,7 @@ export class ScheduleService {
     private readonly channelService: ChannelService,
     private readonly googleCalendarService: GoogleCalendarService,
     private readonly userService: UserService,
+    private readonly scheduleNotificationService: ScheduleNotificationService,
   ) {}
 
   // 스케줄 생성 (Google Calendar도 함께 생성)
@@ -586,11 +588,13 @@ export class ScheduleService {
       recurrenceType: dto.recurrenceType,
     });
 
-    // 5. Slack 채널에 요약 알림 직접 발송
+    // 5. Slack 채널에 요약 알림 직접 발송 (웹훅 알림 차단용 auto-mute 선행)
+    await this.scheduleNotificationService.autoMute(dto.scheduleId);
+
     const slackChannelIds = await this.channelService.getSlackChannelIds(
       dto.scheduleId,
     );
-    if (slackChannelIds.length > 0) {
+    if (slackChannelIds.length > 0 && !(await this.scheduleNotificationService.isManuallyMuted(dto.scheduleId))) {
       const writerDisplay = await this.resolveWriterDisplay(
         schedule.calendarId,
       );
@@ -723,6 +727,8 @@ export class ScheduleService {
       await this.recurrenceGroupRepository.softDelete({ id: groupDbId });
     }
 
+    await this.scheduleNotificationService.autoMute(group.scheduleId);
+
     const slackChannelIds = await this.channelService.getSlackChannelIds(
       group.scheduleId,
     );
@@ -730,24 +736,26 @@ export class ScheduleService {
     const executorDisplay = executorSlackId
       ? `<@${executorSlackId}>`
       : '알 수 없음';
-    await Promise.allSettled(
-      slackChannelIds.map((channel) =>
-        this.slack.chat.postMessage({
-          channel,
-          text: `🗑️ ${schedule.name} 반복 일정 삭제 안내`,
-          blocks: buildRecurringDeleteBlocks(
-            schedule.name,
-            group,
-            scope,
-            filterOriginal,
-            deletedCount,
-            events.length,
-            executorDisplay,
-            writerDisplay,
-          ),
-        }),
-      ),
-    );
+    if (!(await this.scheduleNotificationService.isManuallyMuted(group.scheduleId))) {
+      await Promise.allSettled(
+        slackChannelIds.map((channel) =>
+          this.slack.chat.postMessage({
+            channel,
+            text: `🗑️ ${schedule.name} 반복 일정 삭제 안내`,
+            blocks: buildRecurringDeleteBlocks(
+              schedule.name,
+              group,
+              scope,
+              filterOriginal,
+              deletedCount,
+              events.length,
+              executorDisplay,
+              writerDisplay,
+            ),
+          }),
+        ),
+      );
+    }
 
     this.logger.log(
       `Recurring group deleted: groupId=${group.groupId}, scope=${scope}, deleted=${deletedCount}/${events.length}`,
@@ -894,6 +902,8 @@ export class ScheduleService {
       );
     }
 
+    await this.scheduleNotificationService.autoMute(group.scheduleId);
+
     const slackChannelIds = await this.channelService.getSlackChannelIds(
       group.scheduleId,
     );
@@ -901,24 +911,27 @@ export class ScheduleService {
     const executorDisplay = executorSlackId
       ? `<@${executorSlackId}>`
       : '알 수 없음';
-    await Promise.allSettled(
-      slackChannelIds.map((channel) =>
-        this.slack.chat.postMessage({
-          channel,
-          text: `🔄 ${schedule.name} 반복 일정 수정 안내`,
-          blocks: buildRecurringUpdateBlocks(
-            schedule.name,
-            group,
-            dto,
-            scope,
-            updatedCount,
-            events.length,
-            executorDisplay,
-            writerDisplay,
-          ),
-        }),
-      ),
-    );
+
+    if (!(await this.scheduleNotificationService.isManuallyMuted(group.scheduleId))) {
+      await Promise.allSettled(
+        slackChannelIds.map((channel) =>
+          this.slack.chat.postMessage({
+            channel,
+            text: `🔄 ${schedule.name} 반복 일정 수정 안내`,
+            blocks: buildRecurringUpdateBlocks(
+              schedule.name,
+              group,
+              dto,
+              scope,
+              updatedCount,
+              events.length,
+              executorDisplay,
+              writerDisplay,
+            ),
+          }),
+        ),
+      );
+    }
 
     this.logger.log(
       `Recurring group updated: groupId=${group.groupId}, scope=${scope}, updated=${updatedCount}/${events.length}`,
