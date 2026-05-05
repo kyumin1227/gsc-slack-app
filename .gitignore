@@ -67,3 +67,6 @@ terraform/*.tfstate.backup
 #Claude
 .claude/
 CLAUDE.md
+
+# Codex
+AGENTS.md

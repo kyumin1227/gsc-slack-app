@@ -17,6 +17,7 @@ import { ChannelModule } from './channel/channel.module';
 import { ResourceModule } from './resource/resource.module';
 import { httpReceiver } from './slack-receiver';
 import { slackErrorMiddleware } from './common/slack-error.middleware';
+import { CleaningModule } from './cleaning/cleaning.module';
 
 @Module({
   imports: [
@@ -69,6 +70,7 @@ import { slackErrorMiddleware } from './common/slack-error.middleware';
     ScheduleModule,
     ChannelModule,
     ResourceModule,
+    CleaningModule,
   ],
   controllers: [AppController],
   providers: [AppService],
