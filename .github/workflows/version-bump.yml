@@ -16,13 +16,14 @@ jobs:
     steps:
       - name: Determine bump type from PR labels
         id: bump-type
+        env:
+          PR_LABELS: ${{ toJson(github.event.pull_request.labels.*.name) }}
         run: |
-          LABELS='${{ toJson(github.event.pull_request.labels.*.name) }}'
-          if echo "$LABELS" | grep -q "release:major"; then
+          if echo "$PR_LABELS" | grep -q "release:major"; then
             echo "type=major" >> $GITHUB_OUTPUT
-          elif echo "$LABELS" | grep -q "release:minor"; then
+          elif echo "$PR_LABELS" | grep -q "release:minor"; then
             echo "type=minor" >> $GITHUB_OUTPUT
-          elif echo "$LABELS" | grep -q "release:patch"; then
+          elif echo "$PR_LABELS" | grep -q "release:patch"; then
             echo "type=patch" >> $GITHUB_OUTPUT
           else
             echo "type=none" >> $GITHUB_OUTPUT
@@ -48,6 +49,6 @@ jobs:
           git config user.email "github-actions[bot]@users.noreply.github.com"
           npm version ${{ steps.bump-type.outputs.type }} --no-git-tag-version
           NEW_VERSION=$(jq -r .version package.json)
-          git add package.json
+          git add package.json package-lock.json
           git commit -m "chore: bump version to v${NEW_VERSION}"
           git push origin main
