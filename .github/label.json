@@ -53,5 +53,20 @@
     "name": "✅ test",
     "color": "3d9970",
     "description": "테스트 코드 추가 및 수정"
+  },
+  {
+    "name": "🔖 release:patch",
+    "color": "0e8a16",
+    "description": "버그 수정, 문구·UI 소폭 개선, 리팩토링 등 기존 동작 유지"
+  },
+  {
+    "name": "🌟 release:minor",
+    "color": "e4e669",
+    "description": "새 기능 추가, 새 DB 테이블 추가 (기존 데이터 영향 없음)"
+  },
+  {
+    "name": "🔥 release:major",
+    "color": "b60205",
+    "description": "DB 마이그레이션, 앱 전면 개편"
   }
 ]
