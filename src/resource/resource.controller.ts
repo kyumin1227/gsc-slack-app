@@ -13,6 +13,7 @@ import { UserService } from '../user/user.service';
 import { UserStatus } from '../user/user.entity';
 import { GoogleCalendarService } from '../google/google-calendar.service';
 import { PermissionService } from '../user/permission.service';
+import { withModalFeedback } from '../common/modal-feedback.util';
 
 @Controller()
 export class ResourceController {
@@ -234,24 +235,27 @@ export class ResourceController {
       return;
     }
 
-    await ack();
-
+    const viewId = body.view.id;
     const startTime = new Date(`${date}T${startTimeStr}:00+09:00`);
     const endTime = new Date(startTime.getTime() + durationMinutes * 60 * 1000);
 
-    await this.resourceService.bookResource({
-      resourceId: roomId,
-      title,
-      startTime,
-      endTime,
-      bookerSlackId: body.user.id,
-      attendeeSlackIds,
-    });
-
-    await client.chat.postMessage({
-      channel: body.user.id,
-      text: `✅ 예약이 완료되었습니다.\n*${title}* | ${date} ${startTimeStr} (${durationMinutes}분)`,
-    });
+    await withModalFeedback(
+      { ack, client, viewId, userId: body.user.id },
+      () =>
+        this.resourceService.bookResource({
+          resourceId: roomId,
+          title,
+          startTime,
+          endTime,
+          bookerSlackId: body.user.id,
+          attendeeSlackIds,
+        }),
+      {
+        successTitle: '예약 완료',
+        successText: () =>
+          `✅ 예약이 완료되었습니다!\n\n*${title}*\n📅 ${date} ${startTimeStr} (${durationMinutes}분)`,
+      },
+    );
   }
 
   @Action('home:open-my-bookings')

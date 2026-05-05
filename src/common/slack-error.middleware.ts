@@ -40,26 +40,41 @@ export const slackErrorMiddleware = async (
     const text =
       err instanceof Error ? `❌ ${err.message}` : '❌ 오류가 발생했습니다.';
 
+    const errorView = {
+      type: 'modal' as const,
+      title: { type: 'plain_text' as const, text: '오류' },
+      close: { type: 'plain_text' as const, text: '닫기' },
+      blocks,
+    };
+
+    const viewId: string | undefined = body?.view?.id;
+
+    // 모달이 열려 있으면 현재 뷰를 에러 모달로 교체 (ack 후 trigger_id 만료 케이스 포함)
+    if (viewId) {
+      const updated = await client.views
+        .update({ view_id: viewId, view: errorView })
+        .then(() => true)
+        .catch(() => false);
+      if (updated) return;
+    }
+
+    // viewId 없거나 update 실패 → trigger_id로 push/open 시도
     if (triggerId) {
       const isInsideModal = body?.view?.type === 'modal';
       const openOrPush = isInsideModal ? client.views.push : client.views.open;
-      await openOrPush({
+      const opened = await openOrPush({
         trigger_id: triggerId,
-        view: {
-          type: 'modal',
-          title: { type: 'plain_text', text: '오류' },
-          close: { type: 'plain_text', text: '닫기' },
-          blocks,
-        },
-      }).catch(async (e: unknown) => {
-        logger.warn('[ErrorModal] views failed, fallback to DM', e);
-        if (userId) {
-          await client.chat
-            .postMessage({ channel: userId, text, blocks })
-            .catch(() => {});
-        }
-      });
-    } else if (userId) {
+        view: errorView,
+      })
+        .then(() => true)
+        .catch((e: unknown) => {
+          logger.warn('[ErrorModal] views failed, fallback to DM', e);
+          return false;
+        });
+      if (opened) return;
+    }
+
+    if (userId) {
       await client.chat
         .postMessage({ channel: userId, text, blocks })
         .catch(() => {});
