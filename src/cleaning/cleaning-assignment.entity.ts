@@ -8,8 +8,8 @@ import {
   ManyToOne,
 } from 'typeorm';
 import { CleaningSchedule } from './cleaning-schedule.entity';
-import { CleaningStudent } from './cleaning-student.entity';
 import { CleaningArea } from './cleaning-area.entity';
+import { User } from '../user/user.entity';
 
 export enum CleaningAssignmentStatus {
   ASSIGNED = '배정',
@@ -29,8 +29,8 @@ export class CleaningAssignment {
   @Column()
   scheduleId: number;
 
-  @ManyToOne(() => CleaningStudent)
-  student: CleaningStudent;
+  @ManyToOne(() => User)
+  student: User;
 
   @Column()
   studentId: number;
