@@ -12,7 +12,7 @@ import { CleaningAssignment } from './cleaning-assignment.entity';
 
 export enum CleaningTradeStatus {
   PENDING = '대기',
-  APPROVED = '승인',
+  ACCEPTED = '수락',
   REJECTED = '거절',
   CANCELED = '취소',
 }
