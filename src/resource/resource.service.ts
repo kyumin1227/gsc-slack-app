@@ -177,7 +177,11 @@ export class ResourceService {
       throw new BusinessError(ErrorCode.BOOKING_CONFLICT);
     }
 
-    const allSlackIds = [dto.bookerSlackId, ...dto.attendeeSlackIds];
+    const allSlackIdsSet = new Set([
+      dto.bookerSlackId,
+      ...dto.attendeeSlackIds,
+    ]);
+    const allSlackIds = Array.from(allSlackIdsSet);
     const attendees = (
       await Promise.all(
         allSlackIds.map((id) => this.userService.findBySlackIdWithClass(id)),
@@ -296,7 +300,10 @@ export class ResourceService {
     const results: ConsultationItem[] = [];
     for (const ev of events) {
       if (ev.status === 'cancelled') continue;
-      if (ev.extendedProperties?.shared?.['goo.createdBySet'] !== 'default_cita') continue;
+      if (
+        ev.extendedProperties?.shared?.['goo.createdBySet'] !== 'default_cita'
+      )
+        continue;
       const start = new Date(ev.start?.dateTime ?? ev.start?.date ?? '');
       const end = new Date(ev.end?.dateTime ?? ev.end?.date ?? '');
       results.push({
@@ -318,9 +325,13 @@ export class ResourceService {
     if (!user) throw new BusinessError(ErrorCode.USER_NOT_FOUND);
 
     const refreshToken = this.userService.getDecryptedRefreshToken(user);
-    if (!refreshToken) throw new BusinessError(ErrorCode.CALENDAR_WRITER_NO_TOKEN);
+    if (!refreshToken)
+      throw new BusinessError(ErrorCode.CALENDAR_WRITER_NO_TOKEN);
 
-    await this.googleCalendarService.cancelConsultationEvent(refreshToken, eventId);
+    await this.googleCalendarService.cancelConsultationEvent(
+      refreshToken,
+      eventId,
+    );
   }
 
   async addEditor(id: number, email: string): Promise<void> {
