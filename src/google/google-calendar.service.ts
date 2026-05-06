@@ -725,6 +725,18 @@ export class GoogleCalendarService {
     return busy.length > 0;
   }
 
+  async isTimeSlotBusyExcluding(
+    calendarId: string,
+    startTime: Date,
+    endTime: Date,
+    excludeEventId: string,
+  ): Promise<boolean> {
+    const events = await this.listEventsInRange(calendarId, startTime, endTime);
+    return events.some(
+      (e) => e.id !== excludeEventId && e.status !== 'cancelled',
+    );
+  }
+
   // 유저 토큰으로 본인 primary 캘린더에서 기간 내 이벤트 조회
   async listUserPrimaryEvents(
     refreshToken: string,
