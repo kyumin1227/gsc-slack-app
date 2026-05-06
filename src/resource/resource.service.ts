@@ -381,6 +381,16 @@ export class ResourceService {
 
     const refreshToken = await this.getEditorRefreshToken(calendarId);
 
+    const isBusy = await this.googleCalendarService.isTimeSlotBusyExcluding(
+      calendarId,
+      dto.startTime,
+      dto.endTime,
+      eventId,
+    );
+    if (isBusy) {
+      throw new BusinessError(ErrorCode.BOOKING_CONFLICT);
+    }
+
     const attendees = (
       await Promise.all(
         dto.attendeeSlackIds.map((id) =>
