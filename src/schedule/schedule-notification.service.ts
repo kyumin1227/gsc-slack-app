@@ -10,7 +10,7 @@ import {
   hasRelevantChanges,
   EventChangeType,
   EventSnapshot,
-} from './schedule-watch.view';
+} from './view/schedule-watch.view';
 
 export type { EventSnapshot };
 

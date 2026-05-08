@@ -14,7 +14,7 @@ import {
   ScheduleNotificationService,
   DebounceEntry,
 } from './schedule-notification.service';
-import { detectChangeType, hasRelevantChanges } from './schedule-watch.view';
+import { detectChangeType, hasRelevantChanges } from './view/schedule-watch.view';
 import { ResourceMirrorService } from '../resource/resource-mirror.service';
 import { EventSnapshot } from './schedule-notification.service';
 

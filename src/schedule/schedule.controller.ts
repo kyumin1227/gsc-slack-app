@@ -7,7 +7,9 @@ import type {
   BlockAction,
 } from '@slack/bolt';
 import { ScheduleService } from './schedule.service';
-import { ScheduleView } from './schedule.view';
+import { ScheduleView } from './view/schedule.view';
+import { ScheduleRecurringView } from './view/schedule-recurring.view';
+import { ScheduleClassRepView } from './view/schedule-class-rep.view';
 import { UserService } from '../user/user.service';
 import { TagService } from '../tag/tag.service';
 import { TagView } from '../tag/tag.view';
@@ -791,7 +793,7 @@ export class ScheduleController {
 
     await client.views.open({
       trigger_id: body.trigger_id,
-      view: ScheduleView.createRecurringModal(
+      view: ScheduleRecurringView.createRecurringModal(
         schedules.map((s) => ({ id: s.id, name: s.name })),
       ),
     });
@@ -917,7 +919,7 @@ export class ScheduleController {
 
     await client.views.open({
       trigger_id: body.trigger_id,
-      view: ScheduleView.selectScheduleForRecurringModal(schedules, 'delete'),
+      view: ScheduleRecurringView.selectScheduleForRecurringModal(schedules, 'delete'),
     });
   }
 
@@ -957,7 +959,7 @@ export class ScheduleController {
 
     await ack({
       response_action: 'push',
-      view: ScheduleView.deleteRecurringModal(groups, scheduleName),
+      view: ScheduleRecurringView.deleteRecurringModal(groups, scheduleName),
     });
   }
 
@@ -1014,7 +1016,7 @@ export class ScheduleController {
 
     await client.views.open({
       trigger_id: body.trigger_id,
-      view: ScheduleView.selectScheduleForRecurringModal(schedules, 'edit'),
+      view: ScheduleRecurringView.selectScheduleForRecurringModal(schedules, 'edit'),
     });
   }
 
@@ -1054,7 +1056,7 @@ export class ScheduleController {
 
     await ack({
       response_action: 'push',
-      view: ScheduleView.selectGroupForEditModal(
+      view: ScheduleRecurringView.selectGroupForEditModal(
         groups,
         scheduleName,
         scheduleId,
@@ -1095,7 +1097,7 @@ export class ScheduleController {
 
     await ack({
       response_action: 'push',
-      view: ScheduleView.editRecurringModal(group, scheduleName),
+      view: ScheduleRecurringView.editRecurringModal(group, scheduleName),
     });
   }
 
@@ -1277,7 +1279,7 @@ export class ScheduleController {
       channelMap.map(({ id, channels }) => [id, channels]),
     );
 
-    return ScheduleView.classRepScheduleListModal(
+    return ScheduleClassRepView.scheduleListModal(
       schedules.map((s) => ({
         id: s.id,
         name: s.name,
@@ -1328,7 +1330,7 @@ export class ScheduleController {
 
     await client.views.push({
       trigger_id: body.trigger_id,
-      view: ScheduleView.classRepEditModal(
+      view: ScheduleClassRepView.editModal(
         {
           id: schedule.id,
           name: schedule.name,
@@ -1469,7 +1471,7 @@ export class ScheduleController {
 
     await client.views.push({
       trigger_id: body.trigger_id,
-      view: ScheduleView.createRecurringModal(
+      view: ScheduleRecurringView.createRecurringModal(
         [{ id: schedule.id, name: schedule.name }],
         schedule.id,
       ),
@@ -1521,7 +1523,7 @@ export class ScheduleController {
 
     await client.views.push({
       trigger_id: body.trigger_id,
-      view: ScheduleView.selectGroupForEditModal(
+      view: ScheduleRecurringView.selectGroupForEditModal(
         groups,
         schedule.name,
         scheduleId,
@@ -1574,7 +1576,7 @@ export class ScheduleController {
 
     await client.views.push({
       trigger_id: body.trigger_id,
-      view: ScheduleView.deleteRecurringModal(groups, schedule.name),
+      view: ScheduleRecurringView.deleteRecurringModal(groups, schedule.name),
     });
   }
 }

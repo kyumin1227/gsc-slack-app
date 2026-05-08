@@ -1,5 +1,7 @@
+// 반복 주기 타입
 export type RecurrenceType = 'weekly' | 'biweekly' | 'monthly';
 
+// 반복 일정 생성 요청
 export interface CreateRecurringEventsDto {
   scheduleId: number;
   title: string;
@@ -13,6 +15,7 @@ export interface CreateRecurringEventsDto {
   daysOfWeek?: number[]; // 0=일, 1=월 ... 6=토 (weekly/biweekly 시 사용)
 }
 
+// 반복 일정 수정 요청
 export interface UpdateRecurringEventsDto {
   title?: string;
   description?: string;
