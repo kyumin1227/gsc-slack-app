@@ -5,7 +5,10 @@ import {
   CreateDateColumn,
   UpdateDateColumn,
   DeleteDateColumn,
+  ManyToOne,
+  Unique,
 } from 'typeorm';
+import { Resource } from '../resource/resource.entity';
 
 export enum CleaningScheduleStatus {
   SCHEDULED = '예정',
@@ -13,13 +16,23 @@ export enum CleaningScheduleStatus {
   CANCELED = '취소',
 }
 
+@Unique(['resourceId', 'cleaningDate'])
 @Entity('cleaning_schedules')
 export class CleaningSchedule {
   @PrimaryGeneratedColumn()
   id: number;
 
-  @Column({ type: 'date', unique: true })
+  @ManyToOne(() => Resource)
+  resource: Resource;
+
+  @Column()
+  resourceId: number;
+
+  @Column({ type: 'date' })
   cleaningDate: string;
+
+  @Column()
+  needPeoples: number;
 
   @Column({
     type: 'enum',

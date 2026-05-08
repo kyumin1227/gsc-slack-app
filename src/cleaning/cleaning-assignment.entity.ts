@@ -6,9 +6,9 @@ import {
   UpdateDateColumn,
   DeleteDateColumn,
   ManyToOne,
+  Unique,
 } from 'typeorm';
 import { CleaningSchedule } from './cleaning-schedule.entity';
-import { CleaningArea } from './cleaning-area.entity';
 import { User } from '../user/user.entity';
 
 export enum CleaningAssignmentStatus {
@@ -18,6 +18,7 @@ export enum CleaningAssignmentStatus {
   NON_COMPLIANT = '불이행',
 }
 
+@Unique(['studentId', 'cleaningDate'])
 @Entity('cleaning_assignments')
 export class CleaningAssignment {
   @PrimaryGeneratedColumn()
@@ -35,11 +36,8 @@ export class CleaningAssignment {
   @Column()
   studentId: number;
 
-  @ManyToOne(() => CleaningArea)
-  area: CleaningArea;
-
-  @Column()
-  areaId: number;
+  @Column({ type: 'date' })
+  cleaningDate: string;
 
   @Column({
     type: 'enum',
