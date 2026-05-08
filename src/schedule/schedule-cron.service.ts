@@ -5,7 +5,7 @@ import type { Cache } from 'cache-manager';
 import { calendar_v3 } from 'googleapis';
 import { ScheduleService } from './schedule.service';
 import { ResourceMirrorService } from '../resource/resource-mirror.service';
-import { ResourceService } from '../resource/resource.service';
+import { ResourceService } from '../resource/service/resource.service';
 import { GoogleCalendarService } from '../google/google-calendar.service';
 
 const CRON_SUPPRESS_KEY = 'suppress:cron:sync';
