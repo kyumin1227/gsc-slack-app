@@ -1,7 +1,7 @@
 import { Injectable, Logger } from '@nestjs/common';
 import { calendar_v3 } from 'googleapis';
 import { GoogleCalendarService } from '../google/google-calendar.service';
-import { ResourceService } from './resource.service';
+import { ResourceService } from './service/resource.service';
 import { Resource } from './resource.entity';
 
 const MIRRORED_BY_KEY = 'mirroredBy';
@@ -92,10 +92,16 @@ export class ResourceMirrorService {
       const { roomPart, professorPart } = this.parseLocation(location);
 
       const roomNames = roomPart
-        ? roomPart.split(',').map((s) => s.trim()).filter(Boolean)
+        ? roomPart
+            .split(',')
+            .map((s) => s.trim())
+            .filter(Boolean)
         : [];
       const professorNames = professorPart
-        ? professorPart.split(',').map((s) => s.trim()).filter(Boolean)
+        ? professorPart
+            .split(',')
+            .map((s) => s.trim())
+            .filter(Boolean)
         : [];
 
       for (const alias of [...roomNames, ...professorNames]) {
