@@ -11,7 +11,7 @@ export class ProfessorService {
     private readonly googleCalendarService: GoogleCalendarService,
   ) {}
 
-  // 교수의 향후 90일 상담 예약 목록 조회 (Google Appointments 이벤트만 필터)
+  // 교수의 향후 상담 예약 목록 조회 (Google Appointments 이벤트만 필터)
   async getConsultations(slackId: string): Promise<ConsultationItem[]> {
     const user = await this.userService.findBySlackId(slackId);
     if (!user) return [];
@@ -19,8 +19,9 @@ export class ProfessorService {
     const refreshToken = this.userService.getDecryptedRefreshToken(user);
     if (!refreshToken) return [];
 
+    const CONSULTATION_LOOKAHEAD_MS = 90 * 24 * 60 * 60 * 1000; // 90일
     const now = new Date();
-    const future = new Date(now.getTime() + 90 * 24 * 60 * 60 * 1000);
+    const future = new Date(now.getTime() + CONSULTATION_LOOKAHEAD_MS);
 
     const events = await this.googleCalendarService.listUserPrimaryEvents(
       refreshToken,

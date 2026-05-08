@@ -18,7 +18,7 @@ export class ProfessorController {
 
   constructor(
     private readonly resourceService: ResourceService,
-    private readonly bookingService: StudyRoomService,
+    private readonly studyRoomService: StudyRoomService,
     private readonly professorService: ProfessorService,
   ) {}
 
@@ -76,7 +76,7 @@ export class ProfessorController {
     try {
       await this.professorService.cancelConsultation(userId, eventId);
       const [bookings, consultations] = await Promise.all([
-        this.bookingService.getMyBookings(userId),
+        this.studyRoomService.getMyBookings(userId),
         this.professorService.getConsultations(userId),
       ]);
       await client.views.update({

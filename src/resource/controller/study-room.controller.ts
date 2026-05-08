@@ -23,7 +23,7 @@ export class StudyRoomController {
 
   constructor(
     private readonly resourceService: ResourceService,
-    private readonly bookingService: StudyRoomService,
+    private readonly studyRoomService: StudyRoomService,
     private readonly professorService: ProfessorService,
     private readonly userService: UserService,
     private readonly googleCalendarService: GoogleCalendarService,
@@ -117,7 +117,7 @@ export class StudyRoomController {
     await withModalFeedback(
       { ack, client, viewId, userId: body.user.id },
       () =>
-        this.bookingService.bookResource({
+        this.studyRoomService.bookResource({
           resourceId: roomId,
           title,
           startTime,
@@ -291,7 +291,7 @@ export class StudyRoomController {
     const startTime = new Date(`${date}T${startTimeStr}:00+09:00`);
     const endTime = new Date(startTime.getTime() + durationMinutes * 60 * 1000);
 
-    const result = await this.bookingService.modifyBooking(
+    const result = await this.studyRoomService.modifyBooking(
       calendarId,
       eventId,
       {
@@ -330,7 +330,7 @@ export class StudyRoomController {
       (action as { value: string }).value,
     ) as { calendarId: string; eventId: string; roomName: string };
 
-    await this.bookingService.cancelBooking(calendarId, eventId);
+    await this.studyRoomService.cancelBooking(calendarId, eventId);
     await client.chat.postMessage({
       channel: body.user.id,
       text: `✅ *${roomName}* 예약이 취소되었습니다.`,
@@ -349,7 +349,7 @@ export class StudyRoomController {
     const userId = body.user.id;
 
     const [bookings, consultations] = await Promise.all([
-      this.bookingService.getMyBookings(userId),
+      this.studyRoomService.getMyBookings(userId),
       this.professorService.getConsultations(userId),
     ]);
 
