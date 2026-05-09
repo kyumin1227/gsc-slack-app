@@ -8,10 +8,10 @@ import type {
 } from '@slack/bolt';
 import { ScheduleService } from '../service/schedule.service';
 import { ScheduleView } from '../view/schedule.view';
-import { UserService } from '../../user/user.service';
+import { UserService } from '../../user/service/user.service';
 import { TagService } from '../../tag/tag.service';
 import { ChannelService } from '../../channel/channel.service';
-import { PermissionService } from '../../user/permission.service';
+import { PermissionService } from '../../user/service/permission.service';
 import { GoogleAclService } from '../../google/calendar/acl.service';
 import { ScheduleNotificationService } from '../service/schedule-notification.service';
 import { SCHEDULE_PAGE_SIZE } from '../constants';

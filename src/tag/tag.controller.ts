@@ -8,7 +8,7 @@ import type {
 } from '@slack/bolt';
 import { TagService } from './tag.service';
 import { TagView } from './tag.view';
-import { PermissionService } from '../user/permission.service';
+import { PermissionService } from '../user/service/permission.service';
 
 @Controller()
 export class TagController {

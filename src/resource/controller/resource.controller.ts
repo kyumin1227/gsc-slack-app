@@ -9,9 +9,9 @@ import type {
 import { ResourceService } from '../service/resource.service';
 import { ResourceView } from '../view/resource.view';
 import { ResourceStatus, ResourceType } from '../resource.entity';
-import { UserService } from '../../user/user.service';
+import { UserService } from '../../user/service/user.service';
 import { GoogleAclService } from '../../google/calendar/acl.service';
-import { PermissionService } from '../../user/permission.service';
+import { PermissionService } from '../../user/service/permission.service';
 
 @Controller()
 export class ResourceController {

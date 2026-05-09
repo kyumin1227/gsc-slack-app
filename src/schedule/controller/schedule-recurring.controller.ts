@@ -9,7 +9,7 @@ import type {
 import { ScheduleService } from '../service/schedule.service';
 import { ScheduleRecurringService } from '../service/schedule-recurring.service';
 import { ScheduleRecurringView } from '../view/schedule-recurring.view';
-import { PermissionService } from '../../user/permission.service';
+import { PermissionService } from '../../user/service/permission.service';
 
 @Controller()
 export class ScheduleRecurringController {

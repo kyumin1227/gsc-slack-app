@@ -11,7 +11,7 @@ import { StudyRoomService } from '../service/study-room.service';
 import { ProfessorService } from '../service/professor.service';
 import { StudyRoomView } from '../view/study-room.view';
 import { ResourceView } from '../view/resource.view';
-import { UserService } from '../../user/user.service';
+import { UserService } from '../../user/service/user.service';
 import { UserStatus } from '../../user/user.entity';
 import { GoogleEventsService } from '../../google/calendar/events.service';
 import { ResourceType } from '../resource.entity';

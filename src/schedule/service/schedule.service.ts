@@ -6,7 +6,7 @@ import { Schedule, ScheduleStatus } from '../schedule.entity';
 import { GoogleCalendarsService } from '../../google/calendar/calendars.service';
 import { GoogleAclService } from '../../google/calendar/acl.service';
 import { GoogleCalendarListService } from '../../google/calendar/calendar-list.service';
-import { UserService } from '../../user/user.service';
+import { UserService } from '../../user/service/user.service';
 import { Tag } from '../../tag/tag.entity';
 import { ScheduleWatchService } from './schedule-watch.service';
 import { CreateScheduleDto, UpdateScheduleDto } from '../dto/schedule.dto';

@@ -4,7 +4,7 @@ import { ResourceType } from '../resource.entity';
 import { GoogleEventsService } from '../../google/calendar/events.service';
 import { GoogleAclService } from '../../google/calendar/acl.service';
 import { GoogleFreebusyService } from '../../google/calendar/freebusy.service';
-import { UserService } from '../../user/user.service';
+import { UserService } from '../../user/service/user.service';
 import { BusinessError, ErrorCode } from '../../common/errors';
 import {
   BookResourceDto,

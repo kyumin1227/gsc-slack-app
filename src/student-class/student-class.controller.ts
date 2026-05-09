@@ -10,7 +10,7 @@ import type {
 import { StudentClassService } from './student-class.service';
 import { StudentClassView } from './student-class.view';
 import { ClassSection } from './student-class.entity';
-import { PermissionService } from '../user/permission.service';
+import { PermissionService } from '../user/service/permission.service';
 
 @Controller()
 export class StudentClassController {
