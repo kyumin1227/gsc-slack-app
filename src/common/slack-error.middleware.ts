@@ -7,16 +7,15 @@ const logger = new Logger('SlackErrorMiddleware');
 
 export const slackErrorMiddleware = async (
   // next is present at runtime but not in the AnyMiddlewareArgs union type
-  // eslint-disable-next-line @typescript-eslint/no-explicit-any
+
   args: AnyMiddlewareArgs & { next: () => Promise<void> },
 ) => {
   const { next } = args;
   try {
     await next();
   } catch (err) {
-    // eslint-disable-next-line @typescript-eslint/no-explicit-any
     const body = (args as any).body;
-    // eslint-disable-next-line @typescript-eslint/no-explicit-any
+
     const client = (args as any).client;
 
     if (err instanceof BusinessError) {
@@ -29,7 +28,7 @@ export const slackErrorMiddleware = async (
 
     const triggerId: string | undefined = body?.trigger_id;
     logger.debug(
-      `[ErrorModal] triggerId=${triggerId}, userId=${body && 'user' in body ? (body.user as any)?.id : body?.user_id}`,
+      `[ErrorModal] triggerId=${triggerId}, userId=${body && 'user' in body ? body.user?.id : body?.user_id}`,
     );
     const userId: string | undefined =
       body && 'user' in body && body.user

@@ -33,13 +33,19 @@ export class StudentClassService {
   }
 
   // Slack 채널명 생성: "${admissionYear}-${section.toLowerCase()}" (예: "2024-a")
-  static buildChannelName(admissionYear: number, section: ClassSection): string {
+  static buildChannelName(
+    admissionYear: number,
+    section: ClassSection,
+  ): string {
     return `${admissionYear}-${section.toLowerCase()}`;
   }
 
   // 반 생성 + 태그 자동 생성
   async createClass(dto: CreateStudentClassDto): Promise<StudentClass> {
-    const name = StudentClassService.buildClassName(dto.admissionYear, dto.section);
+    const name = StudentClassService.buildClassName(
+      dto.admissionYear,
+      dto.section,
+    );
     const studentClass = this.studentClassRepository.create({
       name,
       admissionYear: dto.admissionYear,
@@ -75,10 +81,7 @@ export class StudentClassService {
   }
 
   // 반에 Slack 채널 ID 저장
-  async updateSlackChannel(
-    id: number,
-    slackChannelId: string,
-  ): Promise<void> {
+  async updateSlackChannel(id: number, slackChannelId: string): Promise<void> {
     await this.studentClassRepository.update({ id }, { slackChannelId });
   }
 

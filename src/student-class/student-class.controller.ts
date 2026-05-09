@@ -1,5 +1,5 @@
 import { Controller } from '@nestjs/common';
-import { BusinessError, ErrorCode } from '../common/errors';
+import { BusinessError, ScheduleErrorCode } from '../common/errors';
 import { Action, View } from 'nestjs-slack-bolt';
 import type {
   AllMiddlewareArgs,
@@ -10,7 +10,7 @@ import type {
 import { StudentClassService } from './student-class.service';
 import { StudentClassView } from './student-class.view';
 import { ClassSection } from './student-class.entity';
-import { PermissionService } from '../user/permission.service';
+import { PermissionService } from '../user/service/permission.service';
 
 @Controller()
 export class StudentClassController {
@@ -119,7 +119,7 @@ export class StudentClassController {
       .create({ name: channelName, is_private: false })
       .catch((e: any) => {
         if (e?.data?.error === 'name_taken')
-          throw new BusinessError(ErrorCode.CHANNEL_NAME_TAKEN);
+          throw new BusinessError(ScheduleErrorCode.CHANNEL_NAME_TAKEN);
         throw e;
       });
 

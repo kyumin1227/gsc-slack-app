@@ -1,7 +1,7 @@
 import { Injectable, Logger } from '@nestjs/common';
 import { calendar_v3 } from 'googleapis';
-import { GoogleCalendarService } from '../google/google-calendar.service';
-import { ResourceService } from './resource.service';
+import { GoogleEventsService } from '../google/calendar/events.service';
+import { ResourceService } from './service/resource.service';
 import { Resource } from './resource.entity';
 
 const MIRRORED_BY_KEY = 'mirroredBy';
@@ -21,7 +21,7 @@ export class ResourceMirrorService {
 
   constructor(
     private readonly resourceService: ResourceService,
-    private readonly googleCalendarService: GoogleCalendarService,
+    private readonly googleEventsService: GoogleEventsService,
   ) {}
 
   // 위치 문자열을 '/' 기준으로 분리
@@ -68,7 +68,7 @@ export class ResourceMirrorService {
 
     // 첫 번째 미러 이벤트를 기준으로 "변경 전" 상태 반환 (알림 diff용)
     const first = targets[0];
-    return this.googleCalendarService.getEventById(
+    return this.googleEventsService.getEventById(
       first.calendarId,
       first.eventId,
     );
@@ -92,10 +92,16 @@ export class ResourceMirrorService {
       const { roomPart, professorPart } = this.parseLocation(location);
 
       const roomNames = roomPart
-        ? roomPart.split(',').map((s) => s.trim()).filter(Boolean)
+        ? roomPart
+            .split(',')
+            .map((s) => s.trim())
+            .filter(Boolean)
         : [];
       const professorNames = professorPart
-        ? professorPart.split(',').map((s) => s.trim()).filter(Boolean)
+        ? professorPart
+            .split(',')
+            .map((s) => s.trim())
+            .filter(Boolean)
         : [];
 
       for (const alias of [...roomNames, ...professorNames]) {
@@ -129,7 +135,7 @@ export class ResourceMirrorService {
     const newCalendarIds = new Set(targets.map((t) => t.calendarId));
     for (const existing of existingTargets) {
       if (!newCalendarIds.has(existing.calendarId)) {
-        await this.googleCalendarService
+        await this.googleEventsService
           .deleteEventAsServiceAccount(existing.calendarId, existing.eventId)
           .catch(() => {});
         this.logger.log(
@@ -157,7 +163,7 @@ export class ResourceMirrorService {
     }
 
     // source 이벤트에 최신 mirroredTargets 저장
-    await this.googleCalendarService.patchEventPrivateExtendedProperty(
+    await this.googleEventsService.patchEventPrivateExtendedProperty(
       sourceCalendarId,
       event.id!,
       { [MIRRORED_TARGETS_KEY]: JSON.stringify(updatedTargets) },
@@ -168,7 +174,7 @@ export class ResourceMirrorService {
     event: calendar_v3.Schema$Event,
     sourceCalendarId: string,
   ): Promise<void> {
-    const sourceEvent = await this.googleCalendarService.getEventById(
+    const sourceEvent = await this.googleEventsService.getEventById(
       sourceCalendarId,
       event.id!,
     );
@@ -179,7 +185,7 @@ export class ResourceMirrorService {
     const targets = this.parseMirroredTargets(rawTargets);
 
     for (const target of targets) {
-      await this.googleCalendarService
+      await this.googleEventsService
         .deleteEventAsServiceAccount(target.calendarId, target.eventId)
         .catch(() => {});
       this.logger.log(`Mirror deleted: ${event.id} from ${target.calendarId}`);
@@ -198,7 +204,7 @@ export class ResourceMirrorService {
 
     for (const target of targets) {
       if (!keepSet.has(target.calendarId)) {
-        await this.googleCalendarService
+        await this.googleEventsService
           .deleteEventAsServiceAccount(target.calendarId, target.eventId)
           .catch(() => {});
         this.logger.log(
@@ -208,7 +214,7 @@ export class ResourceMirrorService {
     }
 
     if (targets.length > 0) {
-      await this.googleCalendarService.patchEventPrivateExtendedProperty(
+      await this.googleEventsService.patchEventPrivateExtendedProperty(
         sourceCalendarId,
         event.id!,
         { [MIRRORED_TARGETS_KEY]: JSON.stringify([]) },
@@ -244,7 +250,7 @@ export class ResourceMirrorService {
     };
 
     if (existingMirrorEventId) {
-      const currentMirror = await this.googleCalendarService.getEventById(
+      const currentMirror = await this.googleEventsService.getEventById(
         target.calendarId,
         existingMirrorEventId,
       );
@@ -261,7 +267,7 @@ export class ResourceMirrorService {
       }
 
       if (currentMirror && currentMirror.status !== 'cancelled') {
-        await this.googleCalendarService.updateMirrorEventAsServiceAccount(
+        await this.googleEventsService.updateMirrorEventAsServiceAccount(
           target.calendarId,
           existingMirrorEventId,
           {
@@ -283,7 +289,7 @@ export class ResourceMirrorService {
     }
 
     const newMirrorId =
-      await this.googleCalendarService.createMirrorEventAsServiceAccount(
+      await this.googleEventsService.createMirrorEventAsServiceAccount(
         target.calendarId,
         {
           summary: event.summary ?? '',
