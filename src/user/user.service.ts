@@ -163,7 +163,9 @@ export class UserService {
   }
 
   // 반 대표용: 자기 반 승인 대기 유저 조회
-  async findPendingApprovalByStudentClassId(studentClassId: number): Promise<User[]> {
+  async findPendingApprovalByStudentClassId(
+    studentClassId: number,
+  ): Promise<User[]> {
     return this.userRepository.find({
       where: { status: UserStatus.PENDING_APPROVAL, studentClassId },
       relations: ['studentClass'],
@@ -172,7 +174,11 @@ export class UserService {
   }
 
   // 반 대표용: 자기 반 유저 목록 조회
-  async findByStudentClassId(studentClassId: number, skip: number, take: number) {
+  async findByStudentClassId(
+    studentClassId: number,
+    skip: number,
+    take: number,
+  ) {
     const [users, total] = await this.userRepository.findAndCount({
       where: { studentClassId },
       relations: ['studentClass'],

@@ -44,9 +44,7 @@ export class CryptoUtil {
       encryptedText.slice(IV_LENGTH * 2, IV_LENGTH * 2 + AUTH_TAG_LENGTH * 2),
       'hex',
     );
-    const encrypted = encryptedText.slice(
-      IV_LENGTH * 2 + AUTH_TAG_LENGTH * 2,
-    );
+    const encrypted = encryptedText.slice(IV_LENGTH * 2 + AUTH_TAG_LENGTH * 2);
 
     const decipher = crypto.createDecipheriv(ALGORITHM, key, iv);
     decipher.setAuthTag(authTag);

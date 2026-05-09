@@ -4,6 +4,6 @@ import { CleaningService } from './cleaning.service';
 
 @Module({
   controllers: [CleaningController],
-  providers: [CleaningService]
+  providers: [CleaningService],
 })
 export class CleaningModule {}

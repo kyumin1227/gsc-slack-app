@@ -71,7 +71,8 @@ export class UserController {
         await this.googleOAuthService.exchangeCodeForTokens(code);
 
       // 3. Google 유저 정보 가져오기
-      const googleUser = await this.googleOAuthService.getGoogleUserInfo(accessToken);
+      const googleUser =
+        await this.googleOAuthService.getGoogleUserInfo(accessToken);
 
       // 4. 유저 생성 (또는 기존 유저 조회)
       let user = await this.userService.findBySlackId(slackUserId);
@@ -611,9 +612,12 @@ export class UserController {
 
   // ========== 반 대표 유저 관리 ==========
 
-  private async getClassRepStudentClassId(slackUserId: string): Promise<number | null> {
+  private async getClassRepStudentClassId(
+    slackUserId: string,
+  ): Promise<number | null> {
     const user = await this.userService.findBySlackIdWithClass(slackUserId);
-    if (!user || user.role !== UserRole.CLASS_REP || !user.studentClassId) return null;
+    if (!user || user.role !== UserRole.CLASS_REP || !user.studentClassId)
+      return null;
     return user.studentClassId;
   }
 
@@ -630,7 +634,11 @@ export class UserController {
 
     const user = await this.userService.findBySlackIdWithClass(body.user.id);
     const className = user?.studentClass?.name ?? '';
-    const { users, total } = await this.userService.findByStudentClassId(studentClassId, 0, PAGE_SIZE);
+    const { users, total } = await this.userService.findByStudentClassId(
+      studentClassId,
+      0,
+      PAGE_SIZE,
+    );
 
     await client.views.open({
       trigger_id: body.trigger_id,
@@ -702,7 +710,10 @@ export class UserController {
     const studentClassId = await this.getClassRepStudentClassId(body.user.id);
     if (!studentClassId) return;
 
-    const pendingUsers = await this.userService.findPendingApprovalByStudentClassId(studentClassId);
+    const pendingUsers =
+      await this.userService.findPendingApprovalByStudentClassId(
+        studentClassId,
+      );
 
     await client.views.open({
       trigger_id: body.trigger_id,
@@ -746,7 +757,10 @@ export class UserController {
     });
 
     if (body.view?.id) {
-      const pendingUsers = await this.userService.findPendingApprovalByStudentClassId(studentClassId);
+      const pendingUsers =
+        await this.userService.findPendingApprovalByStudentClassId(
+          studentClassId,
+        );
       await client.views.update({
         view_id: body.view.id,
         view: UserView.classRepPendingApprovalModal(
