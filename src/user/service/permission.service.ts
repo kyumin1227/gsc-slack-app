@@ -1,7 +1,7 @@
 import { Injectable } from '@nestjs/common';
 import { UserService } from './user.service';
-import { User, UserStatus } from './user.entity';
-import { BusinessError, ErrorCode } from '../common/errors';
+import { User, UserStatus } from '../user.entity';
+import { BusinessError, ErrorCode } from '../../common/errors';
 
 @Injectable()
 export class PermissionService {

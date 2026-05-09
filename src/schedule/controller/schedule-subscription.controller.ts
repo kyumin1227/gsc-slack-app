@@ -8,7 +8,7 @@ import type {
 } from '@slack/bolt';
 import { ScheduleService } from '../service/schedule.service';
 import { ScheduleView } from '../view/schedule.view';
-import { UserService } from '../../user/user.service';
+import { UserService } from '../../user/service/user.service';
 import { TagService } from '../../tag/tag.service';
 import { TagView } from '../../tag/tag.view';
 import { ChannelService } from '../../channel/channel.service';

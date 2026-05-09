@@ -1,13 +1,13 @@
 import { Injectable } from '@nestjs/common';
 import { InjectRepository } from '@nestjs/typeorm';
 import { Repository } from 'typeorm';
-import { User, UserStatus, UserRole } from './user.entity';
-import { CryptoUtil } from '../utils/crypto.util';
+import { User, UserStatus, UserRole } from '../user.entity';
+import { CryptoUtil } from '../../utils/crypto.util';
 import {
   CreateUserDto,
   SubmitRegistrationDto,
   UpdateMyInfoDto,
-} from './dto/user.dto';
+} from '../dto/user.dto';
 
 @Injectable()
 export class UserService {

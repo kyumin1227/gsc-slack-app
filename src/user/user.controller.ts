@@ -1,5 +1,5 @@
 import { Controller, Get, Logger, Query, Res } from '@nestjs/common';
-import { UserService } from './user.service';
+import { UserService } from './service/user.service';
 import { Action, SlackService, View } from 'nestjs-slack-bolt';
 import type { Response } from 'express';
 import type {
@@ -15,7 +15,7 @@ import { GoogleOAuthService } from '../google/oauth/google-oauth.service';
 import { UserRole, UserStatus } from './user.entity';
 import { BusinessError, ErrorCode } from '../common/errors';
 import { StudentClassService } from '../student-class/student-class.service';
-import { PermissionService } from './permission.service';
+import { PermissionService } from './service/permission.service';
 import { UserAdminService } from './service/user-admin.service';
 import { UserClassRepService } from './service/user-class-rep.service';
 

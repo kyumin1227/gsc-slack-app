@@ -8,7 +8,7 @@ import { Schedule } from '../schedule.entity';
 import { RecurrenceGroup } from '../recurrence-group.entity';
 import { GoogleEventsService } from '../../google/calendar/events.service';
 import { GoogleAclService } from '../../google/calendar/acl.service';
-import { UserService } from '../../user/user.service';
+import { UserService } from '../../user/service/user.service';
 import { ChannelService } from '../../channel/channel.service';
 import { WebClient } from '@slack/web-api';
 import { randomUUID } from 'crypto';

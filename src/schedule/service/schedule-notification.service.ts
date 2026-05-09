@@ -3,7 +3,7 @@ import { CACHE_MANAGER } from '@nestjs/cache-manager';
 import type { Cache } from 'cache-manager';
 import { WebClient } from '@slack/web-api';
 import { ChannelService } from '../../channel/channel.service';
-import { UserService } from '../../user/user.service';
+import { UserService } from '../../user/service/user.service';
 import { GoogleEventsService } from '../../google/calendar/events.service';
 import { GoogleAclService } from '../../google/calendar/acl.service';
 import {

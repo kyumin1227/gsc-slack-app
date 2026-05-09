@@ -1,6 +1,6 @@
 import { Injectable } from '@nestjs/common';
 import type { WebClient } from '@slack/web-api';
-import { UserService } from 'src/user/user.service';
+import { UserService } from 'src/user/service/user.service';
 import { UserRole, UserStatus } from 'src/user/user.entity';
 import { HomeView } from './slack-home.view';
 

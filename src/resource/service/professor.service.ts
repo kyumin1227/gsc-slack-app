@@ -1,6 +1,6 @@
 import { Injectable } from '@nestjs/common';
 import { GoogleEventsService } from '../../google/calendar/events.service';
-import { UserService } from '../../user/user.service';
+import { UserService } from '../../user/service/user.service';
 import { BusinessError, ErrorCode } from '../../common/errors';
 import { ConsultationItem } from '../dto/professor.dto';
 
