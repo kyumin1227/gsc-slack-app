@@ -48,7 +48,7 @@ export class ScheduleSubscriptionController {
   ) {
     const tagFilter = tagIds.length > 0 ? tagIds : undefined;
 
-    const [{ schedules, total }, displayActiveTags, subscribedIds] =
+    const [{ schedules: rawSchedules, total }, displayActiveTags, subscribedIds] =
       await Promise.all([
         this.scheduleService.findSchedulesPaginated({
           page,
@@ -62,6 +62,17 @@ export class ScheduleSubscriptionController {
 
     const totalPages = Math.max(1, Math.ceil(total / SCHEDULE_PAGE_SIZE));
     const safePage = Math.min(page, totalPages - 1);
+    const schedules =
+      safePage !== page
+        ? (
+            await this.scheduleService.findSchedulesPaginated({
+              page: safePage,
+              pageSize: SCHEDULE_PAGE_SIZE,
+              status: 'active',
+              tagIds: tagFilter,
+            })
+          ).schedules
+        : rawSchedules;
     const displayActiveTagMap = new Map(
       displayActiveTags.map((t) => [t.id, t.name]),
     );
@@ -253,9 +264,8 @@ export class ScheduleSubscriptionController {
     const userId = body.user.id;
     const { isActive, message } = await this.checkActiveUser(userId);
     if (!isActive) {
-      await client.chat.postEphemeral({
+      await client.chat.postMessage({
         channel: userId,
-        user: userId,
         text: message!,
       });
       return;

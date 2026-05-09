@@ -33,18 +33,31 @@ export class ScheduleAdminController {
       status === 'all' ? undefined : (status as 'active' | 'inactive');
     const tagFilter = tagIds.length > 0 ? tagIds : undefined;
 
-    const [{ schedules, total }, displayTags] = await Promise.all([
-      this.scheduleService.findSchedulesPaginated({
-        page,
-        pageSize: SCHEDULE_PAGE_SIZE,
-        status: statusFilter,
-        tagIds: tagFilter,
-      }),
-      this.tagService.findDisplayTags(),
-    ]);
+    const [{ schedules: rawSchedules, total }, displayTags] = await Promise.all(
+      [
+        this.scheduleService.findSchedulesPaginated({
+          page,
+          pageSize: SCHEDULE_PAGE_SIZE,
+          status: statusFilter,
+          tagIds: tagFilter,
+        }),
+        this.tagService.findDisplayTags(),
+      ],
+    );
 
     const totalPages = Math.max(1, Math.ceil(total / SCHEDULE_PAGE_SIZE));
     const safePage = Math.min(page, totalPages - 1);
+    const schedules =
+      safePage !== page
+        ? (
+            await this.scheduleService.findSchedulesPaginated({
+              page: safePage,
+              pageSize: SCHEDULE_PAGE_SIZE,
+              status: statusFilter,
+              tagIds: tagFilter,
+            })
+          ).schedules
+        : rawSchedules;
     const displayTagMap = new Map(displayTags.map((t) => [t.id, t.name]));
 
     const [schedulesWithMeta, mutedScheduleIds] = await Promise.all([

@@ -15,6 +15,7 @@ export enum ErrorCode {
   CALENDAR_WRITER_NO_TOKEN = 'CALENDAR_WRITER_NO_TOKEN',
   CANNOT_EDIT_PENDING_USER = 'CANNOT_EDIT_PENDING_USER',
   CHANNEL_NAME_TAKEN = 'CHANNEL_NAME_TAKEN',
+  INVALID_WEEKDAY = 'INVALID_WEEKDAY',
 }
 
 export const ERROR_MESSAGES: Record<ErrorCode, string> = {
@@ -37,6 +38,7 @@ export const ERROR_MESSAGES: Record<ErrorCode, string> = {
     '승인 대기 또는 미가입 상태의 유저는 편집할 수 없습니다.\n가입 승인 관리에서 먼저 처리해주세요.',
   [ErrorCode.CHANNEL_NAME_TAKEN]:
     '이미 존재하는 Slack 채널 이름입니다. 채널을 직접 연결해주세요.',
+  [ErrorCode.INVALID_WEEKDAY]: '유효하지 않은 요일 값입니다.',
 };
 
 export class BusinessError extends Error {

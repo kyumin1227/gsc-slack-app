@@ -543,7 +543,9 @@ function jsWeekdayToRRule(day: number): Weekday {
     RRule.FR,
     RRule.SA,
   ];
-  return map[day];
+  const weekday = map[day];
+  if (!weekday) throw new BusinessError(ErrorCode.INVALID_WEEKDAY);
+  return weekday;
 }
 
 // 429 Rate Limit 시 exponential backoff으로 재시도
