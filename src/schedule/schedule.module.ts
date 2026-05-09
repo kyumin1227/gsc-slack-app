@@ -5,7 +5,8 @@ import { RecurrenceGroup } from './recurrence-group.entity';
 import { ScheduleService } from './service/schedule.service';
 import { ScheduleWatchService } from './service/schedule-watch.service';
 import { ScheduleRecurringService } from './service/schedule-recurring.service';
-import { ScheduleController } from './controller/schedule.controller';
+import { ScheduleAdminController } from './controller/schedule-admin.controller';
+import { ScheduleSubscriptionController } from './controller/schedule-subscription.controller';
 import { ScheduleRecurringController } from './controller/schedule-recurring.controller';
 import { ScheduleClassRepController } from './controller/schedule-class-rep.controller';
 import { ScheduleWatchController } from './controller/schedule-watch.controller';
@@ -28,7 +29,8 @@ import { GoogleModule } from '../google/google.module';
     GoogleModule,
   ],
   controllers: [
-    ScheduleController,
+    ScheduleAdminController,
+    ScheduleSubscriptionController,
     ScheduleRecurringController,
     ScheduleClassRepController,
     ScheduleWatchController,

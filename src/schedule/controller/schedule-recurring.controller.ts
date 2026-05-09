@@ -19,6 +19,7 @@ export class ScheduleRecurringController {
     private readonly permissionService: PermissionService,
   ) {}
 
+  // 반복 일정 생성 모달 열기
   @Action('home:open-create-recurrence')
   async openCreateRecurringModal({
     ack,
@@ -40,6 +41,7 @@ export class ScheduleRecurringController {
     });
   }
 
+  // 반복 일정 생성 폼 제출
   @View('schedule:modal:create_recurring')
   async handleCreateRecurring({
     ack,
@@ -138,6 +140,7 @@ export class ScheduleRecurringController {
     });
   }
 
+  // 반복 일정 삭제 모달 열기 (시간표 선택)
   @Action('home:open-delete-recurrence')
   async openDeleteRecurringModal({
     ack,
@@ -165,6 +168,7 @@ export class ScheduleRecurringController {
     });
   }
 
+  // 반복 일정 삭제 step1 — 시간표 선택 후 반복 그룹 목록 표시
   @View('recurring:modal:step1:delete')
   async handleStep1DeleteRecurring({
     ack,
@@ -204,6 +208,7 @@ export class ScheduleRecurringController {
     });
   }
 
+  // 반복 일정 삭제 폼 제출
   @View('recurring:modal:delete')
   async handleDeleteRecurring({
     ack,
@@ -237,6 +242,7 @@ export class ScheduleRecurringController {
     });
   }
 
+  // 반복 일정 수정 모달 열기 (시간표 선택)
   @Action('home:open-edit-recurrence')
   async openEditRecurringModal({
     ack,
@@ -264,6 +270,7 @@ export class ScheduleRecurringController {
     });
   }
 
+  // 반복 일정 수정 step1 — 시간표 선택 후 반복 그룹 목록 표시
   @View('recurring:modal:step1:edit')
   async handleStep1EditRecurring({
     ack,
@@ -307,6 +314,7 @@ export class ScheduleRecurringController {
     });
   }
 
+  // 반복 일정 수정 step2 — 그룹 선택 후 프리필 폼 표시
   @View('recurring:modal:step2:edit')
   async handleStep2EditRecurring({
     ack,
@@ -344,6 +352,7 @@ export class ScheduleRecurringController {
     });
   }
 
+  // 반복 일정 수정 폼 제출
   @View('recurring:modal:edit')
   async handleEditRecurring({
     ack,

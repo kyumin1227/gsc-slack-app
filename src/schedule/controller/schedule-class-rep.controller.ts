@@ -50,6 +50,7 @@ export class ScheduleClassRepController {
     );
   }
 
+  // 반 대표 시간표 목록 모달 열기
   @Action('home:open-class-rep-schedules')
   async openClassRepSchedules({
     ack,
@@ -64,6 +65,7 @@ export class ScheduleClassRepController {
     });
   }
 
+  // 반 대표 시간표 수정 모달 열기
   @Action(/^schedule:class-rep:edit:/)
   async classRepOpenEdit({
     ack,
@@ -101,6 +103,7 @@ export class ScheduleClassRepController {
     });
   }
 
+  // 반 대표 시간표 수정 폼 제출
   @View('schedule:modal:class-rep:edit')
   async classRepHandleEdit({
     ack,
@@ -152,6 +155,7 @@ export class ScheduleClassRepController {
     }
   }
 
+  // 반 대표 알림 뮤트
   @Action(/^schedule:class-rep:mute:/)
   async classRepHandleMute({
     ack,
@@ -180,6 +184,7 @@ export class ScheduleClassRepController {
     }
   }
 
+  // 반 대표 알림 뮤트 해제
   @Action(/^schedule:class-rep:unmute:/)
   async classRepHandleUnmute({
     ack,
@@ -208,6 +213,7 @@ export class ScheduleClassRepController {
     }
   }
 
+  // 반 대표 반복 일정 생성 모달 열기
   @Action(/^schedule:class-rep:create-recurring:/)
   async classRepOpenCreateRecurring({
     ack,
@@ -238,6 +244,7 @@ export class ScheduleClassRepController {
     });
   }
 
+  // 반 대표 반복 일정 수정 모달 열기
   @Action(/^schedule:class-rep:edit-recurring:/)
   async classRepOpenEditRecurring({
     ack,
@@ -291,6 +298,7 @@ export class ScheduleClassRepController {
     });
   }
 
+  // 반 대표 반복 일정 삭제 모달 열기
   @Action(/^schedule:class-rep:delete-recurring:/)
   async classRepOpenDeleteRecurring({
     ack,
