@@ -14,11 +14,10 @@ import { ChannelService } from '../../channel/channel.service';
 import { PermissionService } from '../../user/permission.service';
 import { GoogleCalendarService } from '../../google/google-calendar.service';
 import { ScheduleNotificationService } from '../service/schedule-notification.service';
+import { SCHEDULE_PAGE_SIZE } from '../constants';
 
 @Controller()
 export class ScheduleAdminController {
-  private readonly SCHEDULE_PAGE_SIZE = 10;
-
   constructor(
     private readonly scheduleService: ScheduleService,
     private readonly userService: UserService,
@@ -37,14 +36,14 @@ export class ScheduleAdminController {
     const [{ schedules, total }, displayTags] = await Promise.all([
       this.scheduleService.findSchedulesPaginated({
         page,
-        pageSize: this.SCHEDULE_PAGE_SIZE,
+        pageSize: SCHEDULE_PAGE_SIZE,
         status: statusFilter,
         tagIds: tagFilter,
       }),
       this.tagService.findDisplayTags(),
     ]);
 
-    const totalPages = Math.max(1, Math.ceil(total / this.SCHEDULE_PAGE_SIZE));
+    const totalPages = Math.max(1, Math.ceil(total / SCHEDULE_PAGE_SIZE));
     const safePage = Math.min(page, totalPages - 1);
     const displayTagMap = new Map(displayTags.map((t) => [t.id, t.name]));
 

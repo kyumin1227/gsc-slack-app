@@ -14,29 +14,11 @@ import { TagView } from '../../tag/tag.view';
 import { ChannelService } from '../../channel/channel.service';
 import { UserStatus, User } from '../../user/user.entity';
 import { GoogleCalendarService } from '../../google/google-calendar.service';
-
-const CALENDAR_COLORS = [
-  '%234285F4',
-  '%23DB4437',
-  '%230F9D58',
-  '%23F4B400',
-  '%239E69AF',
-  '%23F6511D',
-  '%2300BCD4',
-  '%23E91E63',
-  '%23795548',
-  '%23607D8B',
-  '%23FF5722',
-  '%239C27B0',
-  '%2303A9F4',
-  '%238BC34A',
-  '%23FF9800',
-];
+import { CALENDAR_COLORS } from '../../common/constants';
+import { SCHEDULE_PAGE_SIZE } from '../constants';
 
 @Controller()
 export class ScheduleSubscriptionController {
-  private readonly SCHEDULE_PAGE_SIZE = 10;
-
   constructor(
     private readonly scheduleService: ScheduleService,
     private readonly userService: UserService,
@@ -70,7 +52,7 @@ export class ScheduleSubscriptionController {
       await Promise.all([
         this.scheduleService.findSchedulesPaginated({
           page,
-          pageSize: this.SCHEDULE_PAGE_SIZE,
+          pageSize: SCHEDULE_PAGE_SIZE,
           status: 'active',
           tagIds: tagFilter,
         }),
@@ -78,7 +60,7 @@ export class ScheduleSubscriptionController {
         this.scheduleService.getSubscribedCalendarIds(userRefreshToken),
       ]);
 
-    const totalPages = Math.max(1, Math.ceil(total / this.SCHEDULE_PAGE_SIZE));
+    const totalPages = Math.max(1, Math.ceil(total / SCHEDULE_PAGE_SIZE));
     const safePage = Math.min(page, totalPages - 1);
     const displayActiveTagMap = new Map(
       displayActiveTags.map((t) => [t.id, t.name]),
