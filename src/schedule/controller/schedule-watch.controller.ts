@@ -8,18 +8,18 @@ import {
 } from '@nestjs/common';
 import { CACHE_MANAGER } from '@nestjs/cache-manager';
 import type { Cache } from 'cache-manager';
-import { GoogleCalendarService } from '../google/google-calendar.service';
-import { ScheduleWatchService } from './service/schedule-watch.service';
+import { GoogleCalendarService } from '../../google/google-calendar.service';
+import { ScheduleWatchService } from '../service/schedule-watch.service';
 import {
   ScheduleNotificationService,
   DebounceEntry,
-} from './service/schedule-notification.service';
+} from '../service/schedule-notification.service';
 import {
   detectChangeType,
   hasRelevantChanges,
-} from './view/schedule-watch.view';
-import { ResourceMirrorService } from '../resource/resource-mirror.service';
-import { EventSnapshot } from './service/schedule-notification.service';
+} from '../view/schedule-watch.view';
+import { ResourceMirrorService } from '../../resource/resource-mirror.service';
+import { EventSnapshot } from '../service/schedule-notification.service';
 
 @Controller('google/calendar')
 export class ScheduleWatchController {
