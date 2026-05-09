@@ -116,7 +116,7 @@ export function buildCalendarNotificationBlocks(
   const titleChanged = diff && (diff.summary ?? '') !== (event.summary ?? '');
   let titleText: string;
   if (titleChanged) {
-    titleText = `📌 *일정 제목* ✏️\n~${diff!.summary || '(없음)'}~ → *${afterTitle}*`;
+    titleText = `📌 *일정 제목* ✏️\n~${diff.summary || '(없음)'}~ → *${afterTitle}*`;
   } else {
     titleText = `📌 *일정 제목*\n*${afterTitle}*`;
   }
@@ -181,7 +181,7 @@ export function buildCalendarNotificationBlocks(
   const descriptionChanged =
     diff && (diff.description ?? '') !== afterDescription;
   const descriptionText = descriptionChanged
-    ? `📝 *추가 정보* ✏️\n~${diff!.description || '(없음)'}~ → ${afterDescription || '_(없음)_'}`
+    ? `📝 *추가 정보* ✏️\n~${diff.description || '(없음)'}~ → ${afterDescription || '_(없음)_'}`
     : `📝 *추가 정보*\n${afterDescription || '_추가 정보가 없습니다._'}`;
 
   return [
