@@ -1,7 +1,7 @@
 import { NestFactory } from '@nestjs/core';
 import { AppModule } from './app.module';
 import { httpReceiver } from './slack-receiver';
-import { ScheduleCronService } from './schedule/schedule-cron.service';
+import { ScheduleCronService } from './schedule/service/schedule-cron.service';
 
 async function bootstrap() {
   const app = await NestFactory.create(AppModule);

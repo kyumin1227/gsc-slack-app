@@ -8,22 +8,25 @@ import {
 } from '@nestjs/common';
 import { CACHE_MANAGER } from '@nestjs/cache-manager';
 import type { Cache } from 'cache-manager';
-import { GoogleCalendarService } from '../google/google-calendar.service';
-import { ScheduleService } from './schedule.service';
+import { GoogleCalendarService } from '../../google/google-calendar.service';
+import { ScheduleWatchService } from '../service/schedule-watch.service';
 import {
   ScheduleNotificationService,
   DebounceEntry,
-} from './schedule-notification.service';
-import { detectChangeType, hasRelevantChanges } from './schedule-watch.view';
-import { ResourceMirrorService } from '../resource/resource-mirror.service';
-import { EventSnapshot } from './schedule-notification.service';
+} from '../service/schedule-notification.service';
+import {
+  detectChangeType,
+  hasRelevantChanges,
+} from '../view/schedule-watch.view';
+import { ResourceMirrorService } from '../../resource/resource-mirror.service';
+import { EventSnapshot } from '../service/schedule-notification.service';
 
 @Controller('google/calendar')
 export class ScheduleWatchController {
   private readonly logger = new Logger(ScheduleWatchController.name);
 
   constructor(
-    private readonly scheduleService: ScheduleService,
+    private readonly scheduleWatchService: ScheduleWatchService,
     private readonly notificationService: ScheduleNotificationService,
     private readonly spaceMirrorService: ResourceMirrorService,
     private readonly googleCalendarService: GoogleCalendarService,
@@ -44,7 +47,8 @@ export class ScheduleWatchController {
 
     if (resourceState !== 'exists') return;
 
-    const schedule = await this.scheduleService.findByWatchChannelId(channelId);
+    const schedule =
+      await this.scheduleWatchService.findByWatchChannelId(channelId);
     if (!schedule) {
       this.logger.warn(`Unknown channelId: ${channelId}`);
       return;
@@ -63,7 +67,7 @@ export class ScheduleWatchController {
         schedule.syncToken,
       );
 
-    await this.scheduleService.updateSyncToken(schedule.id, nextSyncToken);
+    await this.scheduleWatchService.updateSyncToken(schedule.id, nextSyncToken);
 
     // cron 동기화 중 — syncToken은 소비하되 알림/미러링은 스킵
     if (await this.cache.get('suppress:cron:sync')) {

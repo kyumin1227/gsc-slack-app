@@ -11,6 +11,7 @@ export interface EventSnapshot {
   description?: string | null;
 }
 
+// 이벤트의 변경 타입 감지 (추가/수정/취소)
 export function detectChangeType(
   event: calendar_v3.Schema$Event,
 ): EventChangeType {
@@ -69,14 +70,14 @@ function parseLocationParts(location: string): {
   professor: string | null;
 } {
   const slashIdx = location.indexOf('/');
-  if (slashIdx === -1)
-    return { room: location.trim(), professor: null };
+  if (slashIdx === -1) return { room: location.trim(), professor: null };
   return {
     room: location.slice(0, slashIdx).trim(),
     professor: location.slice(slashIdx + 1).trim() || null,
   };
 }
 
+// 알림이 필요한 변경사항 여부 확인 (제목/장소/설명/시간 변경)
 export function hasRelevantChanges(
   before: EventSnapshot,
   after: calendar_v3.Schema$Event,
@@ -94,6 +95,7 @@ export function hasRelevantChanges(
   return false;
 }
 
+// 캘린더 변경 알림 Slack Block Kit 블록 생성
 export function buildCalendarNotificationBlocks(
   scheduleName: string,
   event: calendar_v3.Schema$Event,
@@ -153,8 +155,9 @@ export function buildCalendarNotificationBlocks(
   let professorText: string | null = null;
 
   if (locationChanged && diff) {
-    const { room: beforeRoom, professor: beforeProfessor } =
-      parseLocationParts(diff.location ?? '');
+    const { room: beforeRoom, professor: beforeProfessor } = parseLocationParts(
+      diff.location ?? '',
+    );
 
     roomText =
       beforeRoom !== afterRoom
