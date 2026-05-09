@@ -5,7 +5,7 @@ import { GoogleEventsService } from '../../google/calendar/events.service';
 import { GoogleAclService } from '../../google/calendar/acl.service';
 import { GoogleFreebusyService } from '../../google/calendar/freebusy.service';
 import { UserService } from '../../user/service/user.service';
-import { BusinessError, ErrorCode } from '../../common/errors';
+import { BusinessError, GoogleErrorCode, ResourceErrorCode } from '../../common/errors';
 import {
   BookResourceDto,
   BookingItem,
@@ -33,11 +33,11 @@ export class StudyRoomService {
       .map((e) => e.email);
 
     const editor = await this.userService.findActiveByEmails(editorEmails);
-    if (!editor) throw new BusinessError(ErrorCode.CALENDAR_WRITER_NOT_FOUND);
+    if (!editor) throw new BusinessError(GoogleErrorCode.CALENDAR_WRITER_NOT_FOUND);
 
     const refreshToken = this.userService.getDecryptedRefreshToken(editor);
     if (!refreshToken)
-      throw new BusinessError(ErrorCode.CALENDAR_WRITER_NO_TOKEN);
+      throw new BusinessError(GoogleErrorCode.CALENDAR_WRITER_NO_TOKEN);
 
     return refreshToken;
   }
@@ -45,9 +45,9 @@ export class StudyRoomService {
   // 스터디룸 예약 생성 (시간 충돌 확인 후 Google Calendar 이벤트 생성)
   async bookResource(dto: BookResourceDto): Promise<string> {
     const resource = await this.resourceService.findById(dto.resourceId);
-    if (!resource) throw new BusinessError(ErrorCode.STUDY_ROOM_NOT_FOUND);
+    if (!resource) throw new BusinessError(ResourceErrorCode.STUDY_ROOM_NOT_FOUND);
     if (resource.type === ResourceType.PROFESSOR) {
-      throw new BusinessError(ErrorCode.STUDY_ROOM_NOT_FOUND);
+      throw new BusinessError(ResourceErrorCode.STUDY_ROOM_NOT_FOUND);
     }
 
     const refreshToken = await this.getEditorRefreshToken(resource.calendarId);
@@ -59,7 +59,7 @@ export class StudyRoomService {
       dto.endTime,
     );
     if (isBusy) {
-      throw new BusinessError(ErrorCode.BOOKING_CONFLICT);
+      throw new BusinessError(ResourceErrorCode.BOOKING_CONFLICT);
     }
 
     const allSlackIdsSet = new Set([
@@ -161,7 +161,7 @@ export class StudyRoomService {
       eventId,
     );
     if (isBusy) {
-      throw new BusinessError(ErrorCode.BOOKING_CONFLICT);
+      throw new BusinessError(ResourceErrorCode.BOOKING_CONFLICT);
     }
 
     const attendees = (
