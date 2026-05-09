@@ -9,7 +9,7 @@ import type {
   BlockAction,
 } from '@slack/bolt';
 import { UserView, UserListFilter, UserListModalState } from './user.view';
-import { OAuthUtil } from './google-oauth.util';
+import { GoogleOAuthService } from '../google/oauth/google-oauth.service';
 import { UserRole, UserStatus } from './user.entity';
 import { BusinessError, ErrorCode } from '../common/errors';
 import { StudentClassService } from '../student-class/student-class.service';
@@ -26,6 +26,7 @@ export class UserController {
     private readonly slackService: SlackService,
     private readonly studentClassService: StudentClassService,
     private readonly permissionService: PermissionService,
+    private readonly googleOAuthService: GoogleOAuthService,
   ) {}
 
   // 회원가입 모달 열기
@@ -40,8 +41,8 @@ export class UserController {
     const slackUserId = body.user.id;
 
     // Google OAuth URL 생성
-    const state = OAuthUtil.createOAuthState(slackUserId);
-    const googleAuthUrl = OAuthUtil.getGoogleAuthUrl(state);
+    const state = this.googleOAuthService.createOAuthState(slackUserId);
+    const googleAuthUrl = this.googleOAuthService.getGoogleAuthUrl(state);
 
     const result = await client.views.open({
       trigger_id: body.trigger_id,
@@ -63,14 +64,14 @@ export class UserController {
   ) {
     try {
       // 1. state 파싱
-      const { slackUserId } = OAuthUtil.parseOAuthState(state);
+      const { slackUserId } = this.googleOAuthService.parseOAuthState(state);
 
       // 2. Google 토큰 교환
       const { accessToken, refreshToken } =
-        await OAuthUtil.exchangeCodeForTokens(code);
+        await this.googleOAuthService.exchangeCodeForTokens(code);
 
       // 3. Google 유저 정보 가져오기
-      const googleUser = await OAuthUtil.getGoogleUserInfo(accessToken);
+      const googleUser = await this.googleOAuthService.getGoogleUserInfo(accessToken);
 
       // 4. 유저 생성 (또는 기존 유저 조회)
       let user = await this.userService.findBySlackId(slackUserId);

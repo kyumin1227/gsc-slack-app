@@ -7,7 +7,7 @@ import { ScheduleService } from './schedule.service';
 import { ScheduleWatchService } from './schedule-watch.service';
 import { ResourceMirrorService } from '../../resource/resource-mirror.service';
 import { ResourceService } from '../../resource/service/resource.service';
-import { GoogleCalendarService } from '../../google/google-calendar.service';
+import { GoogleEventsService } from '../../google/calendar/events.service';
 
 const CRON_SUPPRESS_KEY = 'suppress:cron:sync';
 
@@ -20,7 +20,7 @@ export class ScheduleCronService {
     private readonly scheduleWatchService: ScheduleWatchService,
     private readonly resourceMirrorService: ResourceMirrorService,
     private readonly resourceService: ResourceService,
-    private readonly googleCalendarService: GoogleCalendarService,
+    private readonly googleEventsService: GoogleEventsService,
     @Inject(CACHE_MANAGER) private readonly cache: Cache,
   ) {}
 
@@ -61,7 +61,7 @@ export class ScheduleCronService {
       for (const schedule of schedules) {
         let events: calendar_v3.Schema$Event[];
         try {
-          events = await this.googleCalendarService.listEventsInRange(
+          events = await this.googleEventsService.listEventsInRange(
             schedule.calendarId,
             timeMin,
             timeMax,
@@ -112,12 +112,11 @@ export class ScheduleCronService {
       for (const resource of resources) {
         let mirrorEvents: calendar_v3.Schema$Event[];
         try {
-          mirrorEvents =
-            await this.googleCalendarService.listMirrorEventsInRange(
-              resource.calendarId,
-              timeMin,
-              timeMax,
-            );
+          mirrorEvents = await this.googleEventsService.listMirrorEventsInRange(
+            resource.calendarId,
+            timeMin,
+            timeMax,
+          );
         } catch (err: any) {
           this.logger.warn(
             `Failed to list mirror events for resource ${resource.id}: ${err.message}`,
@@ -129,7 +128,7 @@ export class ScheduleCronService {
           if (!mirror.id) continue;
 
           if (!validMirrorEventIds.has(mirror.id)) {
-            await this.googleCalendarService
+            await this.googleEventsService
               .deleteEventAsServiceAccount(resource.calendarId, mirror.id)
               .then(() => removed++)
               .catch((err: Error) => {

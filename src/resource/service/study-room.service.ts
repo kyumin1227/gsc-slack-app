@@ -1,7 +1,9 @@
 import { Injectable, Logger } from '@nestjs/common';
 import { formatClassLabel } from '../../common/class-label.util';
 import { ResourceType } from '../resource.entity';
-import { GoogleCalendarService } from '../../google/google-calendar.service';
+import { GoogleEventsService } from '../../google/calendar/events.service';
+import { GoogleAclService } from '../../google/calendar/acl.service';
+import { GoogleFreebusyService } from '../../google/calendar/freebusy.service';
 import { UserService } from '../../user/user.service';
 import { BusinessError, ErrorCode } from '../../common/errors';
 import {
@@ -18,12 +20,14 @@ export class StudyRoomService {
   constructor(
     private readonly resourceService: ResourceService,
     private readonly userService: UserService,
-    private readonly googleCalendarService: GoogleCalendarService,
+    private readonly googleEventsService: GoogleEventsService,
+    private readonly googleAclService: GoogleAclService,
+    private readonly googleFreebusyService: GoogleFreebusyService,
   ) {}
 
   // 캘린더 ACL에서 활성 편집자의 refresh token 조회
   private async getEditorRefreshToken(calendarId: string): Promise<string> {
-    const acl = await this.googleCalendarService.getCalendarAcl(calendarId);
+    const acl = await this.googleAclService.getCalendarAcl(calendarId);
     const editorEmails = acl
       .filter((e) => e.role === 'writer' || e.role === 'owner')
       .map((e) => e.email);
@@ -48,7 +52,7 @@ export class StudyRoomService {
 
     const refreshToken = await this.getEditorRefreshToken(resource.calendarId);
 
-    const isBusy = await this.googleCalendarService.isTimeSlotBusy(
+    const isBusy = await this.googleFreebusyService.isTimeSlotBusy(
       resource.calendarId,
       refreshToken,
       dto.startTime,
@@ -79,7 +83,7 @@ export class StudyRoomService {
       })
       .join('\n');
 
-    const eventId = await this.googleCalendarService.createEvent(
+    const eventId = await this.googleEventsService.createEvent(
       resource.calendarId,
       refreshToken,
       {
@@ -112,7 +116,7 @@ export class StudyRoomService {
     const calendarIds = rooms.map((r) => r.calendarId);
     const roomMap = new Map(rooms.map((r) => [r.calendarId, r.name]));
 
-    const rawBookings = await this.googleCalendarService.getUserBookings(
+    const rawBookings = await this.googleEventsService.getUserBookings(
       calendarIds,
       user.email,
     );
@@ -130,7 +134,7 @@ export class StudyRoomService {
   // 예약 취소 (Google Calendar 이벤트 삭제)
   async cancelBooking(calendarId: string, eventId: string): Promise<void> {
     const refreshToken = await this.getEditorRefreshToken(calendarId);
-    await this.googleCalendarService.deleteEvent(
+    await this.googleEventsService.deleteEvent(
       calendarId,
       refreshToken,
       eventId,
@@ -150,7 +154,7 @@ export class StudyRoomService {
 
     const refreshToken = await this.getEditorRefreshToken(calendarId);
 
-    const isBusy = await this.googleCalendarService.isTimeSlotBusyExcluding(
+    const isBusy = await this.googleFreebusyService.isTimeSlotBusyExcluding(
       calendarId,
       dto.startTime,
       dto.endTime,
@@ -178,7 +182,7 @@ export class StudyRoomService {
       })
       .join('\n');
 
-    await this.googleCalendarService.updateEvent(
+    await this.googleEventsService.updateEvent(
       calendarId,
       refreshToken,
       eventId,

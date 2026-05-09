@@ -12,7 +12,7 @@ import { UserService } from '../../user/user.service';
 import { TagService } from '../../tag/tag.service';
 import { ChannelService } from '../../channel/channel.service';
 import { PermissionService } from '../../user/permission.service';
-import { GoogleCalendarService } from '../../google/google-calendar.service';
+import { GoogleAclService } from '../../google/calendar/acl.service';
 import { ScheduleNotificationService } from '../service/schedule-notification.service';
 import { SCHEDULE_PAGE_SIZE } from '../constants';
 
@@ -24,7 +24,7 @@ export class ScheduleAdminController {
     private readonly tagService: TagService,
     private readonly channelService: ChannelService,
     private readonly permissionService: PermissionService,
-    private readonly googleCalendarService: GoogleCalendarService,
+    private readonly googleAclService: GoogleAclService,
     private readonly scheduleNotificationService: ScheduleNotificationService,
   ) {}
 
@@ -65,9 +65,7 @@ export class ScheduleAdminController {
         schedules.map(async (s) => {
           const [channels, acl] = await Promise.all([
             this.channelService.getSlackChannelIds(s.id),
-            this.googleCalendarService
-              .getCalendarAcl(s.calendarId)
-              .catch(() => []),
+            this.googleAclService.getCalendarAcl(s.calendarId).catch(() => []),
           ]);
           const writerEmails = acl
             .filter((e) => e.role === 'writer' || e.role === 'owner')
@@ -183,7 +181,7 @@ export class ScheduleAdminController {
 
     const studentClassIds = (created.tags ?? [])
       .filter((t) => t.studentClassId)
-      .map((t) => t.studentClassId!);
+      .map((t) => t.studentClassId);
     await this.channelService.syncClassChannels(created.id, studentClassIds);
 
     await client.chat.postMessage({
@@ -431,7 +429,7 @@ export class ScheduleAdminController {
     const beforeSchedule = await this.scheduleService.findById(scheduleId);
     const oldStudentClassIds = (beforeSchedule?.tags ?? [])
       .filter((t) => t.studentClassId)
-      .map((t) => t.studentClassId!);
+      .map((t) => t.studentClassId);
 
     const updated = await this.scheduleService.updateSchedule(scheduleId, {
       name: name.trim(),
@@ -448,7 +446,7 @@ export class ScheduleAdminController {
 
     const newStudentClassIds = (updated?.tags ?? [])
       .filter((t) => t.studentClassId)
-      .map((t) => t.studentClassId!);
+      .map((t) => t.studentClassId);
     const removedStudentClassIds = oldStudentClassIds.filter(
       (id) => !newStudentClassIds.includes(id),
     );

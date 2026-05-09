@@ -2,7 +2,8 @@ import { Injectable } from '@nestjs/common';
 import { InjectRepository } from '@nestjs/typeorm';
 import { Repository } from 'typeorm';
 import { Resource, ResourceStatus, ResourceType } from '../resource.entity';
-import { GoogleCalendarService } from '../../google/google-calendar.service';
+import { GoogleCalendarsService } from '../../google/calendar/calendars.service';
+import { GoogleAclService } from '../../google/calendar/acl.service';
 import { BusinessError, ErrorCode } from '../../common/errors';
 import { CreateResourceDto } from '../dto/resource.dto';
 
@@ -11,16 +12,17 @@ export class ResourceService {
   constructor(
     @InjectRepository(Resource)
     private readonly resourceRepository: Repository<Resource>,
-    private readonly googleCalendarService: GoogleCalendarService,
+    private readonly googleCalendarsService: GoogleCalendarsService,
+    private readonly googleAclService: GoogleAclService,
   ) {}
 
   // Google Calendar 생성 후 리소스 DB 등록
   async create(dto: CreateResourceDto): Promise<Resource> {
-    const { calendarId } = await this.googleCalendarService.createCalendar(
+    const { calendarId } = await this.googleCalendarsService.createCalendar(
       dto.name,
     );
 
-    await this.googleCalendarService.makeCalendarPublic(calendarId);
+    await this.googleAclService.makeCalendarPublic(calendarId);
 
     if (dto.isDefault) {
       await this.resourceRepository
@@ -108,7 +110,7 @@ export class ResourceService {
   async rename(id: number, name: string): Promise<void> {
     const resource = await this.findById(id);
     if (!resource) throw new BusinessError(ErrorCode.STUDY_ROOM_NOT_FOUND);
-    await this.googleCalendarService.updateCalendar(resource.calendarId, name);
+    await this.googleCalendarsService.updateCalendar(resource.calendarId, name);
     await this.resourceRepository.update(id, { name });
   }
 
@@ -130,7 +132,7 @@ export class ResourceService {
   async addEditor(id: number, email: string): Promise<void> {
     const resource = await this.findById(id);
     if (!resource) throw new BusinessError(ErrorCode.STUDY_ROOM_NOT_FOUND);
-    await this.googleCalendarService.shareCalendar({
+    await this.googleAclService.shareCalendar({
       calendarId: resource.calendarId,
       email,
       role: 'writer',
@@ -141,17 +143,14 @@ export class ResourceService {
   async removeEditor(id: number, email: string): Promise<void> {
     const resource = await this.findById(id);
     if (!resource) throw new BusinessError(ErrorCode.STUDY_ROOM_NOT_FOUND);
-    await this.googleCalendarService.unshareCalendar(
-      resource.calendarId,
-      email,
-    );
+    await this.googleAclService.unshareCalendar(resource.calendarId, email);
   }
 
   // Google Calendar 삭제 후 소프트 딜리트
   async remove(id: number): Promise<void> {
     const resource = await this.findById(id);
     if (!resource) throw new BusinessError(ErrorCode.STUDY_ROOM_NOT_FOUND);
-    await this.googleCalendarService.deleteCalendar(resource.calendarId);
+    await this.googleCalendarsService.deleteCalendar(resource.calendarId);
     await this.resourceRepository.softDelete(id);
   }
 }

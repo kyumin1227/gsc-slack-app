@@ -8,7 +8,7 @@ import {
 } from '@nestjs/common';
 import { CACHE_MANAGER } from '@nestjs/cache-manager';
 import type { Cache } from 'cache-manager';
-import { GoogleCalendarService } from '../../google/google-calendar.service';
+import { GoogleEventsService } from '../../google/calendar/events.service';
 import { ScheduleWatchService } from '../service/schedule-watch.service';
 import {
   ScheduleNotificationService,
@@ -29,7 +29,7 @@ export class ScheduleWatchController {
     private readonly scheduleWatchService: ScheduleWatchService,
     private readonly notificationService: ScheduleNotificationService,
     private readonly spaceMirrorService: ResourceMirrorService,
-    private readonly googleCalendarService: GoogleCalendarService,
+    private readonly googleEventsService: GoogleEventsService,
     @Inject(CACHE_MANAGER) private readonly cache: Cache,
   ) {}
 
@@ -62,7 +62,7 @@ export class ScheduleWatchController {
     }
 
     const { events, nextSyncToken } =
-      await this.googleCalendarService.getChangedEventsBySyncToken(
+      await this.googleEventsService.getChangedEventsBySyncToken(
         schedule.calendarId,
         schedule.syncToken,
       );
