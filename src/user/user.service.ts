@@ -3,49 +3,14 @@ import { InjectRepository } from '@nestjs/typeorm';
 import { Repository } from 'typeorm';
 import { User, UserStatus, UserRole } from './user.entity';
 import { CryptoUtil } from '../utils/crypto.util';
-
-export interface CreateUserDto {
-  slackId: string;
-  email: string;
-  name: string;
-  refreshToken: string;
-}
-
-export interface SubmitRegistrationDto {
-  code: string; // 학번 / 사번
-  role: UserRole;
-  name?: string;
-  studentClassId?: number; // 반 ID (학생/키지기/반대표만)
-}
-
-export interface UpdateUserInfoDto {
-  name?: string;
-  code?: string;
-  role?: UserRole;
-  studentClassId?: number | null;
-  status?: UserStatus;
-}
-
-export interface UpdateMyInfoDto {
-  name?: string;
-  code?: string;
-  studentClassId?: number | null;
-}
-
-export interface UserListFilter {
-  role?: UserRole;
-  status?: UserStatus;
-  studentClassId?: number;
-}
-
-export interface FindFilteredResult {
-  users: User[];
-  total: number;
-}
+import {
+  CreateUserDto,
+  SubmitRegistrationDto,
+  UpdateMyInfoDto,
+} from './dto/user.dto';
 
 @Injectable()
 export class UserService {
-  // 임시 저장소 (모달 업데이트용)
   private viewIdStore = new Map<string, string>();
 
   constructor(
@@ -53,10 +18,12 @@ export class UserService {
     private userRepository: Repository<User>,
   ) {}
 
+  // slackId로 유저 단순 조회
   async findBySlackId(slackId: string): Promise<User | null> {
     return this.userRepository.findOne({ where: { slackId } });
   }
 
+  // slackId로 유저 조회 (studentClass 관계 포함)
   async findBySlackIdWithClass(slackId: string): Promise<User | null> {
     return this.userRepository.findOne({
       where: { slackId },
@@ -64,10 +31,12 @@ export class UserService {
     });
   }
 
+  // 이메일로 유저 조회
   async findByEmail(email: string): Promise<User | null> {
     return this.userRepository.findOne({ where: { email } });
   }
 
+  // 해당 슬랙 유저가 관리자(교수/조교) 권한인지 확인
   async isAdmin(slackUserId: string): Promise<boolean> {
     const user = await this.findBySlackId(slackUserId);
     const allowed = [UserRole.PROFESSOR, UserRole.TA];
@@ -76,11 +45,13 @@ export class UserService {
     );
   }
 
+  // 이메일 목록을 slackId 목록으로 변환
   async mapEmailsToSlackIds(emails: string[]): Promise<string[]> {
     const users = await Promise.all(emails.map((e) => this.findByEmail(e)));
     return users.filter((u): u is User => u !== null).map((u) => u.slackId);
   }
 
+  // 이메일 목록 중 ACTIVE 상태이고 refreshToken이 있는 유저 조회 (Google Calendar 위임용)
   async findActiveByEmails(emails: string[]): Promise<User | null> {
     if (emails.length === 0) return null;
     return this.userRepository
@@ -91,7 +62,7 @@ export class UserService {
       .getOne();
   }
 
-  // 1단계: Google 로그인 완료 → REGISTERED
+  // 1단계: Google 로그인 완료 → REGISTERED 상태로 유저 생성
   async createUser(dto: CreateUserDto): Promise<User> {
     const user = this.userRepository.create({
       ...dto,
@@ -101,7 +72,7 @@ export class UserService {
     return this.userRepository.save(user);
   }
 
-  // refresh token 업데이트 (재인증 시)
+  // refresh token 갱신 (재인증 시 암호화하여 저장)
   async updateRefreshToken(
     slackId: string,
     refreshToken: string,
@@ -112,18 +83,17 @@ export class UserService {
     );
   }
 
-  // 복호화된 refresh token 조회
+  // 저장된 refresh token을 복호화하여 반환 (복호화 실패 시 null)
   getDecryptedRefreshToken(user: User): string | null {
     if (!user.refreshToken) return null;
     try {
       return CryptoUtil.decrypt(user.refreshToken);
     } catch {
-      // 복호화 실패 시 (암호화되지 않은 이전 데이터일 수 있음)
       return null;
     }
   }
 
-  // 2단계: 정보 입력 완료 → PENDING_APPROVAL
+  // 2단계: 역할·학번 입력 완료 → PENDING_APPROVAL 상태로 전환
   async submitRegistration(
     slackId: string,
     dto: SubmitRegistrationDto,
@@ -138,7 +108,7 @@ export class UserService {
     return this.findBySlackId(slackId);
   }
 
-  // 학생: 바로 ACTIVE (승인 불필요)
+  // 학생 역할 선택 시 승인 없이 바로 ACTIVE로 활성화
   async activateWithRole(
     slackId: string,
     dto: SubmitRegistrationDto,
@@ -153,43 +123,7 @@ export class UserService {
     return this.findBySlackId(slackId);
   }
 
-  // 승인 대기 유저 목록 조회
-  async findPendingApproval(): Promise<User[]> {
-    return this.userRepository.find({
-      where: { status: UserStatus.PENDING_APPROVAL },
-      relations: ['studentClass'],
-      order: { createdAt: 'ASC' },
-    });
-  }
-
-  // 반 대표용: 자기 반 승인 대기 유저 조회
-  async findPendingApprovalByStudentClassId(
-    studentClassId: number,
-  ): Promise<User[]> {
-    return this.userRepository.find({
-      where: { status: UserStatus.PENDING_APPROVAL, studentClassId },
-      relations: ['studentClass'],
-      order: { createdAt: 'ASC' },
-    });
-  }
-
-  // 반 대표용: 자기 반 유저 목록 조회
-  async findByStudentClassId(
-    studentClassId: number,
-    skip: number,
-    take: number,
-  ) {
-    const [users, total] = await this.userRepository.findAndCount({
-      where: { studentClassId },
-      relations: ['studentClass'],
-      order: { name: 'ASC' },
-      skip,
-      take,
-    });
-    return { users, total };
-  }
-
-  // 3단계: 관리자 승인 → ACTIVE
+  // 3단계: 관리자 또는 반대표 승인 → ACTIVE 상태로 전환
   async approveUser(slackId: string): Promise<User | null> {
     await this.userRepository.update(
       { slackId },
@@ -198,59 +132,7 @@ export class UserService {
     return this.findBySlackId(slackId);
   }
 
-  // 가입 거절 (hard delete → 재가입 가능)
-  async rejectUser(slackId: string): Promise<void> {
-    await this.userRepository.delete({ slackId });
-  }
-
-  // 전체 유저 목록 (soft-delete 제외, 이름 오름차순)
-  async findAll(): Promise<User[]> {
-    return this.userRepository.find({
-      relations: ['studentClass'],
-      order: { name: 'ASC' },
-    });
-  }
-
-  // 필터 + 페이지네이션 유저 목록
-  async findFiltered(
-    filter: UserListFilter,
-    skip: number,
-    take: number,
-  ): Promise<FindFilteredResult> {
-    const qb = this.userRepository
-      .createQueryBuilder('user')
-      .leftJoinAndSelect('user.studentClass', 'studentClass')
-      .orderBy('user.name', 'ASC');
-
-    if (filter.role) {
-      qb.andWhere('user.role = :role', { role: filter.role });
-    }
-    if (filter.status) {
-      qb.andWhere('user.status = :status', { status: filter.status });
-    }
-    if (filter.studentClassId) {
-      qb.andWhere('user.studentClassId = :classId', {
-        classId: filter.studentClassId,
-      });
-    }
-
-    const [users, total] = await qb.skip(skip).take(take).getManyAndCount();
-    return { users, total };
-  }
-
-  // 유저 정보 수정 (관리자용: 역할·상태 포함)
-  async updateUserInfo(
-    targetSlackId: string,
-    dto: UpdateUserInfoDto,
-  ): Promise<User | null> {
-    await this.userRepository.update(
-      { slackId: targetSlackId },
-      dto as Parameters<typeof this.userRepository.update>[1],
-    );
-    return this.findBySlackIdWithClass(targetSlackId);
-  }
-
-  // 내 정보 수정 (본인용: 이름·학번·반만)
+  // 본인 정보 수정 (학번·반 변경만 허용, 역할·상태 변경 불가)
   async updateMyInfo(
     slackId: string,
     dto: UpdateMyInfoDto,
@@ -262,24 +144,17 @@ export class UserService {
     return this.findBySlackIdWithClass(slackId);
   }
 
-  // 비활성화
-  async deactivateUser(slackId: string): Promise<User | null> {
-    await this.userRepository.update(
-      { slackId },
-      { status: UserStatus.INACTIVE },
-    );
-    return this.findBySlackId(slackId);
-  }
-
-  // 모달 view_id 임시 저장 (Google OAuth callback에서 모달 업데이트용)
+  // Google OAuth 콜백에서 모달 업데이트에 사용할 view_id를 인메모리에 임시 저장
   async saveViewId(slackUserId: string, viewId: string): Promise<void> {
     this.viewIdStore.set(slackUserId, viewId);
   }
 
+  // 저장된 view_id 조회
   async getViewId(slackUserId: string): Promise<string | undefined> {
     return this.viewIdStore.get(slackUserId);
   }
 
+  // 사용 완료된 view_id 삭제
   async deleteViewId(slackUserId: string): Promise<void> {
     this.viewIdStore.delete(slackUserId);
   }

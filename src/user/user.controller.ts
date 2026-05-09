@@ -16,6 +16,8 @@ import { UserRole, UserStatus } from './user.entity';
 import { BusinessError, ErrorCode } from '../common/errors';
 import { StudentClassService } from '../student-class/student-class.service';
 import { PermissionService } from './permission.service';
+import { UserAdminService } from './service/user-admin.service';
+import { UserClassRepService } from './service/user-class-rep.service';
 
 const PAGE_SIZE = 10;
 
@@ -25,6 +27,8 @@ export class UserController {
 
   constructor(
     private readonly userService: UserService,
+    private readonly userAdminService: UserAdminService,
+    private readonly userClassRepService: UserClassRepService,
     private readonly slackService: SlackService,
     private readonly studentClassService: StudentClassService,
     private readonly permissionService: PermissionService,
@@ -217,7 +221,7 @@ export class UserController {
     await this.permissionService.requireAdmin(userId);
 
     // 승인 대기 유저 목록 조회
-    const pendingUsers = await this.userService.findPendingApproval();
+    const pendingUsers = await this.userAdminService.findPendingApproval();
 
     await client.views.open({
       trigger_id: body.trigger_id,
@@ -264,7 +268,7 @@ export class UserController {
 
       logger.info(`User approved: ${targetSlackId}`);
     } else if (actionType === 'reject') {
-      await this.userService.rejectUser(targetSlackId);
+      await this.userAdminService.rejectUser(targetSlackId);
 
       // 거절된 유저에게 알림
       await client.chat.postMessage({
@@ -277,7 +281,7 @@ export class UserController {
 
     // 모달 업데이트 (목록 새로고침)
     if (body.view?.id) {
-      const pendingUsers = await this.userService.findPendingApproval();
+      const pendingUsers = await this.userAdminService.findPendingApproval();
       await client.views.update({
         view_id: body.view.id,
         view: UserAdminView.pendingApprovalModal(
@@ -296,7 +300,7 @@ export class UserController {
 
   // 유저 목록 모달 빌드 헬퍼
   private async buildUserListView(filter: UserListFilter, page: number) {
-    const { users, total } = await this.userService.findFiltered(
+    const { users, total } = await this.userAdminService.findFiltered(
       filter,
       page * PAGE_SIZE,
       PAGE_SIZE,
@@ -519,7 +523,7 @@ export class UserController {
 
     await ack();
 
-    await this.userService.updateUserInfo(targetSlackId, {
+    await this.userAdminService.updateUserInfo(targetSlackId, {
       name,
       code,
       role,
@@ -636,7 +640,7 @@ export class UserController {
 
     const user = await this.userService.findBySlackIdWithClass(body.user.id);
     const className = user?.studentClass?.name ?? '';
-    const { users, total } = await this.userService.findByStudentClassId(
+    const { users, total } = await this.userClassRepService.findByStudentClassId(
       studentClassId,
       0,
       PAGE_SIZE,
@@ -676,7 +680,7 @@ export class UserController {
 
     const user = await this.userService.findBySlackIdWithClass(body.user.id);
     const className = user?.studentClass?.name ?? '';
-    const { users, total } = await this.userService.findByStudentClassId(
+    const { users, total } = await this.userClassRepService.findByStudentClassId(
       studentClassId,
       page * PAGE_SIZE,
       PAGE_SIZE,
@@ -713,7 +717,7 @@ export class UserController {
     if (!studentClassId) return;
 
     const pendingUsers =
-      await this.userService.findPendingApprovalByStudentClassId(
+      await this.userClassRepService.findPendingApprovalByStudentClassId(
         studentClassId,
       );
 
@@ -760,7 +764,7 @@ export class UserController {
 
     if (body.view?.id) {
       const pendingUsers =
-        await this.userService.findPendingApprovalByStudentClassId(
+        await this.userClassRepService.findPendingApprovalByStudentClassId(
           studentClassId,
         );
       await client.views.update({
