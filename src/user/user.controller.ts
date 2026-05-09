@@ -8,7 +8,9 @@ import type {
   SlackViewMiddlewareArgs,
   BlockAction,
 } from '@slack/bolt';
-import { UserView, UserListFilter, UserListModalState } from './user.view';
+import { UserView, UserListFilter, UserListModalState } from './view/user.view';
+import { UserAdminView } from './view/user-admin.view';
+import { UserClassRepView } from './view/user-class-rep.view';
 import { GoogleOAuthService } from '../google/oauth/google-oauth.service';
 import { UserRole, UserStatus } from './user.entity';
 import { BusinessError, ErrorCode } from '../common/errors';
@@ -219,7 +221,7 @@ export class UserController {
 
     await client.views.open({
       trigger_id: body.trigger_id,
-      view: UserView.pendingApprovalModal(
+      view: UserAdminView.pendingApprovalModal(
         pendingUsers.map((u) => ({
           slackId: u.slackId,
           name: u.name,
@@ -278,7 +280,7 @@ export class UserController {
       const pendingUsers = await this.userService.findPendingApproval();
       await client.views.update({
         view_id: body.view.id,
-        view: UserView.pendingApprovalModal(
+        view: UserAdminView.pendingApprovalModal(
           pendingUsers.map((u) => ({
             slackId: u.slackId,
             name: u.name,
@@ -301,7 +303,7 @@ export class UserController {
     );
     const activeClasses = await this.studentClassService.findActiveClasses();
 
-    return UserView.userListModal(
+    return UserAdminView.userListModal(
       users.map((u) => ({
         slackId: u.slackId,
         name: u.name,
@@ -474,7 +476,7 @@ export class UserController {
 
     await client.views.push({
       trigger_id: body.trigger_id,
-      view: UserView.editUserModal({
+      view: UserAdminView.editUserModal({
         targetSlackId,
         name: targetUser.name,
         code: targetUser.code,
@@ -642,7 +644,7 @@ export class UserController {
 
     await client.views.open({
       trigger_id: body.trigger_id,
-      view: UserView.classRepUserListModal(
+      view: UserClassRepView.userListModal(
         users.map((u) => ({
           slackId: u.slackId,
           name: u.name,
@@ -683,7 +685,7 @@ export class UserController {
     if (body.view?.id) {
       await client.views.update({
         view_id: body.view.id,
-        view: UserView.classRepUserListModal(
+        view: UserClassRepView.userListModal(
           users.map((u) => ({
             slackId: u.slackId,
             name: u.name,
@@ -717,7 +719,7 @@ export class UserController {
 
     await client.views.open({
       trigger_id: body.trigger_id,
-      view: UserView.classRepPendingApprovalModal(
+      view: UserClassRepView.pendingApprovalModal(
         pendingUsers.map((u) => ({
           slackId: u.slackId,
           name: u.name,
@@ -763,7 +765,7 @@ export class UserController {
         );
       await client.views.update({
         view_id: body.view.id,
-        view: UserView.classRepPendingApprovalModal(
+        view: UserClassRepView.pendingApprovalModal(
           pendingUsers.map((u) => ({
             slackId: u.slackId,
             name: u.name,
