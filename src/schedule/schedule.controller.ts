@@ -6,7 +6,8 @@ import type {
   SlackViewMiddlewareArgs,
   BlockAction,
 } from '@slack/bolt';
-import { ScheduleService } from './schedule.service';
+import { ScheduleService } from './service/schedule.service';
+import { ScheduleRecurringService } from './service/schedule-recurring.service';
 import { ScheduleView } from './view/schedule.view';
 import { ScheduleRecurringView } from './view/schedule-recurring.view';
 import { ScheduleClassRepView } from './view/schedule-class-rep.view';
@@ -17,7 +18,7 @@ import { ChannelService } from '../channel/channel.service';
 import { UserStatus, User } from '../user/user.entity';
 import { PermissionService } from '../user/permission.service';
 import { GoogleCalendarService } from '../google/google-calendar.service';
-import { ScheduleNotificationService } from './schedule-notification.service';
+import { ScheduleNotificationService } from './service/schedule-notification.service';
 
 const CALENDAR_COLORS = [
   '%234285F4',
@@ -41,6 +42,7 @@ const CALENDAR_COLORS = [
 export class ScheduleController {
   constructor(
     private readonly scheduleService: ScheduleService,
+    private readonly scheduleRecurringService: ScheduleRecurringService,
     private readonly userService: UserService,
     private readonly tagService: TagService,
     private readonly channelService: ChannelService,
@@ -877,7 +879,7 @@ export class ScheduleController {
 
     await ack();
 
-    await this.scheduleService.createRecurringEvents(
+    await this.scheduleRecurringService.createRecurringEvents(
       {
         scheduleId,
         title: title.trim(),
@@ -911,7 +913,7 @@ export class ScheduleController {
     await this.permissionService.requireAdmin(userId);
 
     const schedules =
-      await this.scheduleService.findSchedulesWithRecurrenceGroups();
+      await this.scheduleRecurringService.findSchedulesWithRecurrenceGroups();
 
     if (schedules.length === 0) {
       return;
@@ -919,7 +921,10 @@ export class ScheduleController {
 
     await client.views.open({
       trigger_id: body.trigger_id,
-      view: ScheduleRecurringView.selectScheduleForRecurringModal(schedules, 'delete'),
+      view: ScheduleRecurringView.selectScheduleForRecurringModal(
+        schedules,
+        'delete',
+      ),
     });
   }
 
@@ -944,7 +949,7 @@ export class ScheduleController {
     }
 
     const [groups, schedules] = await Promise.all([
-      this.scheduleService.findRecurrenceGroupsBySchedule(scheduleId),
+      this.scheduleRecurringService.findRecurrenceGroupsBySchedule(scheduleId),
       this.scheduleService.findActiveSchedules(),
     ]);
     const scheduleName = schedules.find((s) => s.id === scheduleId)?.name ?? '';
@@ -984,12 +989,13 @@ export class ScheduleController {
 
     await ack();
 
-    const { deleted, total } = await this.scheduleService.deleteRecurringGroup(
-      groupDbId,
-      scope,
-      filterOriginal,
-      body.user.id,
-    );
+    const { deleted, total } =
+      await this.scheduleRecurringService.deleteRecurringGroup(
+        groupDbId,
+        scope,
+        filterOriginal,
+        body.user.id,
+      );
     await client.chat.postMessage({
       channel: body.user.id,
       text: `반복 일정 삭제 완료: ${deleted}/${total}개`,
@@ -1008,7 +1014,7 @@ export class ScheduleController {
     await this.permissionService.requireAdmin(userId);
 
     const schedules =
-      await this.scheduleService.findSchedulesWithRecurrenceGroups();
+      await this.scheduleRecurringService.findSchedulesWithRecurrenceGroups();
 
     if (schedules.length === 0) {
       return;
@@ -1016,7 +1022,10 @@ export class ScheduleController {
 
     await client.views.open({
       trigger_id: body.trigger_id,
-      view: ScheduleRecurringView.selectScheduleForRecurringModal(schedules, 'edit'),
+      view: ScheduleRecurringView.selectScheduleForRecurringModal(
+        schedules,
+        'edit',
+      ),
     });
   }
 
@@ -1041,7 +1050,7 @@ export class ScheduleController {
     }
 
     const [groups, schedules] = await Promise.all([
-      this.scheduleService.findRecurrenceGroupsBySchedule(scheduleId),
+      this.scheduleRecurringService.findRecurrenceGroupsBySchedule(scheduleId),
       this.scheduleService.findActiveSchedules(),
     ]);
     const scheduleName = schedules.find((s) => s.id === scheduleId)?.name ?? '';
@@ -1086,7 +1095,8 @@ export class ScheduleController {
       return;
     }
 
-    const group = await this.scheduleService.findRecurrenceGroupById(groupDbId);
+    const group =
+      await this.scheduleRecurringService.findRecurrenceGroupById(groupDbId);
     if (!group) {
       await ack({
         response_action: 'errors',
@@ -1164,21 +1174,22 @@ export class ScheduleController {
 
     await ack();
 
-    const { updated, total } = await this.scheduleService.updateRecurringGroup(
-      groupDbId,
-      {
-        title,
-        description,
-        location,
-        startTime,
-        endTime,
-        daysOfWeek,
-        startDate,
-        endDate,
-      },
-      scope,
-      body.user.id,
-    );
+    const { updated, total } =
+      await this.scheduleRecurringService.updateRecurringGroup(
+        groupDbId,
+        {
+          title,
+          description,
+          location,
+          startTime,
+          endTime,
+          daysOfWeek,
+          startDate,
+          endDate,
+        },
+        scope,
+        body.user.id,
+      );
     await client.chat.postMessage({
       channel: body.user.id,
       text: `반복 일정 수정 완료: ${updated}/${total}개`,
@@ -1498,7 +1509,7 @@ export class ScheduleController {
 
     const [schedule, groups] = await Promise.all([
       this.scheduleService.findById(scheduleId),
-      this.scheduleService.findRecurrenceGroupsBySchedule(scheduleId),
+      this.scheduleRecurringService.findRecurrenceGroupsBySchedule(scheduleId),
     ]);
     if (!schedule) return;
 
@@ -1551,7 +1562,7 @@ export class ScheduleController {
 
     const [schedule, groups] = await Promise.all([
       this.scheduleService.findById(scheduleId),
-      this.scheduleService.findRecurrenceGroupsBySchedule(scheduleId),
+      this.scheduleRecurringService.findRecurrenceGroupsBySchedule(scheduleId),
     ]);
     if (!schedule) return;
 

@@ -4,9 +4,10 @@ import { CACHE_MANAGER } from '@nestjs/cache-manager';
 import type { Cache } from 'cache-manager';
 import { calendar_v3 } from 'googleapis';
 import { ScheduleService } from './schedule.service';
-import { ResourceMirrorService } from '../resource/resource-mirror.service';
-import { ResourceService } from '../resource/service/resource.service';
-import { GoogleCalendarService } from '../google/google-calendar.service';
+import { ScheduleWatchService } from './schedule-watch.service';
+import { ResourceMirrorService } from '../../resource/resource-mirror.service';
+import { ResourceService } from '../../resource/service/resource.service';
+import { GoogleCalendarService } from '../../google/google-calendar.service';
 
 const CRON_SUPPRESS_KEY = 'suppress:cron:sync';
 
@@ -16,6 +17,7 @@ export class ScheduleCronService {
 
   constructor(
     private readonly scheduleService: ScheduleService,
+    private readonly scheduleWatchService: ScheduleWatchService,
     private readonly resourceMirrorService: ResourceMirrorService,
     private readonly resourceService: ResourceService,
     private readonly googleCalendarService: GoogleCalendarService,
@@ -25,7 +27,7 @@ export class ScheduleCronService {
   // listen() 완료 후 main.ts에서 직접 호출
   async renewOnBootstrap(): Promise<void> {
     this.logger.log('Starting watch renewal on bootstrap...');
-    await this.scheduleService.renewAllActiveWatches();
+    await this.scheduleWatchService.renewAllActiveWatches();
     this.logger.log('Bootstrap watch renewal completed');
   }
 
@@ -34,7 +36,7 @@ export class ScheduleCronService {
   @Cron('0 0 * * 1')
   async renewWatches(): Promise<void> {
     this.logger.log('Starting weekly watch renewal...');
-    await this.scheduleService.renewAllActiveWatches();
+    await this.scheduleWatchService.renewAllActiveWatches();
     this.logger.log('Weekly watch renewal completed');
   }
 

@@ -2,15 +2,15 @@ import { Inject, Injectable, Logger } from '@nestjs/common';
 import { CACHE_MANAGER } from '@nestjs/cache-manager';
 import type { Cache } from 'cache-manager';
 import { WebClient } from '@slack/web-api';
-import { ChannelService } from '../channel/channel.service';
-import { UserService } from '../user/user.service';
-import { GoogleCalendarService } from '../google/google-calendar.service';
+import { ChannelService } from '../../channel/channel.service';
+import { UserService } from '../../user/user.service';
+import { GoogleCalendarService } from '../../google/google-calendar.service';
 import {
   buildCalendarNotificationBlocks,
   hasRelevantChanges,
   EventChangeType,
   EventSnapshot,
-} from './view/schedule-watch.view';
+} from '../view/schedule-watch.view';
 
 export type { EventSnapshot };
 
