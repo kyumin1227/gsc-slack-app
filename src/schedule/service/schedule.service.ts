@@ -3,7 +3,9 @@ import { BusinessError, ErrorCode } from '../../common/errors';
 import { InjectRepository } from '@nestjs/typeorm';
 import { Repository, In } from 'typeorm';
 import { Schedule, ScheduleStatus } from '../schedule.entity';
-import { GoogleCalendarService } from '../../google/google-calendar.service';
+import { GoogleCalendarsService } from '../../google/calendar/calendars.service';
+import { GoogleAclService } from '../../google/calendar/acl.service';
+import { GoogleCalendarListService } from '../../google/calendar/calendar-list.service';
 import { UserService } from '../../user/user.service';
 import { Tag } from '../../tag/tag.entity';
 import { ScheduleWatchService } from './schedule-watch.service';
@@ -18,7 +20,9 @@ export class ScheduleService {
     private scheduleRepository: Repository<Schedule>,
     @InjectRepository(Tag)
     private tagRepository: Repository<Tag>,
-    private readonly googleCalendarService: GoogleCalendarService,
+    private readonly googleCalendarsService: GoogleCalendarsService,
+    private readonly googleAclService: GoogleAclService,
+    private readonly googleCalendarListService: GoogleCalendarListService,
     private readonly userService: UserService,
     private readonly scheduleWatchService: ScheduleWatchService,
   ) {}
@@ -26,7 +30,7 @@ export class ScheduleService {
   // 스케줄 생성 (Google Calendar도 함께 생성)
   async createSchedule(dto: CreateScheduleDto): Promise<Schedule> {
     // 1. Google Calendar 생성
-    const { calendarId } = await this.googleCalendarService.createCalendar(
+    const { calendarId } = await this.googleCalendarsService.createCalendar(
       dto.name,
       dto.description,
     );
@@ -52,16 +56,16 @@ export class ScheduleService {
     const saved = await this.scheduleRepository.save(schedule);
 
     // 4. 캘린더 전체 공개 설정
-    await this.googleCalendarService.makeCalendarPublic(calendarId);
+    await this.googleAclService.makeCalendarPublic(calendarId);
 
     // 5. 생성자에게 writer 권한 부여 및 자동 구독
     if (dto.creatorEmail && dto.creatorRefreshToken) {
-      await this.googleCalendarService.shareCalendar({
+      await this.googleAclService.shareCalendar({
         calendarId,
         email: dto.creatorEmail,
         role: 'writer',
       });
-      await this.googleCalendarService.addCalendarToUserList(
+      await this.googleCalendarListService.addCalendarToUserList(
         calendarId,
         dto.creatorRefreshToken,
       );
@@ -258,7 +262,7 @@ export class ScheduleService {
     if (!schedule) return null;
 
     if (dto.name || dto.description !== undefined) {
-      await this.googleCalendarService.updateCalendar(
+      await this.googleCalendarsService.updateCalendar(
         schedule.calendarId,
         dto.name ?? schedule.name,
         dto.description ?? schedule.description,
@@ -306,7 +310,7 @@ export class ScheduleService {
     await this.scheduleWatchService.stopWatch(id);
 
     try {
-      await this.googleCalendarService.deleteCalendar(schedule.calendarId);
+      await this.googleCalendarsService.deleteCalendar(schedule.calendarId);
     } catch (error) {
       this.logger.warn(
         `Failed to delete calendar ${schedule.calendarId}: ${error}`,
@@ -321,7 +325,7 @@ export class ScheduleService {
     const schedule = await this.findById(id);
     if (!schedule) return null;
 
-    return this.googleCalendarService.getCalendarAcl(schedule.calendarId);
+    return this.googleAclService.getCalendarAcl(schedule.calendarId);
   }
 
   // 캘린더 권한 부여
@@ -333,7 +337,7 @@ export class ScheduleService {
     const schedule = await this.findById(id);
     if (!schedule) throw new BusinessError(ErrorCode.SCHEDULE_NOT_FOUND);
 
-    await this.googleCalendarService.shareCalendar({
+    await this.googleAclService.shareCalendar({
       calendarId: schedule.calendarId,
       email,
       role,
@@ -345,10 +349,7 @@ export class ScheduleService {
     const schedule = await this.findById(id);
     if (!schedule) throw new BusinessError(ErrorCode.SCHEDULE_NOT_FOUND);
 
-    await this.googleCalendarService.unshareCalendar(
-      schedule.calendarId,
-      email,
-    );
+    await this.googleAclService.unshareCalendar(schedule.calendarId, email);
   }
 
   // 구독 (사용자 캘린더 목록에 추가)
@@ -356,7 +357,7 @@ export class ScheduleService {
     const schedule = await this.findById(id);
     if (!schedule) throw new BusinessError(ErrorCode.SCHEDULE_NOT_FOUND);
 
-    await this.googleCalendarService.addCalendarToUserList(
+    await this.googleCalendarListService.addCalendarToUserList(
       schedule.calendarId,
       userRefreshToken,
     );
@@ -367,7 +368,7 @@ export class ScheduleService {
     const schedule = await this.findById(id);
     if (!schedule) throw new BusinessError(ErrorCode.SCHEDULE_NOT_FOUND);
 
-    await this.googleCalendarService.removeCalendarFromUserList(
+    await this.googleCalendarListService.removeCalendarFromUserList(
       schedule.calendarId,
       userRefreshToken,
     );
@@ -377,6 +378,6 @@ export class ScheduleService {
   async getSubscribedCalendarIds(
     userRefreshToken: string,
   ): Promise<Set<string>> {
-    return this.googleCalendarService.getUserCalendarIds(userRefreshToken);
+    return this.googleCalendarListService.getUserCalendarIds(userRefreshToken);
   }
 }

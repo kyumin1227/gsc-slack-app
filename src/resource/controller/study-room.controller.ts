@@ -13,7 +13,7 @@ import { StudyRoomView } from '../view/study-room.view';
 import { ResourceView } from '../view/resource.view';
 import { UserService } from '../../user/user.service';
 import { UserStatus } from '../../user/user.entity';
-import { GoogleCalendarService } from '../../google/google-calendar.service';
+import { GoogleEventsService } from '../../google/calendar/events.service';
 import { ResourceType } from '../resource.entity';
 import { withModalFeedback } from '../../common/modal-feedback.util';
 
@@ -26,7 +26,7 @@ export class StudyRoomController {
     private readonly studyRoomService: StudyRoomService,
     private readonly professorService: ProfessorService,
     private readonly userService: UserService,
-    private readonly googleCalendarService: GoogleCalendarService,
+    private readonly googleEventsService: GoogleEventsService,
   ) {}
 
   // 스터디룸 예약 목록 모달 열기 (활성 유저만)
@@ -222,7 +222,7 @@ export class StudyRoomController {
       endIso: string;
     };
 
-    const event = await this.googleCalendarService.getEventById(
+    const event = await this.googleEventsService.getEventById(
       calendarId,
       eventId,
     );

@@ -1,5 +1,5 @@
 import { Injectable } from '@nestjs/common';
-import { GoogleCalendarService } from '../../google/google-calendar.service';
+import { GoogleEventsService } from '../../google/calendar/events.service';
 import { UserService } from '../../user/user.service';
 import { BusinessError, ErrorCode } from '../../common/errors';
 import { ConsultationItem } from '../dto/professor.dto';
@@ -8,7 +8,7 @@ import { ConsultationItem } from '../dto/professor.dto';
 export class ProfessorService {
   constructor(
     private readonly userService: UserService,
-    private readonly googleCalendarService: GoogleCalendarService,
+    private readonly googleEventsService: GoogleEventsService,
   ) {}
 
   // 교수의 향후 상담 예약 목록 조회 (Google Appointments 이벤트만 필터)
@@ -23,7 +23,7 @@ export class ProfessorService {
     const now = new Date();
     const future = new Date(now.getTime() + CONSULTATION_LOOKAHEAD_MS);
 
-    const events = await this.googleCalendarService.listUserPrimaryEvents(
+    const events = await this.googleEventsService.listUserPrimaryEvents(
       refreshToken,
       now,
       future,
@@ -61,7 +61,7 @@ export class ProfessorService {
     if (!refreshToken)
       throw new BusinessError(ErrorCode.CALENDAR_WRITER_NO_TOKEN);
 
-    await this.googleCalendarService.cancelConsultationEvent(
+    await this.googleEventsService.cancelConsultationEvent(
       refreshToken,
       eventId,
     );

@@ -6,7 +6,8 @@ import { InjectRepository } from '@nestjs/typeorm';
 import { Repository, In } from 'typeorm';
 import { Schedule } from '../schedule.entity';
 import { RecurrenceGroup } from '../recurrence-group.entity';
-import { GoogleCalendarService } from '../../google/google-calendar.service';
+import { GoogleEventsService } from '../../google/calendar/events.service';
+import { GoogleAclService } from '../../google/calendar/acl.service';
 import { UserService } from '../../user/user.service';
 import { ChannelService } from '../../channel/channel.service';
 import { WebClient } from '@slack/web-api';
@@ -36,14 +37,15 @@ export class ScheduleRecurringService {
     private recurrenceGroupRepository: Repository<RecurrenceGroup>,
     @Inject(CACHE_MANAGER) private cache: Cache,
     private readonly channelService: ChannelService,
-    private readonly googleCalendarService: GoogleCalendarService,
+    private readonly googleEventsService: GoogleEventsService,
+    private readonly googleAclService: GoogleAclService,
     private readonly userService: UserService,
     private readonly scheduleNotificationService: ScheduleNotificationService,
   ) {}
 
   private async resolveWriterDisplay(calendarId: string): Promise<string> {
     try {
-      const acl = await this.googleCalendarService.getCalendarAcl(calendarId);
+      const acl = await this.googleAclService.getCalendarAcl(calendarId);
       const emails = acl
         .filter((e) => e.role === 'writer' || e.role === 'owner')
         .map((e) => e.email);
@@ -77,20 +79,18 @@ export class ScheduleRecurringService {
     await this.cache.set(`suppress:group:${groupId}`, true, 3 * 60 * 1000);
 
     // 3. 이벤트 10개씩 청크 생성 (Rate Limit 방지)
-    const results = await runInChunks(
-      dates,
-      ({ startDateTime, endDateTime }) =>
-        this.googleCalendarService.createEventAsServiceAccount(
-          schedule.calendarId,
-          {
-            summary: dto.title,
-            startDateTime,
-            endDateTime,
-            description: dto.description,
-            location: dto.location,
-            groupId,
-          },
-        ),
+    const results = await runInChunks(dates, ({ startDateTime, endDateTime }) =>
+      this.googleEventsService.createEventAsServiceAccount(
+        schedule.calendarId,
+        {
+          summary: dto.title,
+          startDateTime,
+          endDateTime,
+          description: dto.description,
+          location: dto.location,
+          groupId,
+        },
+      ),
     );
 
     const successCount = results.filter((r) => r.status === 'fulfilled').length;
@@ -237,7 +237,7 @@ export class ScheduleRecurringService {
       3 * 60 * 1000,
     );
 
-    let events = await this.googleCalendarService.listEventsByGroupId(
+    let events = await this.googleEventsService.listEventsByGroupId(
       schedule.calendarId,
       group.groupId,
     );
@@ -254,7 +254,7 @@ export class ScheduleRecurringService {
     }
 
     const results = await runInChunks(events, (e) =>
-      this.googleCalendarService.deleteEventAsServiceAccount(
+      this.googleEventsService.deleteEventAsServiceAccount(
         schedule.calendarId,
         e.id!,
       ),
@@ -337,7 +337,7 @@ export class ScheduleRecurringService {
       3 * 60 * 1000,
     );
 
-    let events = await this.googleCalendarService.listEventsByGroupId(
+    let events = await this.googleEventsService.listEventsByGroupId(
       schedule.calendarId,
       group.groupId,
     );
@@ -362,7 +362,7 @@ export class ScheduleRecurringService {
     if (needsRecreate) {
       // 요일/기간 변경: 기존 원본 전체 삭제 후 재생성
       await runInChunks(events, (e) =>
-        this.googleCalendarService.deleteEventAsServiceAccount(
+        this.googleEventsService.deleteEventAsServiceAccount(
           schedule.calendarId,
           e.id!,
         ),
@@ -391,7 +391,7 @@ export class ScheduleRecurringService {
         const createResults = await runInChunks(
           newDates,
           ({ startDateTime, endDateTime }) =>
-            this.googleCalendarService.createEventAsServiceAccount(
+            this.googleEventsService.createEventAsServiceAccount(
               schedule.calendarId,
               {
                 summary: dto.title ?? group.title,
@@ -422,7 +422,7 @@ export class ScheduleRecurringService {
           endDateTime = `${datePart}T${dto.endTime}:00+09:00`;
         }
 
-        return this.googleCalendarService.updateEventAsServiceAccount(
+        return this.googleEventsService.updateEventAsServiceAccount(
           schedule.calendarId,
           e.id!,
           {

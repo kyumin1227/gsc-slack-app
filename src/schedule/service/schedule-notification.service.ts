@@ -4,7 +4,8 @@ import type { Cache } from 'cache-manager';
 import { WebClient } from '@slack/web-api';
 import { ChannelService } from '../../channel/channel.service';
 import { UserService } from '../../user/user.service';
-import { GoogleCalendarService } from '../../google/google-calendar.service';
+import { GoogleEventsService } from '../../google/calendar/events.service';
+import { GoogleAclService } from '../../google/calendar/acl.service';
 import {
   buildCalendarNotificationBlocks,
   hasRelevantChanges,
@@ -32,7 +33,8 @@ const MUTE_TTL_MS = 30 * 60 * 1000;
 const ENTRY_TTL_MS = 60 * 60 * 1000; // 1시간 안전 TTL
 
 const pendingKey = (key: string) => `${DEBOUNCE_KEY_PREFIX}${key}`;
-const manualMuteKey = (scheduleId: number) => `${MANUAL_MUTE_PREFIX}${scheduleId}`;
+const manualMuteKey = (scheduleId: number) =>
+  `${MANUAL_MUTE_PREFIX}${scheduleId}`;
 const autoMuteKey = (scheduleId: number) => `${AUTO_MUTE_PREFIX}${scheduleId}`;
 
 @Injectable()
@@ -45,7 +47,8 @@ export class ScheduleNotificationService {
     @Inject(CACHE_MANAGER) private cache: Cache,
     private readonly channelService: ChannelService,
     private readonly userService: UserService,
-    private readonly googleCalendarService: GoogleCalendarService,
+    private readonly googleEventsService: GoogleEventsService,
+    private readonly googleAclService: GoogleAclService,
   ) {}
 
   // 웹훅 수신 시: Redis 저장 + 타이머 예약 (타이머 리셋)
@@ -92,7 +95,7 @@ export class ScheduleNotificationService {
     await this.cache.del(pendingKey(key));
 
     // 최신 이벤트 조회 (미러 메타데이터 포함)
-    const event = await this.googleCalendarService.getEventById(
+    const event = await this.googleEventsService.getEventById(
       entry.calendarId,
       entry.eventId,
     );
@@ -163,7 +166,7 @@ export class ScheduleNotificationService {
     calendarId: string,
   ): Promise<string | undefined> {
     try {
-      const acl = await this.googleCalendarService.getCalendarAcl(calendarId);
+      const acl = await this.googleAclService.getCalendarAcl(calendarId);
       const writerEmails = acl
         .filter((e) => e.role === 'writer' || e.role === 'owner')
         .map((e) => e.email);

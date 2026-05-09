@@ -10,7 +10,7 @@ import { ResourceService } from '../service/resource.service';
 import { ResourceView } from '../view/resource.view';
 import { ResourceStatus, ResourceType } from '../resource.entity';
 import { UserService } from '../../user/user.service';
-import { GoogleCalendarService } from '../../google/google-calendar.service';
+import { GoogleAclService } from '../../google/calendar/acl.service';
 import { PermissionService } from '../../user/permission.service';
 
 @Controller()
@@ -19,7 +19,7 @@ export class ResourceController {
     private readonly resourceService: ResourceService,
     private readonly userService: UserService,
     private readonly permissionService: PermissionService,
-    private readonly googleCalendarService: GoogleCalendarService,
+    private readonly googleAclService: GoogleAclService,
   ) {}
 
   // 리소스 생성 모달 열기 (어드민 전용)
@@ -197,7 +197,7 @@ export class ResourceController {
     const resource = await this.resourceService.findById(roomId);
     if (!resource) return;
 
-    const acl = await this.googleCalendarService.getCalendarAcl(calendarId);
+    const acl = await this.googleAclService.getCalendarAcl(calendarId);
     const editorEmails = acl
       .filter((e) => e.role === 'writer')
       .map((e) => e.email);
@@ -226,7 +226,7 @@ export class ResourceController {
     const selectedIds =
       values['editors_block']?.['editors_select']?.selected_users ?? [];
 
-    const acl = await this.googleCalendarService.getCalendarAcl(calendarId);
+    const acl = await this.googleAclService.getCalendarAcl(calendarId);
     const currentEditorEmails = acl
       .filter((e) => e.role === 'writer')
       .map((e) => e.email);

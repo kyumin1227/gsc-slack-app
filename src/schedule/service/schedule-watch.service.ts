@@ -2,7 +2,8 @@ import { Injectable, Logger } from '@nestjs/common';
 import { InjectRepository } from '@nestjs/typeorm';
 import { Repository } from 'typeorm';
 import { Schedule, ScheduleStatus } from '../schedule.entity';
-import { GoogleCalendarService } from '../../google/google-calendar.service';
+import { GoogleChannelsService } from '../../google/calendar/channels.service';
+import { GoogleEventsService } from '../../google/calendar/events.service';
 import { randomUUID } from 'crypto';
 
 @Injectable()
@@ -12,7 +13,8 @@ export class ScheduleWatchService {
   constructor(
     @InjectRepository(Schedule)
     private scheduleRepository: Repository<Schedule>,
-    private readonly googleCalendarService: GoogleCalendarService,
+    private readonly googleChannelsService: GoogleChannelsService,
+    private readonly googleEventsService: GoogleEventsService,
   ) {}
 
   // watch 등록 — 멱등 (기존 watch가 있으면 stop 후 재등록)
@@ -20,7 +22,7 @@ export class ScheduleWatchService {
     const schedule = await this.scheduleRepository.findOne({ where: { id } });
     if (!schedule) return;
 
-    if (!this.googleCalendarService.isWatchConfigured()) {
+    if (!this.googleChannelsService.isWatchConfigured()) {
       this.logger.warn(
         'GOOGLE_WEBHOOK_URL not set, skipping watch registration',
       );
@@ -30,7 +32,7 @@ export class ScheduleWatchService {
     // 기존 watch가 있으면 먼저 해제
     if (schedule.watchChannelId && schedule.watchResourceId) {
       try {
-        await this.googleCalendarService.stopCalendarWatch(
+        await this.googleChannelsService.stopCalendarWatch(
           schedule.watchChannelId,
           schedule.watchResourceId,
         );
@@ -45,12 +47,12 @@ export class ScheduleWatchService {
 
     try {
       const { resourceId } =
-        await this.googleCalendarService.watchCalendarEvents(
+        await this.googleChannelsService.watchCalendarEvents(
           schedule.calendarId,
           channelId,
         );
 
-      const syncToken = await this.googleCalendarService.getInitialSyncToken(
+      const syncToken = await this.googleEventsService.getInitialSyncToken(
         schedule.calendarId,
       );
 
@@ -76,7 +78,7 @@ export class ScheduleWatchService {
     if (!schedule?.watchChannelId || !schedule?.watchResourceId) return;
 
     try {
-      await this.googleCalendarService.stopCalendarWatch(
+      await this.googleChannelsService.stopCalendarWatch(
         schedule.watchChannelId,
         schedule.watchResourceId,
       );

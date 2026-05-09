@@ -13,7 +13,7 @@ import { TagService } from '../../tag/tag.service';
 import { TagView } from '../../tag/tag.view';
 import { ChannelService } from '../../channel/channel.service';
 import { UserStatus, User } from '../../user/user.entity';
-import { GoogleCalendarService } from '../../google/google-calendar.service';
+import { GoogleAclService } from '../../google/calendar/acl.service';
 import { CALENDAR_COLORS } from '../../common/constants';
 import { SCHEDULE_PAGE_SIZE } from '../constants';
 
@@ -24,7 +24,7 @@ export class ScheduleSubscriptionController {
     private readonly userService: UserService,
     private readonly tagService: TagService,
     private readonly channelService: ChannelService,
-    private readonly googleCalendarService: GoogleCalendarService,
+    private readonly googleAclService: GoogleAclService,
   ) {}
 
   private async checkActiveUser(
@@ -48,17 +48,20 @@ export class ScheduleSubscriptionController {
   ) {
     const tagFilter = tagIds.length > 0 ? tagIds : undefined;
 
-    const [{ schedules: rawSchedules, total }, displayActiveTags, subscribedIds] =
-      await Promise.all([
-        this.scheduleService.findSchedulesPaginated({
-          page,
-          pageSize: SCHEDULE_PAGE_SIZE,
-          status: 'active',
-          tagIds: tagFilter,
-        }),
-        this.tagService.findDisplayTags(true),
-        this.scheduleService.getSubscribedCalendarIds(userRefreshToken),
-      ]);
+    const [
+      { schedules: rawSchedules, total },
+      displayActiveTags,
+      subscribedIds,
+    ] = await Promise.all([
+      this.scheduleService.findSchedulesPaginated({
+        page,
+        pageSize: SCHEDULE_PAGE_SIZE,
+        status: 'active',
+        tagIds: tagFilter,
+      }),
+      this.tagService.findDisplayTags(true),
+      this.scheduleService.getSubscribedCalendarIds(userRefreshToken),
+    ]);
 
     const totalPages = Math.max(1, Math.ceil(total / SCHEDULE_PAGE_SIZE));
     const safePage = Math.min(page, totalPages - 1);
@@ -81,9 +84,7 @@ export class ScheduleSubscriptionController {
       schedules.map(async (s) => {
         const [channels, acl] = await Promise.all([
           this.channelService.getSlackChannelIds(s.id),
-          this.googleCalendarService
-            .getCalendarAcl(s.calendarId)
-            .catch(() => []),
+          this.googleAclService.getCalendarAcl(s.calendarId).catch(() => []),
         ]);
         const writerEmails = acl
           .filter((e) => e.role === 'writer' || e.role === 'owner')
