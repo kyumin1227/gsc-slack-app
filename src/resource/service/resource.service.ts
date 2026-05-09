@@ -4,7 +4,7 @@ import { Repository } from 'typeorm';
 import { Resource, ResourceStatus, ResourceType } from '../resource.entity';
 import { GoogleCalendarsService } from '../../google/calendar/calendars.service';
 import { GoogleAclService } from '../../google/calendar/acl.service';
-import { BusinessError, ErrorCode } from '../../common/errors';
+import { BusinessError, ResourceErrorCode } from '../../common/errors';
 import { CreateResourceDto } from '../dto/resource.dto';
 
 @Injectable()
@@ -109,7 +109,7 @@ export class ResourceService {
   // 이름 변경 (Google Calendar 제목 동기화 포함)
   async rename(id: number, name: string): Promise<void> {
     const resource = await this.findById(id);
-    if (!resource) throw new BusinessError(ErrorCode.STUDY_ROOM_NOT_FOUND);
+    if (!resource) throw new BusinessError(ResourceErrorCode.STUDY_ROOM_NOT_FOUND);
     await this.googleCalendarsService.updateCalendar(resource.calendarId, name);
     await this.resourceRepository.update(id, { name });
   }
@@ -131,7 +131,7 @@ export class ResourceService {
   // Google Calendar에 편집자 권한 부여
   async addEditor(id: number, email: string): Promise<void> {
     const resource = await this.findById(id);
-    if (!resource) throw new BusinessError(ErrorCode.STUDY_ROOM_NOT_FOUND);
+    if (!resource) throw new BusinessError(ResourceErrorCode.STUDY_ROOM_NOT_FOUND);
     await this.googleAclService.shareCalendar({
       calendarId: resource.calendarId,
       email,
@@ -142,14 +142,14 @@ export class ResourceService {
   // Google Calendar 편집자 권한 회수
   async removeEditor(id: number, email: string): Promise<void> {
     const resource = await this.findById(id);
-    if (!resource) throw new BusinessError(ErrorCode.STUDY_ROOM_NOT_FOUND);
+    if (!resource) throw new BusinessError(ResourceErrorCode.STUDY_ROOM_NOT_FOUND);
     await this.googleAclService.unshareCalendar(resource.calendarId, email);
   }
 
   // Google Calendar 삭제 후 소프트 딜리트
   async remove(id: number): Promise<void> {
     const resource = await this.findById(id);
-    if (!resource) throw new BusinessError(ErrorCode.STUDY_ROOM_NOT_FOUND);
+    if (!resource) throw new BusinessError(ResourceErrorCode.STUDY_ROOM_NOT_FOUND);
     await this.googleCalendarsService.deleteCalendar(resource.calendarId);
     await this.resourceRepository.softDelete(id);
   }

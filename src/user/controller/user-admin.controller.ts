@@ -11,7 +11,7 @@ import { UserAdminService } from '../service/user-admin.service';
 import { UserAdminView } from '../view/user-admin.view';
 import { UserListFilter, UserListModalState } from '../view/user.view';
 import { UserRole, UserStatus } from '../user.entity';
-import { BusinessError, ErrorCode } from '../../common/errors';
+import { BusinessError, UserErrorCode } from '../../common/errors';
 import { StudentClassService } from '../../student-class/student-class.service';
 import { PermissionService } from '../service/permission.service';
 
@@ -257,7 +257,7 @@ export class UserAdminController {
       targetUser.status !== UserStatus.ACTIVE &&
       targetUser.status !== UserStatus.INACTIVE
     ) {
-      throw new BusinessError(ErrorCode.CANNOT_EDIT_PENDING_USER);
+      throw new BusinessError(UserErrorCode.CANNOT_EDIT_PENDING_USER);
     }
 
     await client.views.push({

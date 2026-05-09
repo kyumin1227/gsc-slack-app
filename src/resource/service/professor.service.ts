@@ -1,7 +1,7 @@
 import { Injectable } from '@nestjs/common';
 import { GoogleEventsService } from '../../google/calendar/events.service';
 import { UserService } from '../../user/service/user.service';
-import { BusinessError, ErrorCode } from '../../common/errors';
+import { BusinessError, GoogleErrorCode, UserErrorCode } from '../../common/errors';
 import { ConsultationItem } from '../dto/professor.dto';
 
 @Injectable()
@@ -55,11 +55,11 @@ export class ProfessorService {
   // 교수 상담 예약 취소
   async cancelConsultation(slackId: string, eventId: string): Promise<void> {
     const user = await this.userService.findBySlackId(slackId);
-    if (!user) throw new BusinessError(ErrorCode.USER_NOT_FOUND);
+    if (!user) throw new BusinessError(UserErrorCode.USER_NOT_FOUND);
 
     const refreshToken = this.userService.getDecryptedRefreshToken(user);
     if (!refreshToken)
-      throw new BusinessError(ErrorCode.CALENDAR_WRITER_NO_TOKEN);
+      throw new BusinessError(GoogleErrorCode.CALENDAR_WRITER_NO_TOKEN);
 
     await this.googleEventsService.cancelConsultationEvent(
       refreshToken,

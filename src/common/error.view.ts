@@ -1,8 +1,8 @@
 import type { KnownBlock } from '@slack/types';
-import { BusinessError, ErrorCode } from './errors';
+import { BusinessError } from './errors';
 
 export class ErrorView {
-  static blocks(code: ErrorCode | undefined, message: string): KnownBlock[] {
+  static blocks(code: string | undefined, message: string): KnownBlock[] {
     return [
       {
         type: 'header',

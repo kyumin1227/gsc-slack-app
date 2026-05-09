@@ -1,5 +1,5 @@
 import { Inject, Injectable, Logger } from '@nestjs/common';
-import { BusinessError, ErrorCode } from '../../common/errors';
+import { BusinessError, ScheduleErrorCode } from '../../common/errors';
 import { CACHE_MANAGER } from '@nestjs/cache-manager';
 import type { Cache } from 'cache-manager';
 import { InjectRepository } from '@nestjs/typeorm';
@@ -67,12 +67,12 @@ export class ScheduleRecurringService {
       where: { id: dto.scheduleId },
       relations: ['tags', 'createdBy'],
     });
-    if (!schedule) throw new BusinessError(ErrorCode.SCHEDULE_NOT_FOUND);
+    if (!schedule) throw new BusinessError(ScheduleErrorCode.SCHEDULE_NOT_FOUND);
 
     // 1. 날짜 배열 계산
     const dates = expandRecurringDates(dto);
     if (dates.length === 0)
-      throw new BusinessError(ErrorCode.NO_EVENTS_TO_CREATE);
+      throw new BusinessError(ScheduleErrorCode.NO_EVENTS_TO_CREATE);
 
     // 2. groupId 생성 + Redis suppress 등록 (이벤트 생성 전)
     const groupId = randomUUID();
@@ -223,13 +223,13 @@ export class ScheduleRecurringService {
     const group = await this.recurrenceGroupRepository.findOne({
       where: { id: groupDbId },
     });
-    if (!group) throw new BusinessError(ErrorCode.RECURRENCE_GROUP_NOT_FOUND);
+    if (!group) throw new BusinessError(ScheduleErrorCode.RECURRENCE_GROUP_NOT_FOUND);
 
     const schedule = await this.scheduleRepository.findOne({
       where: { id: group.scheduleId },
       relations: ['tags', 'createdBy'],
     });
-    if (!schedule) throw new BusinessError(ErrorCode.SCHEDULE_NOT_FOUND);
+    if (!schedule) throw new BusinessError(ScheduleErrorCode.SCHEDULE_NOT_FOUND);
 
     await this.cache.set(
       `suppress:group:${group.groupId}`,
@@ -323,13 +323,13 @@ export class ScheduleRecurringService {
     const group = await this.recurrenceGroupRepository.findOne({
       where: { id: groupDbId },
     });
-    if (!group) throw new BusinessError(ErrorCode.RECURRENCE_GROUP_NOT_FOUND);
+    if (!group) throw new BusinessError(ScheduleErrorCode.RECURRENCE_GROUP_NOT_FOUND);
 
     const schedule = await this.scheduleRepository.findOne({
       where: { id: group.scheduleId },
       relations: ['tags', 'createdBy'],
     });
-    if (!schedule) throw new BusinessError(ErrorCode.SCHEDULE_NOT_FOUND);
+    if (!schedule) throw new BusinessError(ScheduleErrorCode.SCHEDULE_NOT_FOUND);
 
     await this.cache.set(
       `suppress:group:${group.groupId}`,
@@ -544,7 +544,7 @@ function jsWeekdayToRRule(day: number): Weekday {
     RRule.SA,
   ];
   const weekday = map[day];
-  if (!weekday) throw new BusinessError(ErrorCode.INVALID_WEEKDAY);
+  if (!weekday) throw new BusinessError(ScheduleErrorCode.INVALID_WEEKDAY);
   return weekday;
 }
 
