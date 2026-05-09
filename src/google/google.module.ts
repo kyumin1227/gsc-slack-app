@@ -5,6 +5,7 @@ import { GoogleCalendarListService } from './calendar/calendar-list.service';
 import { GoogleEventsService } from './calendar/events.service';
 import { GoogleChannelsService } from './calendar/channels.service';
 import { GoogleFreebusyService } from './calendar/freebusy.service';
+import { GoogleOAuthService } from './oauth/google-oauth.service';
 
 const services = [
   GoogleCalendarsService,
@@ -13,6 +14,7 @@ const services = [
   GoogleEventsService,
   GoogleChannelsService,
   GoogleFreebusyService,
+  GoogleOAuthService,
 ];
 
 @Module({
