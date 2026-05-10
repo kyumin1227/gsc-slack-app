@@ -18,7 +18,8 @@ export class BookingTool {
     },
     {
       name: 'get_study_rooms',
-      description: '예약 가능한 스터디룸 목록과 alias를 조회합니다.',
+      description:
+        '예약 가능한 스터디룸 목록과 alias를 조회합니다. roomName이 필요한 툴 호출 전 반드시 먼저 호출하여 정확한 이름을 확인하세요.',
       input_schema: {
         type: 'object' as const,
         properties: {},
