@@ -3,6 +3,13 @@ import { Message } from 'nestjs-slack-bolt';
 import type { SlackEventMiddlewareArgs } from '@slack/bolt';
 import { SlackAiService } from './slack-ai.service';
 
+function toSlackMrkdwn(text: string): string {
+  return text
+    .replace(/\*\*(.+?)\*\*/g, '*$1*')   // **bold** → *bold*
+    .replace(/^#{1,6}\s+(.+)$/gm, '*$1*') // # heading → *heading*
+    .replace(/^- /gm, '• ');              // - list → • list
+}
+
 @Controller()
 export class SlackAiHandler {
   private readonly logger = new Logger(SlackAiHandler.name);
@@ -29,7 +36,7 @@ export class SlackAiHandler {
 
     try {
       const reply = await this.slackAiService.handleMessage(slackId, text);
-      await say(reply);
+      await say({ text: reply, blocks: [{ type: 'section', text: { type: 'mrkdwn', text: toSlackMrkdwn(reply) } }] });
     } catch (e) {
       this.logger.error(`[handleDm] slackId=${slackId} error=${String(e)}`, e instanceof Error ? e.stack : undefined);
       await say(
