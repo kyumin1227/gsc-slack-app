@@ -45,7 +45,7 @@ export class BookingTool {
     {
       name: 'check_room_availability',
       description:
-        '지정한 시간 범위 내 스터디룸별 예약 현황을 조회합니다. 빈 방과 예약된 방, 예약 시간대를 반환합니다.',
+        '지정한 시간 범위 내 스터디룸별 예약 현황을 조회합니다. 빈 방과 예약된 방, 예약 시간대를 반환합니다. roomName을 사용할 경우 반드시 이 툴보다 먼저 get_study_rooms를 호출해 정확한 이름을 확인하세요.',
       input_schema: {
         type: 'object' as const,
         properties: {
@@ -62,7 +62,7 @@ export class BookingTool {
           roomName: {
             type: 'string',
             description:
-              '특정 방만 조회할 경우 방 이름 또는 alias. 생략 시 전체 방 조회.',
+              '특정 방만 조회할 경우 방 이름 또는 alias. 반드시 get_study_rooms로 정확한 이름을 확인 후 입력. 생략 시 전체 방 조회.',
           },
         },
         required: ['startDatetime', 'endDatetime'],

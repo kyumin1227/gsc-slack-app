@@ -71,64 +71,51 @@ export class SlackAiService {
       { role: 'user', content: text },
     ];
 
-    const response = await this.anthropic.messages.create({
-      model: MODEL,
-      max_tokens: 2048,
-      system: systemPrompt,
-      tools,
-      messages,
-    });
-
-    if (response.stop_reason !== 'tool_use') {
-      const replyText = this.extractText(response.content);
-      await this.saveHistory(slackId, [
-        ...messages,
-        { role: 'assistant', content: replyText },
-      ]);
-      return replyText;
-    }
-
-    const toolResults: Anthropic.ToolResultBlockParam[] = [];
-    for (const block of response.content) {
-      if (block.type !== 'tool_use') continue;
-
-      this.logger.log(`[handleMessage] 툴 실행: ${block.name}`);
-      const result = await this.toolsService.execute(
-        block.name,
-        block.input,
-        slackId,
-      );
-
-      toolResults.push({
-        type: 'tool_result',
-        tool_use_id: block.id,
-        content: JSON.stringify(result),
+    const MAX_ROUNDS = 10;
+    for (let round = 0; round < MAX_ROUNDS; round++) {
+      const response = await this.anthropic.messages.create({
+        model: MODEL,
+        max_tokens: 2048,
+        system: systemPrompt,
+        tools,
+        messages,
       });
-    }
 
-    const finalResponse = await this.anthropic.messages.create({
-      model: MODEL,
-      max_tokens: 2048,
-      system: systemPrompt,
-      tools,
-      messages: [
-        ...messages,
+      if (response.stop_reason !== 'tool_use') {
+        const replyText = this.extractText(response.content);
+        await this.saveHistory(slackId, [
+          ...messages,
+          { role: 'assistant', content: replyText },
+        ]);
+        this.logger.log(`[handleMessage] 완료 (${round + 1}라운드) length=${replyText.length}`);
+        return replyText;
+      }
+
+      const toolResults: Anthropic.ToolResultBlockParam[] = [];
+      for (const block of response.content) {
+        if (block.type !== 'tool_use') continue;
+
+        this.logger.log(`[handleMessage] 툴 실행: ${block.name} (${round + 1}라운드)`);
+        const result = await this.toolsService.execute(
+          block.name,
+          block.input,
+          slackId,
+        );
+
+        toolResults.push({
+          type: 'tool_result',
+          tool_use_id: block.id,
+          content: JSON.stringify(result),
+        });
+      }
+
+      messages.push(
         { role: 'assistant', content: response.content },
         { role: 'user', content: toolResults },
-      ],
-    });
+      );
+    }
 
-    const finalText = this.extractText(finalResponse.content);
-    await this.saveHistory(slackId, [
-      ...messages,
-      { role: 'assistant', content: response.content },
-      { role: 'user', content: toolResults },
-      { role: 'assistant', content: finalText },
-    ]);
-    this.logger.log(
-      `[handleMessage] 최종 응답 완료 length=${finalText.length}`,
-    );
-    return finalText;
+    return '요청 처리 중 오류가 발생했습니다. 다시 시도해 주세요.';
   }
 
   private extractText(content: Anthropic.ContentBlock[]): string {
