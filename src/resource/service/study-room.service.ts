@@ -5,11 +5,16 @@ import { GoogleEventsService } from '../../google/calendar/events.service';
 import { GoogleAclService } from '../../google/calendar/acl.service';
 import { GoogleFreebusyService } from '../../google/calendar/freebusy.service';
 import { UserService } from '../../user/service/user.service';
-import { BusinessError, GoogleErrorCode, ResourceErrorCode } from '../../common/errors';
+import {
+  BusinessError,
+  GoogleErrorCode,
+  ResourceErrorCode,
+} from '../../common/errors';
 import {
   BookResourceDto,
   BookingItem,
   ModifyBookingDto,
+  RoomAvailability,
 } from '../dto/study-room.dto';
 import { ResourceService } from './resource.service';
 
@@ -33,7 +38,8 @@ export class StudyRoomService {
       .map((e) => e.email);
 
     const editor = await this.userService.findActiveByEmails(editorEmails);
-    if (!editor) throw new BusinessError(GoogleErrorCode.CALENDAR_WRITER_NOT_FOUND);
+    if (!editor)
+      throw new BusinessError(GoogleErrorCode.CALENDAR_WRITER_NOT_FOUND);
 
     const refreshToken = this.userService.getDecryptedRefreshToken(editor);
     if (!refreshToken)
@@ -45,7 +51,8 @@ export class StudyRoomService {
   // 스터디룸 예약 생성 (시간 충돌 확인 후 Google Calendar 이벤트 생성)
   async bookResource(dto: BookResourceDto): Promise<string> {
     const resource = await this.resourceService.findById(dto.resourceId);
-    if (!resource) throw new BusinessError(ResourceErrorCode.STUDY_ROOM_NOT_FOUND);
+    if (!resource)
+      throw new BusinessError(ResourceErrorCode.STUDY_ROOM_NOT_FOUND);
     if (resource.type === ResourceType.PROFESSOR) {
       throw new BusinessError(ResourceErrorCode.STUDY_ROOM_NOT_FOUND);
     }
@@ -128,7 +135,57 @@ export class StudyRoomService {
       summary: event.summary ?? '(제목 없음)',
       startTime: new Date(event.start!.dateTime!),
       endTime: new Date(event.end!.dateTime!),
+      attendeeEmails: (event.attendees ?? [])
+        .filter((a) => !a.resource)
+        .map((a) => a.email ?? ''),
     }));
+  }
+
+  // 스터디룸 목록 조회
+  async getStudyRooms(): Promise<
+    { id: number; name: string; aliases: string[] }[]
+  > {
+    const rooms = await this.resourceService.findAllByType(
+      ResourceType.STUDY_ROOM,
+    );
+    return rooms.map((r) => ({
+      id: r.id,
+      name: r.name,
+      aliases: r.aliases ?? [],
+    }));
+  }
+
+  // 스터디룸별 예약 현황 조회 (지정 시간 범위 내 예약 목록 반환)
+  async getRoomAvailability(
+    startTime: Date,
+    endTime: Date,
+    roomName?: string,
+  ): Promise<RoomAvailability[]> {
+    const allRooms = await this.resourceService.findAllByType(
+      ResourceType.STUDY_ROOM,
+    );
+    const rooms = roomName
+      ? allRooms.filter(
+          (r) => r.name === roomName || (r.aliases ?? []).includes(roomName),
+        )
+      : allRooms;
+
+    return Promise.all(
+      rooms.map(async (room) => {
+        const events = await this.googleEventsService.listEventsInRange(
+          room.calendarId,
+          startTime,
+          endTime,
+        );
+        const bookings = events
+          .filter((e) => e.status !== 'cancelled' && e.start?.dateTime)
+          .map((e) => ({
+            startTime: e.start!.dateTime!,
+            endTime: e.end!.dateTime!,
+          }));
+        return { roomName: room.name, bookings };
+      }),
+    );
   }
 
   // 예약 취소 (Google Calendar 이벤트 삭제)

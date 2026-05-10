@@ -18,6 +18,7 @@ import { ResourceModule } from './resource/resource.module';
 import { httpReceiver } from './slack-receiver';
 import { slackErrorMiddleware } from './common/slack-error.middleware';
 import { CleaningModule } from './cleaning/cleaning.module';
+import { SlackAiModule } from './slack-ai/slack-ai.module';
 
 @Module({
   imports: [
@@ -71,6 +72,7 @@ import { CleaningModule } from './cleaning/cleaning.module';
     ChannelModule,
     ResourceModule,
     CleaningModule,
+    SlackAiModule,
   ],
   controllers: [AppController],
   providers: [AppService],

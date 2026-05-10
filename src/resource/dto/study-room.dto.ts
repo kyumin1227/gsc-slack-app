@@ -25,4 +25,16 @@ export interface BookingItem {
   summary: string;
   startTime: Date;
   endTime: Date;
+  attendeeEmails: string[];
+}
+
+// 스터디룸별 예약 현황
+export interface RoomBooking {
+  startTime: string;
+  endTime: string;
+}
+
+export interface RoomAvailability {
+  roomName: string;
+  bookings: RoomBooking[];
 }
