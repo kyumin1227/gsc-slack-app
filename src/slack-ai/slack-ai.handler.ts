@@ -31,6 +31,7 @@ export class SlackAiHandler {
       const reply = await this.slackAiService.handleMessage(slackId, text);
       await say(reply);
     } catch (e) {
+      this.logger.error(`[handleDm] slackId=${slackId} error=${String(e)}`, e instanceof Error ? e.stack : undefined);
       await say(
         '죄송합니다. 요청 처리 중 오류가 발생했습니다. 잠시 후 다시 시도해 주세요.',
       );

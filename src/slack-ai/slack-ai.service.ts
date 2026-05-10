@@ -52,7 +52,12 @@ export class SlackAiService {
       (await this.cache.get<Anthropic.MessageParam[]>(
         this.historyKey(slackId),
       )) ?? [];
-    return history.slice(-MAX_HISTORY_MESSAGES);
+    const sliced = history.slice(-MAX_HISTORY_MESSAGES);
+    // 슬라이스로 tool_use/tool_result 쌍이 끊기면 첫 번째 일반 user 텍스트 메시지부터 시작하도록 앞부분을 제거
+    const firstCleanIdx = sliced.findIndex(
+      (m) => m.role === 'user' && typeof m.content === 'string',
+    );
+    return firstCleanIdx > 0 ? sliced.slice(firstCleanIdx) : sliced;
   }
 
   private async saveHistory(
