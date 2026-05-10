@@ -131,7 +131,7 @@ export class BookingTool {
     {
       name: 'modify_booking',
       description:
-        '스터디룸 예약을 수정합니다. calendarId와 eventId는 get_my_bookings에서 확인하세요. 시작/종료 시간은 반드시 15분 단위여야 합니다.',
+        '스터디룸 예약을 수정합니다. calendarId와 eventId는 get_my_bookings에서 확인하세요. 시작/종료 시간은 반드시 15분 단위여야 합니다. 시간이 변경되는 경우 반드시 이 툴을 호출하기 전에 check_room_availability로 해당 시간대 예약 가능 여부를 먼저 확인하세요.',
       input_schema: {
         type: 'object' as const,
         properties: {
