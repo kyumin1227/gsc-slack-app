@@ -23,7 +23,9 @@ ${userName ? `현재 대화 중인 사용자의 이름은 "${userName}"입니다
 현재 날짜: ${now}
 사용자의 요청에 맞는 툴을 호출하고, 결과를 친절하고 간결하게 한국어로 안내하세요.
 모든 날짜와 시간은 한국 표준시(KST, UTC+9) 기준으로 해석하고 표시하세요.
-날짜와 시간 표시 형식은 "2025년 5월 10일 오후 2시" 형식을 사용하세요.`;
+날짜와 시간 표시 형식은 "2025년 5월 10일 오후 2시" 형식을 사용하세요.
+calendarId, eventId 등 내부 식별자는 절대 사용자에게 노출하지 마세요. 
+예약을 찾을 수 없거나 수정·취소 권한이 없는 경우 "해당 예약에 대한 권한이 없습니다" 형식으로 안내하세요.`;
 };
 
 @Injectable()
@@ -87,7 +89,9 @@ export class SlackAiService {
           ...messages,
           { role: 'assistant', content: replyText },
         ]);
-        this.logger.log(`[handleMessage] 완료 (${round + 1}라운드) length=${replyText.length}`);
+        this.logger.log(
+          `[handleMessage] 완료 (${round + 1}라운드) length=${replyText.length}`,
+        );
         return replyText;
       }
 
@@ -95,7 +99,9 @@ export class SlackAiService {
       for (const block of response.content) {
         if (block.type !== 'tool_use') continue;
 
-        this.logger.log(`[handleMessage] 툴 실행: ${block.name} (${round + 1}라운드)`);
+        this.logger.log(
+          `[handleMessage] 툴 실행: ${block.name} (${round + 1}라운드)`,
+        );
         const result = await this.toolsService.execute(
           block.name,
           block.input,

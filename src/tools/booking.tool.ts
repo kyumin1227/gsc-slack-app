@@ -109,6 +109,73 @@ export class BookingTool {
         ],
       },
     },
+    {
+      name: 'cancel_booking',
+      description:
+        '스터디룸 예약을 취소합니다. calendarId와 eventId는 get_my_bookings에서 확인하세요.',
+      input_schema: {
+        type: 'object' as const,
+        properties: {
+          calendarId: {
+            type: 'string',
+            description: 'get_my_bookings에서 반환된 calendarId',
+          },
+          eventId: {
+            type: 'string',
+            description: 'get_my_bookings에서 반환된 eventId',
+          },
+        },
+        required: ['calendarId', 'eventId'],
+      },
+    },
+    {
+      name: 'modify_booking',
+      description:
+        '스터디룸 예약을 수정합니다. calendarId와 eventId는 get_my_bookings에서 확인하세요. 시작/종료 시간은 반드시 15분 단위여야 합니다.',
+      input_schema: {
+        type: 'object' as const,
+        properties: {
+          calendarId: {
+            type: 'string',
+            description: 'get_my_bookings에서 반환된 calendarId',
+          },
+          eventId: {
+            type: 'string',
+            description: 'get_my_bookings에서 반환된 eventId',
+          },
+          title: {
+            type: 'string',
+            description: '예약 목적',
+          },
+          startDatetime: {
+            type: 'string',
+            description: '수정할 시작 일시 (ISO 8601, 15분 단위)',
+          },
+          endDatetime: {
+            type: 'string',
+            description: '수정할 종료 일시 (ISO 8601, 15분 단위)',
+          },
+          attendeeSlackIds: {
+            type: 'array',
+            items: { type: 'string' },
+            description: '수정할 참석자 슬랙 ID 목록 (예약자 본인 포함)',
+          },
+          resourceName: {
+            type: 'string',
+            description: '스터디룸 이름 (get_my_bookings의 resourceName)',
+          },
+        },
+        required: [
+          'calendarId',
+          'eventId',
+          'title',
+          'startDatetime',
+          'endDatetime',
+          'attendeeSlackIds',
+          'resourceName',
+        ],
+      },
+    },
   ];
 
   constructor(
@@ -136,6 +203,8 @@ export class BookingTool {
             .map((u) => ({ name: u.name, slackId: u.slackId, code: u.code }));
 
           return {
+            calendarId: b.calendarId,
+            eventId: b.eventId,
             resourceName: b.resourceName,
             summary: b.summary,
             startTime: toKSTString(b.startTime),
@@ -208,6 +277,55 @@ export class BookingTool {
         attendeeSlackIds,
       });
       return { success: true, eventId };
+    }
+
+    if (name === 'cancel_booking') {
+      const { calendarId, eventId } = input as {
+        calendarId: string;
+        eventId: string;
+      };
+      await this.studyRoomService.cancelBooking(calendarId, eventId);
+      return { success: true };
+    }
+
+    if (name === 'modify_booking') {
+      const {
+        calendarId,
+        eventId,
+        title,
+        startDatetime,
+        endDatetime,
+        attendeeSlackIds,
+        resourceName,
+      } = input as {
+        calendarId: string;
+        eventId: string;
+        title: string;
+        startDatetime: string;
+        endDatetime: string;
+        attendeeSlackIds: string[];
+        resourceName: string;
+      };
+      const start = new Date(startDatetime);
+      const end = new Date(endDatetime);
+      if (start.getMinutes() % 15 !== 0 || end.getMinutes() % 15 !== 0) {
+        return {
+          success: false,
+          error: '시작 및 종료 시간은 15분 단위여야 합니다.',
+        };
+      }
+      const result = await this.studyRoomService.modifyBooking(
+        calendarId,
+        eventId,
+        {
+          title,
+          startTime: start,
+          endTime: end,
+          attendeeSlackIds,
+          resourceName,
+        },
+      );
+      return { success: true, result };
     }
 
     return null;
