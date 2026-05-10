@@ -14,7 +14,6 @@ export interface ModifyBookingDto {
   startTime: Date;
   endTime: Date;
   attendeeSlackIds: string[];
-  resourceName: string;
 }
 
 // 내 예약 목록 항목

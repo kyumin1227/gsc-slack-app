@@ -297,7 +297,6 @@ export class StudyRoomController {
         startTime,
         endTime,
         attendeeSlackIds,
-        resourceName: roomName,
       },
     );
 

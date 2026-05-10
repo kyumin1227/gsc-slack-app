@@ -32,7 +32,16 @@ export class StudyRoomService {
 
   // 캘린더 ACL에서 활성 편집자의 refresh token 조회
   private async getEditorRefreshToken(calendarId: string): Promise<string> {
-    const acl = await this.googleAclService.getCalendarAcl(calendarId);
+    let acl: Awaited<ReturnType<typeof this.googleAclService.getCalendarAcl>>;
+    try {
+      acl = await this.googleAclService.getCalendarAcl(calendarId);
+    } catch (e) {
+      const status = (e as any)?.response?.status ?? (e as any)?.code;
+      if (status === 404 || status === 410) {
+        throw new BusinessError(ResourceErrorCode.STUDY_ROOM_NOT_FOUND);
+      }
+      throw e;
+    }
     const editorEmails = acl
       .filter((e) => e.role === 'writer' || e.role === 'owner')
       .map((e) => e.email);
@@ -190,12 +199,30 @@ export class StudyRoomService {
 
   // 예약 취소 (Google Calendar 이벤트 삭제)
   async cancelBooking(calendarId: string, eventId: string): Promise<void> {
-    const refreshToken = await this.getEditorRefreshToken(calendarId);
-    await this.googleEventsService.deleteEvent(
+    const resource = await this.resourceService.findByCalendarId(calendarId);
+    if (!resource)
+      throw new BusinessError(ResourceErrorCode.STUDY_ROOM_NOT_FOUND);
+
+    const event = await this.googleEventsService.getEventById(
       calendarId,
-      refreshToken,
       eventId,
     );
+    if (!event) throw new BusinessError(ResourceErrorCode.BOOKING_NOT_FOUND);
+
+    const refreshToken = await this.getEditorRefreshToken(calendarId);
+    try {
+      await this.googleEventsService.deleteEvent(
+        calendarId,
+        refreshToken,
+        eventId,
+      );
+    } catch (e) {
+      const status = (e as any)?.response?.status ?? (e as any)?.code;
+      if (status === 404 || status === 410) {
+        throw new BusinessError(ResourceErrorCode.BOOKING_NOT_FOUND);
+      }
+      throw e;
+    }
   }
 
   // 예약 수정 (참석자 없으면 취소, 있으면 이벤트 업데이트)
@@ -208,6 +235,16 @@ export class StudyRoomService {
       await this.cancelBooking(calendarId, eventId);
       return 'cancelled';
     }
+
+    const resource = await this.resourceService.findByCalendarId(calendarId);
+    if (!resource)
+      throw new BusinessError(ResourceErrorCode.STUDY_ROOM_NOT_FOUND);
+
+    const event = await this.googleEventsService.getEventById(
+      calendarId,
+      eventId,
+    );
+    if (!event) throw new BusinessError(ResourceErrorCode.BOOKING_NOT_FOUND);
 
     const refreshToken = await this.getEditorRefreshToken(calendarId);
 
@@ -248,7 +285,7 @@ export class StudyRoomService {
         startTime: dto.startTime,
         endTime: dto.endTime,
         attendeeEmails,
-        location: dto.resourceName,
+        location: resource.name,
         description,
       },
     );

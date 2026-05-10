@@ -72,6 +72,11 @@ export class ResourceService {
     return this.resourceRepository.findOne({ where: { id } });
   }
 
+  // calendarId로 단건 조회
+  async findByCalendarId(calendarId: string): Promise<Resource | null> {
+    return this.resourceRepository.findOne({ where: { calendarId } });
+  }
+
   // 기본 공간 조회 (alias 미매핑 이벤트 미러링 대상)
   async findDefault(): Promise<Resource | null> {
     return this.resourceRepository.findOne({ where: { isDefault: true } });

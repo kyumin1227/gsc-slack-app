@@ -71,7 +71,7 @@ export class BookingTool {
     {
       name: 'book_room',
       description:
-        '스터디룸을 예약합니다. 예약 전 반드시 check_room_availability로 시간대를 확인하세요. 참석자 slackId는 find_user로 조회하세요.',
+        '스터디룸을 예약합니다. roomId는 반드시 get_study_rooms로 정확한 ID를 확인하세요. 예약 전 반드시 check_room_availability로 시간대를 확인하세요. 참석자 slackId는 find_user로 조회하세요.',
       input_schema: {
         type: 'object' as const,
         properties: {
@@ -131,7 +131,7 @@ export class BookingTool {
     {
       name: 'modify_booking',
       description:
-        '스터디룸 예약을 수정합니다. calendarId와 eventId는 get_my_bookings에서 확인하세요. 시작/종료 시간은 반드시 15분 단위여야 합니다.',
+        '스터디룸 예약을 수정합니다. calendarId와 eventId는 get_my_bookings에서 확인하세요. newRoomId를 전달하면 기존 예약을 취소하고 새 방으로 재예약합니다, 반드시 get_study_rooms로 정확한 ID를 확인하세요. 시작/종료 시간은 반드시 15분 단위여야 합니다. 방 또는 시간이 변경되는 경우 반드시 이 툴을 호출하기 전에 check_room_availability로 해당 시간대 예약 가능 여부를 먼저 확인하세요. attendeeSlackIds에 빈 배열을 전달하면 예약이 취소됩니다.',
       input_schema: {
         type: 'object' as const,
         properties: {
@@ -158,11 +158,13 @@ export class BookingTool {
           attendeeSlackIds: {
             type: 'array',
             items: { type: 'string' },
-            description: '수정할 참석자 슬랙 ID 목록 (예약자 본인 포함)',
+            description:
+              '수정할 참석자 슬랙 ID 목록 (예약자 본인 포함). 빈 배열을 전달하면 예약이 취소됩니다.',
           },
-          resourceName: {
-            type: 'string',
-            description: '스터디룸 이름 (get_my_bookings의 resourceName)',
+          newRoomId: {
+            type: 'number',
+            description:
+              '방을 변경할 경우 새 방의 ID (get_study_rooms로 확인). 생략하면 같은 방에서 수정.',
           },
         },
         required: [
@@ -172,7 +174,6 @@ export class BookingTool {
           'startDatetime',
           'endDatetime',
           'attendeeSlackIds',
-          'resourceName',
         ],
       },
     },
@@ -296,7 +297,7 @@ export class BookingTool {
         startDatetime,
         endDatetime,
         attendeeSlackIds,
-        resourceName,
+        newRoomId,
       } = input as {
         calendarId: string;
         eventId: string;
@@ -304,7 +305,7 @@ export class BookingTool {
         startDatetime: string;
         endDatetime: string;
         attendeeSlackIds: string[];
-        resourceName: string;
+        newRoomId?: number;
       };
       const start = new Date(startDatetime);
       const end = new Date(endDatetime);
@@ -314,6 +315,20 @@ export class BookingTool {
           error: '시작 및 종료 시간은 15분 단위여야 합니다.',
         };
       }
+
+      if (newRoomId !== undefined) {
+        const newEventId = await this.studyRoomService.bookResource({
+          resourceId: newRoomId,
+          title,
+          startTime: start,
+          endTime: end,
+          bookerSlackId: slackId,
+          attendeeSlackIds,
+        });
+        await this.studyRoomService.cancelBooking(calendarId, eventId);
+        return { success: true, result: 'room-changed', eventId: newEventId };
+      }
+
       const result = await this.studyRoomService.modifyBooking(
         calendarId,
         eventId,
@@ -322,7 +337,6 @@ export class BookingTool {
           startTime: start,
           endTime: end,
           attendeeSlackIds,
-          resourceName,
         },
       );
       return { success: true, result };
