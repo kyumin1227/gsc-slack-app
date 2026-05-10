@@ -46,6 +46,7 @@ resource "aws_ecs_task_definition" "app" {
         { name = "DB_DATABASE", valueFrom = "${var.secrets_arn}:DB_DATABASE::" },
         { name = "ENCRYPTION_SECRET", valueFrom = "${var.secrets_arn}:ENCRYPTION_SECRET::" },
         { name = "REDIS_PASSWORD", valueFrom = "${var.secrets_arn}:REDIS_PASSWORD::" },
+        { name = "ANTHROPIC_API_KEY", valueFrom = "${var.secrets_arn}:ANTHROPIC_API_KEY::" },
       ]
 
       environment = [
