@@ -31,9 +31,9 @@ export class AppController {
     );
   }
 
-  // URL 버튼처럼 ack만 필요한 액션 핸들러
-  @Action(/view-calendar/)
-  async handleViewCalendar({
+  // 외부 URL 버튼 공통 ack 핸들러 — action_id에 `:open-url`이 포함된 모든 버튼
+  @Action(/open-url/)
+  async ackExternalUrlButtons({
     ack,
   }: SlackActionMiddlewareArgs<BlockAction> & AllMiddlewareArgs) {
     await ack();

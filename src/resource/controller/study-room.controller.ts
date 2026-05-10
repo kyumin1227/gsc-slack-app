@@ -1,4 +1,4 @@
-import { Controller, Logger } from '@nestjs/common';
+import { Controller } from '@nestjs/common';
 import { Action, View } from 'nestjs-slack-bolt';
 import type {
   AllMiddlewareArgs,
@@ -19,8 +19,6 @@ import { withModalFeedback } from '../../common/modal-feedback.util';
 
 @Controller()
 export class StudyRoomController {
-  private readonly logger = new Logger(StudyRoomController.name);
-
   constructor(
     private readonly resourceService: ResourceService,
     private readonly studyRoomService: StudyRoomService,
@@ -357,13 +355,5 @@ export class StudyRoomController {
       trigger_id: body.trigger_id,
       view: ResourceView.myBookingsModal(bookings, consultations),
     });
-  }
-
-  // URL 링크 버튼 — Slack 경고 방지용 ack
-  @Action(/^study-room:action:view-calendar$/)
-  async ackCalendarLinkButtons({
-    ack,
-  }: SlackActionMiddlewareArgs<BlockAction> & AllMiddlewareArgs) {
-    await ack();
   }
 }

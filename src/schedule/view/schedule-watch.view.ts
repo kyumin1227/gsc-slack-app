@@ -240,7 +240,7 @@ export function buildCalendarNotificationBlocks(
                   emoji: true,
                 },
                 url: event.htmlLink,
-                action_id: 'notification:open-calendar',
+                action_id: 'notification:open-url',
               },
             ],
           },

@@ -150,7 +150,7 @@ export class TagView {
               type: 'button',
               text: { type: 'plain_text', text: '일정 보기 ❐' },
               url: tag.calendarUrl,
-              action_id: 'tag:schedule:open-calendar',
+              action_id: 'tag:schedule:open-url',
             },
           },
           { type: 'divider' },
