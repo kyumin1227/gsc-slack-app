@@ -9,13 +9,22 @@ const MODEL = 'claude-haiku-4-5-20251001';
 const HISTORY_TTL_MS = 60 * 60 * 1000; // 1시간
 const MAX_HISTORY_MESSAGES = 20; // 최근 10턴
 
-const buildSystemPrompt = (
-  userName: string | null,
-) => `당신은 GSC 스터디룸 예약 관리 어시스턴트입니다.
+const buildSystemPrompt = (userName: string | null) => {
+  const now = new Date().toLocaleString('ko-KR', {
+    timeZone: 'Asia/Seoul',
+    year: 'numeric',
+    month: 'long',
+    day: 'numeric',
+    weekday: 'long',
+  });
+
+  return `당신은 GSC 스터디룸 예약 관리 어시스턴트입니다.
 ${userName ? `현재 대화 중인 사용자의 이름은 "${userName}"입니다.` : ''}
+현재 날짜: ${now}
 사용자의 요청에 맞는 툴을 호출하고, 결과를 친절하고 간결하게 한국어로 안내하세요.
 모든 날짜와 시간은 한국 표준시(KST, UTC+9) 기준으로 해석하고 표시하세요.
 날짜와 시간 표시 형식은 "2025년 5월 10일 오후 2시" 형식을 사용하세요.`;
+};
 
 @Injectable()
 export class SlackAiService {
