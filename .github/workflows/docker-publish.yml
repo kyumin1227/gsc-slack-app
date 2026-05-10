@@ -86,9 +86,19 @@ jobs:
 
       - name: Force new ECS deployment
         run: |
+          TASK_DEF_ARN=$(aws ecs describe-task-definition \
+            --task-definition bannote-prod-task \
+            --query 'taskDefinition.taskDefinitionArn' \
+            --output text \
+            --region ap-northeast-2)
+          if [ -z "$TASK_DEF_ARN" ]; then
+            echo "Failed to retrieve task definition ARN" >&2
+            exit 1
+          fi
           aws ecs update-service \
             --cluster bannote-prod-cluster \
             --service bannote-prod-service \
+            --task-definition "$TASK_DEF_ARN" \
             --force-new-deployment \
             --region ap-northeast-2
 
