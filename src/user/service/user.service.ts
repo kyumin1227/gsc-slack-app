@@ -158,4 +158,19 @@ export class UserService {
   async deleteViewId(slackUserId: string): Promise<void> {
     this.viewIdStore.delete(slackUserId);
   }
+
+  // 이름, 학번, 이메일로 ACTIVE 유저 검색
+  async findActiveByKeyword(
+    keyword: string,
+  ): Promise<Pick<User, 'slackId' | 'name' | 'code' | 'email'>[]> {
+    return this.userRepository
+      .createQueryBuilder('user')
+      .select(['user.slackId', 'user.name', 'user.code', 'user.email'])
+      .where('user.status = :status', { status: UserStatus.ACTIVE })
+      .andWhere(
+        '(user.name LIKE :keyword OR user.code LIKE :keyword OR user.email LIKE :keyword)',
+        { keyword: `%${keyword}%` },
+      )
+      .getMany();
+  }
 }

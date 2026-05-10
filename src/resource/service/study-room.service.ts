@@ -14,6 +14,7 @@ import {
   BookResourceDto,
   BookingItem,
   ModifyBookingDto,
+  RoomAvailability,
 } from '../dto/study-room.dto';
 import { ResourceService } from './resource.service';
 
@@ -138,6 +139,53 @@ export class StudyRoomService {
         .filter((a) => !a.resource)
         .map((a) => a.email ?? ''),
     }));
+  }
+
+  // 스터디룸 목록 조회
+  async getStudyRooms(): Promise<
+    { id: number; name: string; aliases: string[] }[]
+  > {
+    const rooms = await this.resourceService.findAllByType(
+      ResourceType.STUDY_ROOM,
+    );
+    return rooms.map((r) => ({
+      id: r.id,
+      name: r.name,
+      aliases: r.aliases ?? [],
+    }));
+  }
+
+  // 스터디룸별 예약 현황 조회 (지정 시간 범위 내 예약 목록 반환)
+  async getRoomAvailability(
+    startTime: Date,
+    endTime: Date,
+    roomName?: string,
+  ): Promise<RoomAvailability[]> {
+    const allRooms = await this.resourceService.findAllByType(
+      ResourceType.STUDY_ROOM,
+    );
+    const rooms = roomName
+      ? allRooms.filter(
+          (r) => r.name === roomName || (r.aliases ?? []).includes(roomName),
+        )
+      : allRooms;
+
+    return Promise.all(
+      rooms.map(async (room) => {
+        const events = await this.googleEventsService.listEventsInRange(
+          room.calendarId,
+          startTime,
+          endTime,
+        );
+        const bookings = events
+          .filter((e) => e.status !== 'cancelled' && e.start?.dateTime)
+          .map((e) => ({
+            startTime: e.start!.dateTime!,
+            endTime: e.end!.dateTime!,
+          }));
+        return { roomName: room.name, bookings };
+      }),
+    );
   }
 
   // 예약 취소 (Google Calendar 이벤트 삭제)
