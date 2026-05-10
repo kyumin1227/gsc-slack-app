@@ -68,6 +68,47 @@ export class BookingTool {
         required: ['startDatetime', 'endDatetime'],
       },
     },
+    {
+      name: 'book_room',
+      description:
+        '스터디룸을 예약합니다. 예약 전 반드시 check_room_availability로 시간대를 확인하세요. 참석자 slackId는 find_user로 조회하세요.',
+      input_schema: {
+        type: 'object' as const,
+        properties: {
+          roomId: {
+            type: 'number',
+            description: 'get_study_rooms에서 반환된 방 ID',
+          },
+          title: {
+            type: 'string',
+            description: '예약 목적 (예: 스터디, 팀 프로젝트 회의)',
+          },
+          startDatetime: {
+            type: 'string',
+            description:
+              '예약 시작 일시 (ISO 8601, 반드시 15분 단위, 예: 2025-05-10T14:00:00+09:00, 2025-05-10T14:15:00+09:00)',
+          },
+          endDatetime: {
+            type: 'string',
+            description:
+              '예약 종료 일시 (ISO 8601, 반드시 15분 단위, 예: 2025-05-10T16:00:00+09:00, 2025-05-10T15:45:00+09:00)',
+          },
+          attendeeSlackIds: {
+            type: 'array',
+            items: { type: 'string' },
+            description:
+              '참석자 슬랙 ID 목록 (예약자 본인 제외, 혼자 예약 시 빈 배열 전달)',
+          },
+        },
+        required: [
+          'roomId',
+          'title',
+          'startDatetime',
+          'endDatetime',
+          'attendeeSlackIds',
+        ],
+      },
+    },
   ];
 
   constructor(
@@ -138,6 +179,35 @@ export class BookingTool {
           endTime: toKSTString(new Date(b.endTime)),
         })),
       }));
+    }
+
+    if (name === 'book_room') {
+      const { roomId, title, startDatetime, endDatetime, attendeeSlackIds } =
+        input as {
+          roomId: number;
+          title: string;
+          startDatetime: string;
+          endDatetime: string;
+          attendeeSlackIds: string[];
+        };
+      const start = new Date(startDatetime);
+      const end = new Date(endDatetime);
+      if (start.getMinutes() % 15 !== 0 || end.getMinutes() % 15 !== 0) {
+        return {
+          success: false,
+          error: '시작 및 종료 시간은 15분 단위여야 합니다.',
+        };
+      }
+
+      const eventId = await this.studyRoomService.bookResource({
+        resourceId: roomId,
+        title,
+        startTime: start,
+        endTime: end,
+        bookerSlackId: slackId,
+        attendeeSlackIds,
+      });
+      return { success: true, eventId };
     }
 
     return null;

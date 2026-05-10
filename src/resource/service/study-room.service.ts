@@ -142,11 +142,17 @@ export class StudyRoomService {
   }
 
   // 스터디룸 목록 조회
-  async getStudyRooms(): Promise<{ name: string; aliases: string[] }[]> {
+  async getStudyRooms(): Promise<
+    { id: number; name: string; aliases: string[] }[]
+  > {
     const rooms = await this.resourceService.findAllByType(
       ResourceType.STUDY_ROOM,
     );
-    return rooms.map((r) => ({ name: r.name, aliases: r.aliases ?? [] }));
+    return rooms.map((r) => ({
+      id: r.id,
+      name: r.name,
+      aliases: r.aliases ?? [],
+    }));
   }
 
   // 스터디룸별 예약 현황 조회 (지정 시간 범위 내 예약 목록 반환)
