@@ -209,6 +209,10 @@ export class StudyRoomService {
       return 'cancelled';
     }
 
+    const resource = await this.resourceService.findByCalendarId(calendarId);
+    if (!resource)
+      throw new BusinessError(ResourceErrorCode.STUDY_ROOM_NOT_FOUND);
+
     const refreshToken = await this.getEditorRefreshToken(calendarId);
 
     const isBusy = await this.googleFreebusyService.isTimeSlotBusyExcluding(
@@ -248,7 +252,7 @@ export class StudyRoomService {
         startTime: dto.startTime,
         endTime: dto.endTime,
         attendeeEmails,
-        location: dto.resourceName,
+        location: resource.name,
         description,
       },
     );

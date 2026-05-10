@@ -158,11 +158,8 @@ export class BookingTool {
           attendeeSlackIds: {
             type: 'array',
             items: { type: 'string' },
-            description: '수정할 참석자 슬랙 ID 목록 (예약자 본인 포함)',
-          },
-          resourceName: {
-            type: 'string',
-            description: '스터디룸 이름 (get_my_bookings의 resourceName)',
+            description:
+              '수정할 참석자 슬랙 ID 목록 (예약자 본인 포함). 빈 배열을 전달하면 예약이 취소됩니다.',
           },
         },
         required: [
@@ -172,7 +169,6 @@ export class BookingTool {
           'startDatetime',
           'endDatetime',
           'attendeeSlackIds',
-          'resourceName',
         ],
       },
     },
@@ -296,7 +292,6 @@ export class BookingTool {
         startDatetime,
         endDatetime,
         attendeeSlackIds,
-        resourceName,
       } = input as {
         calendarId: string;
         eventId: string;
@@ -304,7 +299,6 @@ export class BookingTool {
         startDatetime: string;
         endDatetime: string;
         attendeeSlackIds: string[];
-        resourceName: string;
       };
       const start = new Date(startDatetime);
       const end = new Date(endDatetime);
@@ -322,7 +316,6 @@ export class BookingTool {
           startTime: start,
           endTime: end,
           attendeeSlackIds,
-          resourceName,
         },
       );
       return { success: true, result };
