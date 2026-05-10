@@ -17,6 +17,22 @@ export class BookingTool {
       },
     },
     {
+      name: 'find_user',
+      description:
+        '이름, 학번, 이메일로 ACTIVE 유저를 검색합니다. 여러 키워드를 한 번에 전달해 참석자를 일괄 조회할 수 있습니다.',
+      input_schema: {
+        type: 'object' as const,
+        properties: {
+          keywords: {
+            type: 'array',
+            items: { type: 'string' },
+            description: '검색할 이름, 학번, 이메일 목록 (부분 일치)',
+          },
+        },
+        required: ['keywords'],
+      },
+    },
+    {
       name: 'get_study_rooms',
       description:
         '예약 가능한 스터디룸 목록과 alias를 조회합니다. roomName이 필요한 툴 호출 전 반드시 먼저 호출하여 정확한 이름을 확인하세요.',
@@ -88,6 +104,17 @@ export class BookingTool {
         }),
       );
     }
+    if (name === 'find_user') {
+      const { keywords } = input as { keywords: string[] };
+      const results = await Promise.all(
+        keywords.map(async (keyword) => ({
+          keyword,
+          users: await this.userService.findActiveByKeyword(keyword),
+        })),
+      );
+      return results;
+    }
+
     if (name === 'get_study_rooms') {
       return this.studyRoomService.getStudyRooms();
     }
