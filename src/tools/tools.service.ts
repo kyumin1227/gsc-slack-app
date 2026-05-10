@@ -1,6 +1,7 @@
 import { Injectable } from '@nestjs/common';
 import type Anthropic from '@anthropic-ai/sdk';
 import { BookingTool } from './booking.tool';
+import { BusinessError } from '../common/errors/base.error';
 
 @Injectable()
 export class ToolsService {
@@ -19,10 +20,16 @@ export class ToolsService {
     input: unknown,
     slackId: string,
   ): Promise<unknown> {
-    for (const tool of this.tools) {
-      const result = await tool.execute(name, input, slackId);
-      if (result !== null) return result;
+    try {
+      for (const tool of this.tools) {
+        const result = await tool.execute(name, input, slackId);
+        if (result !== null) return result;
+      }
+      return { error: `알 수 없는 툴: ${name}` };
+    } catch (e) {
+      if (e instanceof BusinessError)
+        return { success: false, error: e.message };
+      throw e;
     }
-    return { error: `알 수 없는 툴: ${name}` };
   }
 }
