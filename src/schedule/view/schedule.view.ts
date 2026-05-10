@@ -629,7 +629,7 @@ export class ScheduleView {
                   type: 'button',
                   text: { type: 'plain_text', text: '일정 보기 ❐' },
                   url: calendarUrl,
-                  action_id: `schedule:subscribe:view-calendar:${schedule.id}`,
+                  action_id: `schedule:subscribe:open-url:${schedule.id}`,
                 },
               ],
             },
