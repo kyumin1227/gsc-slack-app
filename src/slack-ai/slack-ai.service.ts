@@ -1,8 +1,11 @@
-import { Injectable, Logger } from '@nestjs/common';
+import { Inject, Injectable, Logger } from '@nestjs/common';
 import Anthropic from '@anthropic-ai/sdk';
+import { CACHE_MANAGER } from '@nestjs/cache-manager';
+import type { Cache } from 'cache-manager';
 import { ToolsService } from '../tools/tools.service';
 
 const MODEL = 'claude-haiku-4-5-20251001';
+const HISTORY_TTL_MS = 60 * 60 * 1000; // 1시간
 
 const SYSTEM_PROMPT = `당신은 GSC 스터디룸 예약 관리 어시스턴트입니다.
 사용자의 요청에 맞는 툴을 호출하고, 결과를 친절하고 간결하게 한국어로 안내하세요.
@@ -16,11 +19,28 @@ export class SlackAiService {
     apiKey: process.env.ANTHROPIC_API_KEY,
   });
 
-  constructor(private readonly toolsService: ToolsService) {}
+  constructor(
+    private readonly toolsService: ToolsService,
+    @Inject(CACHE_MANAGER) private readonly cache: Cache,
+  ) {}
+
+  private historyKey(slackId: string): string {
+    return `slack-ai:history:${slackId}`;
+  }
+
+  private async loadHistory(slackId: string): Promise<Anthropic.MessageParam[]> {
+    return (await this.cache.get<Anthropic.MessageParam[]>(this.historyKey(slackId))) ?? [];
+  }
+
+  private async saveHistory(slackId: string, messages: Anthropic.MessageParam[]): Promise<void> {
+    await this.cache.set(this.historyKey(slackId), messages, HISTORY_TTL_MS);
+  }
 
   async handleMessage(slackId: string, text: string): Promise<string> {
     const tools = this.toolsService.getDefinitions();
+    const history = await this.loadHistory(slackId);
     const messages: Anthropic.MessageParam[] = [
+      ...history,
       { role: 'user', content: text },
     ];
 
@@ -33,7 +53,12 @@ export class SlackAiService {
     });
 
     if (response.stop_reason !== 'tool_use') {
-      return this.extractText(response.content);
+      const text = this.extractText(response.content);
+      await this.saveHistory(slackId, [
+        ...messages,
+        { role: 'assistant', content: text },
+      ]);
+      return text;
     }
 
     const toolResults: Anthropic.ToolResultBlockParam[] = [];
@@ -67,9 +92,13 @@ export class SlackAiService {
     });
 
     const finalText = this.extractText(finalResponse.content);
-    this.logger.log(
-      `[handleMessage] 최종 응답 완료 length=${finalText.length}`,
-    );
+    await this.saveHistory(slackId, [
+      ...messages,
+      { role: 'assistant', content: response.content },
+      { role: 'user', content: toolResults },
+      { role: 'assistant', content: finalText },
+    ]);
+    this.logger.log(`[handleMessage] 최종 응답 완료 length=${finalText.length}`);
     return finalText;
   }
 
