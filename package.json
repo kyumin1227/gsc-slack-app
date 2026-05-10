@@ -24,6 +24,7 @@
     "migration:show": "typeorm-ts-node-commonjs migration:show -d data-source.ts"
   },
   "dependencies": {
+    "@anthropic-ai/sdk": "^0.95.1",
     "@keyv/redis": "^5.1.6",
     "@nestjs/cache-manager": "^3.1.0",
     "@nestjs/common": "^11.0.1",

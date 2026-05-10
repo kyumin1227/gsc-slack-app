@@ -5,7 +5,11 @@ import { GoogleEventsService } from '../../google/calendar/events.service';
 import { GoogleAclService } from '../../google/calendar/acl.service';
 import { GoogleFreebusyService } from '../../google/calendar/freebusy.service';
 import { UserService } from '../../user/service/user.service';
-import { BusinessError, GoogleErrorCode, ResourceErrorCode } from '../../common/errors';
+import {
+  BusinessError,
+  GoogleErrorCode,
+  ResourceErrorCode,
+} from '../../common/errors';
 import {
   BookResourceDto,
   BookingItem,
@@ -33,7 +37,8 @@ export class StudyRoomService {
       .map((e) => e.email);
 
     const editor = await this.userService.findActiveByEmails(editorEmails);
-    if (!editor) throw new BusinessError(GoogleErrorCode.CALENDAR_WRITER_NOT_FOUND);
+    if (!editor)
+      throw new BusinessError(GoogleErrorCode.CALENDAR_WRITER_NOT_FOUND);
 
     const refreshToken = this.userService.getDecryptedRefreshToken(editor);
     if (!refreshToken)
@@ -45,7 +50,8 @@ export class StudyRoomService {
   // 스터디룸 예약 생성 (시간 충돌 확인 후 Google Calendar 이벤트 생성)
   async bookResource(dto: BookResourceDto): Promise<string> {
     const resource = await this.resourceService.findById(dto.resourceId);
-    if (!resource) throw new BusinessError(ResourceErrorCode.STUDY_ROOM_NOT_FOUND);
+    if (!resource)
+      throw new BusinessError(ResourceErrorCode.STUDY_ROOM_NOT_FOUND);
     if (resource.type === ResourceType.PROFESSOR) {
       throw new BusinessError(ResourceErrorCode.STUDY_ROOM_NOT_FOUND);
     }
@@ -128,6 +134,9 @@ export class StudyRoomService {
       summary: event.summary ?? '(제목 없음)',
       startTime: new Date(event.start!.dateTime!),
       endTime: new Date(event.end!.dateTime!),
+      attendeeEmails: (event.attendees ?? [])
+        .filter((a) => !a.resource)
+        .map((a) => a.email ?? ''),
     }));
   }
 

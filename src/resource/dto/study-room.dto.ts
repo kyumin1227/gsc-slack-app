@@ -25,4 +25,5 @@ export interface BookingItem {
   summary: string;
   startTime: Date;
   endTime: Date;
+  attendeeEmails: string[];
 }
