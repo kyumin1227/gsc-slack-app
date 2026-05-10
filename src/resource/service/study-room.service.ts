@@ -199,6 +199,16 @@ export class StudyRoomService {
 
   // 예약 취소 (Google Calendar 이벤트 삭제)
   async cancelBooking(calendarId: string, eventId: string): Promise<void> {
+    const resource = await this.resourceService.findByCalendarId(calendarId);
+    if (!resource)
+      throw new BusinessError(ResourceErrorCode.STUDY_ROOM_NOT_FOUND);
+
+    const event = await this.googleEventsService.getEventById(
+      calendarId,
+      eventId,
+    );
+    if (!event) throw new BusinessError(ResourceErrorCode.BOOKING_NOT_FOUND);
+
     const refreshToken = await this.getEditorRefreshToken(calendarId);
     try {
       await this.googleEventsService.deleteEvent(
