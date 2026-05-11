@@ -71,7 +71,21 @@ export class SlackAiService {
     await this.cache.set(this.historyKey(slackId), messages, HISTORY_TTL_MS);
   }
 
-  async handleMessage(slackId: string, text: string): Promise<string> {
+  private readonly TOOL_LABELS: Record<string, string> = {
+    get_my_bookings: '📋 내 예약 조회 중...',
+    find_user: '🔍 참석자 검색 중...',
+    get_study_rooms: '🏫 스터디룸 목록 조회 중...',
+    check_room_availability: '🗓️ 가용 여부 확인 중...',
+    book_room: '✏️ 예약 생성 중...',
+    cancel_booking: '🗑️ 예약 취소 중...',
+    modify_booking: '🔄 예약 수정 중...',
+  };
+
+  async handleMessage(
+    slackId: string,
+    text: string,
+    onProgress?: (msg: string) => Promise<void>,
+  ): Promise<string> {
     const tools = this.toolsService.getDefinitions();
     const user = await this.userService.findBySlackId(slackId);
     const systemPrompt = buildSystemPrompt(user?.name ?? null);
@@ -111,6 +125,10 @@ export class SlackAiService {
         this.logger.log(
           `[handleMessage] 툴 실행: ${block.name} (${round + 1}라운드)`,
         );
+        if (onProgress) {
+          const label = this.TOOL_LABELS[block.name] ?? '⚙️ 처리 중...';
+          await onProgress(label);
+        }
         const result = await this.toolsService.execute(
           block.name,
           block.input,
