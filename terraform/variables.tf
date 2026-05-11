@@ -83,6 +83,13 @@ variable "acm_certificate_arn" {
   type        = string
 }
 
+# Admin
+variable "admin_slack_id" {
+  description = "Slack user ID of the admin (used for mentions in bot messages)"
+  type        = string
+  default     = "U0A4DCMHHKM"
+}
+
 # Secrets Manager
 variable "secrets_arn" {
   description = "Secrets Manager secret ARN containing app environment variables"
