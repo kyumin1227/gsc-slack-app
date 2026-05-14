@@ -335,7 +335,8 @@ export class ScheduleService {
     role: 'reader' | 'writer' | 'owner',
   ): Promise<void> {
     const schedule = await this.findById(id);
-    if (!schedule) throw new BusinessError(ScheduleErrorCode.SCHEDULE_NOT_FOUND);
+    if (!schedule)
+      throw new BusinessError(ScheduleErrorCode.SCHEDULE_NOT_FOUND);
 
     await this.googleAclService.shareCalendar({
       calendarId: schedule.calendarId,
@@ -347,7 +348,8 @@ export class ScheduleService {
   // 캘린더 권한 제거
   async unshareCalendar(id: number, email: string): Promise<void> {
     const schedule = await this.findById(id);
-    if (!schedule) throw new BusinessError(ScheduleErrorCode.SCHEDULE_NOT_FOUND);
+    if (!schedule)
+      throw new BusinessError(ScheduleErrorCode.SCHEDULE_NOT_FOUND);
 
     await this.googleAclService.unshareCalendar(schedule.calendarId, email);
   }
@@ -355,7 +357,8 @@ export class ScheduleService {
   // 구독 (사용자 캘린더 목록에 추가)
   async subscribe(id: number, userRefreshToken: string): Promise<void> {
     const schedule = await this.findById(id);
-    if (!schedule) throw new BusinessError(ScheduleErrorCode.SCHEDULE_NOT_FOUND);
+    if (!schedule)
+      throw new BusinessError(ScheduleErrorCode.SCHEDULE_NOT_FOUND);
 
     await this.googleCalendarListService.addCalendarToUserList(
       schedule.calendarId,
@@ -366,7 +369,8 @@ export class ScheduleService {
   // 구독 해제 (사용자 캘린더 목록에서 제거)
   async unsubscribe(id: number, userRefreshToken: string): Promise<void> {
     const schedule = await this.findById(id);
-    if (!schedule) throw new BusinessError(ScheduleErrorCode.SCHEDULE_NOT_FOUND);
+    if (!schedule)
+      throw new BusinessError(ScheduleErrorCode.SCHEDULE_NOT_FOUND);
 
     await this.googleCalendarListService.removeCalendarFromUserList(
       schedule.calendarId,

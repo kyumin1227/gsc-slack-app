@@ -107,9 +107,15 @@ export class SlackAiHandler {
     // 기존 키워드 핸들러가 처리하는 명령어 제외
     if (/^health$/i.test(text.trim())) return;
 
+    if (await this.slackAiService.isProcessing(slackId)) {
+      await say('⏳ 이전 답변을 생성하고 있어요! 잠시만 기다려 주세요 😊');
+      return;
+    }
+
     const channel = event.channel as string;
     const loadingMsg = await say('🤔 생각 중...');
 
+    await this.slackAiService.setProcessing(slackId);
     try {
       const reply = await this.slackAiService.handleMessage(
         slackId,
@@ -143,6 +149,8 @@ export class SlackAiHandler {
         ts: loadingMsg.ts as string,
         text: '죄송합니다. 요청 처리 중 오류가 발생했습니다. 잠시 후 다시 시도해 주세요.',
       });
+    } finally {
+      await this.slackAiService.clearProcessing(slackId);
     }
   }
 }

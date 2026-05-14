@@ -6,6 +6,7 @@ import type {
   SlackViewMiddlewareArgs,
   BlockAction,
 } from '@slack/bolt';
+import type { WebClient } from '@slack/web-api';
 import { ResourceService } from '../service/resource.service';
 import { StudyRoomService } from '../service/study-room.service';
 import { ProfessorService } from '../service/professor.service';
@@ -16,6 +17,7 @@ import { UserStatus } from '../../user/user.entity';
 import { GoogleEventsService } from '../../google/calendar/events.service';
 import { ResourceType } from '../resource.entity';
 import { withModalFeedback } from '../../common/modal-feedback.util';
+import { addMinutes, toKSTTimeStr } from '../../common/date.util';
 
 @Controller()
 export class StudyRoomController {
@@ -26,6 +28,37 @@ export class StudyRoomController {
     private readonly userService: UserService,
     private readonly googleEventsService: GoogleEventsService,
   ) {}
+
+  private async withMyBookingsFeedback<T>(
+    params: {
+      ack: (response?: any) => Promise<void>;
+      client: WebClient;
+      viewId: string;
+      userId: string;
+      parentViewId?: string;
+    },
+    operation: () => Promise<T>,
+    handlers: {
+      successTitle?: string;
+      successText: (result: T) => string;
+    },
+  ): Promise<void> {
+    await withModalFeedback(params, operation, handlers);
+
+    // 열려있던 내 예약 모달 갱신
+    if (params.parentViewId) {
+      const [bookings, consultations] = await Promise.all([
+        this.studyRoomService.getMyBookings(params.userId),
+        this.professorService.getConsultations(params.userId),
+      ]);
+      await params.client.views
+        .update({
+          view_id: params.parentViewId,
+          view: ResourceView.myBookingsModal(bookings, consultations),
+        })
+        .catch(() => {});
+    }
+  }
 
   // 스터디룸 예약 목록 모달 열기 (활성 유저만)
   @Action('home:open-booking')
@@ -110,7 +143,7 @@ export class StudyRoomController {
 
     const viewId = body.view.id;
     const startTime = new Date(`${date}T${startTimeStr}:00+09:00`);
-    const endTime = new Date(startTime.getTime() + durationMinutes * 60 * 1000);
+    const endTime = addMinutes(startTime, durationMinutes);
 
     await withModalFeedback(
       { ack, client, viewId, userId: body.user.id },
@@ -163,9 +196,14 @@ export class StudyRoomController {
     }
 
     if (view.callback_id === 'study-room:modal:modify-booking') {
-      const { calendarId, eventId, roomName } = JSON.parse(
+      const { calendarId, eventId, roomName, parentViewId } = JSON.parse(
         view.private_metadata,
-      ) as { calendarId: string; eventId: string; roomName: string };
+      ) as {
+        calendarId: string;
+        eventId: string;
+        roomName: string;
+        parentViewId: string;
+      };
 
       const summary = values.title_block?.title_input?.value ?? '';
       const attendeeSlackIds =
@@ -176,13 +214,21 @@ export class StudyRoomController {
           ? new Date(`${dateStr}T${startTimeStr}:00+09:00`)
           : new Date();
       const durationMin = durationStr ? parseInt(durationStr, 10) : 60;
-      const endTime = new Date(startTime.getTime() + durationMin * 60 * 1000);
+      const endTime = addMinutes(startTime, durationMin);
 
       await client.views.update({
         view_id: view.id,
         hash: view.hash,
         view: StudyRoomView.modifyBookingModal(
-          { calendarId, eventId, roomName, summary, startTime, endTime },
+          {
+            calendarId,
+            eventId,
+            roomName,
+            summary,
+            startTime,
+            endTime,
+            parentViewId,
+          },
           attendeeSlackIds,
         ),
       });
@@ -243,6 +289,7 @@ export class StudyRoomController {
           summary: event?.summary ?? '',
           startTime: new Date(startIso),
           endTime: new Date(endIso),
+          parentViewId: body.view?.id ?? '',
         },
         initialAttendeeSlackIds,
       ),
@@ -257,9 +304,14 @@ export class StudyRoomController {
     body,
   }: SlackViewMiddlewareArgs & AllMiddlewareArgs) {
     const values = body.view.state.values;
-    const { calendarId, eventId, roomName } = JSON.parse(
+    const { calendarId, eventId, roomName, parentViewId } = JSON.parse(
       body.view.private_metadata,
-    ) as { calendarId: string; eventId: string; roomName: string };
+    ) as {
+      calendarId: string;
+      eventId: string;
+      roomName: string;
+      parentViewId: string;
+    };
 
     const title = values.title_block.title_input.value ?? '';
     const date = values.date_block.date_select.selected_date ?? '';
@@ -284,38 +336,38 @@ export class StudyRoomController {
       return;
     }
 
-    await ack();
-
     const startTime = new Date(`${date}T${startTimeStr}:00+09:00`);
-    const endTime = new Date(startTime.getTime() + durationMinutes * 60 * 1000);
+    const endTime = addMinutes(startTime, durationMinutes);
+    const endTimeStr = toKSTTimeStr(endTime);
 
-    const result = await this.studyRoomService.modifyBooking(
-      calendarId,
-      eventId,
+    await this.withMyBookingsFeedback(
       {
-        title,
-        startTime,
-        endTime,
-        attendeeSlackIds,
+        ack,
+        client,
+        viewId: body.view.id,
+        userId: body.user.id,
+        parentViewId,
+      },
+      () =>
+        this.studyRoomService.modifyBooking(calendarId, eventId, {
+          title,
+          startTime,
+          endTime,
+          attendeeSlackIds,
+        }),
+      {
+        successTitle: '예약 수정 완료',
+        successText: (result) =>
+          result === 'cancelled'
+            ? `🗑️ 참석자가 없어 *${roomName}* 예약이 취소되었습니다.`
+            : `✅ *${roomName}* 예약이 수정되었습니다.\n${date} ${startTimeStr}~${endTimeStr}`,
       },
     );
-
-    if (result === 'cancelled') {
-      await client.chat.postMessage({
-        channel: body.user.id,
-        text: `🗑️ 참석자가 없어 *${roomName}* 예약이 취소되었습니다.\n${date} ${startTimeStr} (${durationMinutes}분)`,
-      });
-    } else {
-      await client.chat.postMessage({
-        channel: body.user.id,
-        text: `✅ *${roomName}* 예약이 수정되었습니다.\n${date} ${startTimeStr} (${durationMinutes}분)`,
-      });
-    }
   }
 
-  // 예약 취소 처리
+  // 예약 취소 확인 모달 열기
   @Action('study-room:action:cancel')
-  async cancelBooking({
+  async openCancelConfirm({
     ack,
     client,
     body,
@@ -327,11 +379,49 @@ export class StudyRoomController {
       (action as { value: string }).value,
     ) as { calendarId: string; eventId: string; roomName: string };
 
-    await this.studyRoomService.cancelBooking(calendarId, eventId);
-    await client.chat.postMessage({
-      channel: body.user.id,
-      text: `✅ *${roomName}* 예약이 취소되었습니다.`,
+    const parentViewId = body.view?.id ?? '';
+
+    await client.views.push({
+      trigger_id: body.trigger_id,
+      view: StudyRoomView.cancelConfirmModal({
+        calendarId,
+        eventId,
+        roomName,
+        parentViewId,
+      }),
     });
+  }
+
+  // 예약 취소 확인 모달 제출 처리
+  @View('study-room:modal:cancel-confirm')
+  async submitCancelBooking({
+    ack,
+    client,
+    body,
+  }: SlackViewMiddlewareArgs & AllMiddlewareArgs) {
+    const { calendarId, eventId, roomName, parentViewId } = JSON.parse(
+      body.view.private_metadata,
+    ) as {
+      calendarId: string;
+      eventId: string;
+      roomName: string;
+      parentViewId: string;
+    };
+
+    await this.withMyBookingsFeedback(
+      {
+        ack,
+        client,
+        viewId: body.view.id,
+        userId: body.user.id,
+        parentViewId,
+      },
+      () => this.studyRoomService.cancelBooking(calendarId, eventId),
+      {
+        successTitle: '예약 취소 완료',
+        successText: () => `🗑️ *${roomName}* 예약이 취소되었습니다.`,
+      },
+    );
   }
 
   // 내 예약 모달 열기 (스터디룸 예약 + 교수 상담 통합)

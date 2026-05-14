@@ -158,7 +158,10 @@ export class UserController {
       };
 
       if (needsApproval) {
-        await this.userService.submitRegistration(slackUserId, registrationData);
+        await this.userService.submitRegistration(
+          slackUserId,
+          registrationData,
+        );
       } else {
         await this.userService.activateWithRole(slackUserId, registrationData);
         await this.inviteToClassChannel(slackUserId, studentClassId);

@@ -46,11 +46,12 @@ export class UserClassRepController {
 
     const user = await this.userService.findBySlackIdWithClass(body.user.id);
     const className = user?.studentClass?.name ?? '';
-    const { users, total } = await this.userClassRepService.findByStudentClassId(
-      studentClassId,
-      0,
-      PAGE_SIZE,
-    );
+    const { users, total } =
+      await this.userClassRepService.findByStudentClassId(
+        studentClassId,
+        0,
+        PAGE_SIZE,
+      );
 
     await client.views.open({
       trigger_id: body.trigger_id,
@@ -87,11 +88,12 @@ export class UserClassRepController {
 
     const user = await this.userService.findBySlackIdWithClass(body.user.id);
     const className = user?.studentClass?.name ?? '';
-    const { users, total } = await this.userClassRepService.findByStudentClassId(
-      studentClassId,
-      page * PAGE_SIZE,
-      PAGE_SIZE,
-    );
+    const { users, total } =
+      await this.userClassRepService.findByStudentClassId(
+        studentClassId,
+        page * PAGE_SIZE,
+        PAGE_SIZE,
+      );
 
     if (body.view?.id) {
       await client.views.update({
