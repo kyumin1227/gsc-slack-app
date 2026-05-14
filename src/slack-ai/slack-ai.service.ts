@@ -49,6 +49,23 @@ export class SlackAiService {
     return `slack-ai:history:${slackId}`;
   }
 
+  private processingKey(slackId: string): string {
+    return `slack-ai:processing:${slackId}`;
+  }
+
+  async isProcessing(slackId: string): Promise<boolean> {
+    return (await this.cache.get(this.processingKey(slackId))) === true;
+  }
+
+  async setProcessing(slackId: string): Promise<void> {
+    // 3분 TTL: 서버 크래시 시 플래그가 영구적으로 남지 않도록
+    await this.cache.set(this.processingKey(slackId), true, 3 * 60 * 1000);
+  }
+
+  async clearProcessing(slackId: string): Promise<void> {
+    await this.cache.del(this.processingKey(slackId));
+  }
+
   private async loadHistory(
     slackId: string,
   ): Promise<Anthropic.MessageParam[]> {
