@@ -471,16 +471,6 @@ export class ResourceView {
                 action_id: 'study-room:action:cancel',
                 style: 'danger',
                 value: meta,
-                confirm: {
-                  title: { type: 'plain_text', text: '예약 취소' },
-                  text: {
-                    type: 'mrkdwn',
-                    text: `*${booking.summary}* 예약을 취소하시겠습니까?\n이 작업은 되돌릴 수 없습니다.`,
-                  },
-                  confirm: { type: 'plain_text', text: '취소하기' },
-                  deny: { type: 'plain_text', text: '돌아가기' },
-                  style: 'danger',
-                },
               },
             ],
           },
