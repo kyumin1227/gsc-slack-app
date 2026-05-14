@@ -17,6 +17,7 @@ import { UserStatus } from '../../user/user.entity';
 import { GoogleEventsService } from '../../google/calendar/events.service';
 import { ResourceType } from '../resource.entity';
 import { withModalFeedback } from '../../common/modal-feedback.util';
+import { addMinutes, toKSTTimeStr } from '../../common/date.util';
 
 @Controller()
 export class StudyRoomController {
@@ -44,6 +45,7 @@ export class StudyRoomController {
   ): Promise<void> {
     await withModalFeedback(params, operation, handlers);
 
+    // 열려있던 내 예약 모달 갱신
     if (params.parentViewId) {
       const [bookings, consultations] = await Promise.all([
         this.studyRoomService.getMyBookings(params.userId),
@@ -141,7 +143,7 @@ export class StudyRoomController {
 
     const viewId = body.view.id;
     const startTime = new Date(`${date}T${startTimeStr}:00+09:00`);
-    const endTime = new Date(startTime.getTime() + durationMinutes * 60 * 1000);
+    const endTime = addMinutes(startTime, durationMinutes);
 
     await withModalFeedback(
       { ack, client, viewId, userId: body.user.id },
@@ -212,7 +214,7 @@ export class StudyRoomController {
           ? new Date(`${dateStr}T${startTimeStr}:00+09:00`)
           : new Date();
       const durationMin = durationStr ? parseInt(durationStr, 10) : 60;
-      const endTime = new Date(startTime.getTime() + durationMin * 60 * 1000);
+      const endTime = addMinutes(startTime, durationMin);
 
       await client.views.update({
         view_id: view.id,
@@ -335,7 +337,8 @@ export class StudyRoomController {
     }
 
     const startTime = new Date(`${date}T${startTimeStr}:00+09:00`);
-    const endTime = new Date(startTime.getTime() + durationMinutes * 60 * 1000);
+    const endTime = addMinutes(startTime, durationMinutes);
+    const endTimeStr = toKSTTimeStr(endTime);
 
     await this.withMyBookingsFeedback(
       {
@@ -357,7 +360,7 @@ export class StudyRoomController {
         successText: (result) =>
           result === 'cancelled'
             ? `🗑️ 참석자가 없어 *${roomName}* 예약이 취소되었습니다.`
-            : `✅ *${roomName}* 예약이 수정되었습니다.\n${date} ${startTimeStr} (${durationMinutes}분)`,
+            : `✅ *${roomName}* 예약이 수정되었습니다.\n${date} ${startTimeStr}~${endTimeStr}`,
       },
     );
   }

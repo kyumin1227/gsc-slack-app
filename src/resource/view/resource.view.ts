@@ -3,7 +3,7 @@ import { Resource, ResourceStatus, ResourceType } from '../resource.entity';
 import { multiUsersSelectBlock } from '../../common/blocks';
 import { BookingItem } from '../dto/study-room.dto';
 import { ConsultationItem } from '../dto/professor.dto';
-import { toKST } from '../../utils/date.util';
+import { toKST } from '../../common/date.util';
 
 export class ResourceView {
   // 리소스 생성 모달

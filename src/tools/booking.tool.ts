@@ -2,7 +2,7 @@ import { Injectable } from '@nestjs/common';
 import type Anthropic from '@anthropic-ai/sdk';
 import { StudyRoomService } from '../resource/service/study-room.service';
 import { UserService } from '../user/service/user.service';
-import { toKSTString } from '../utils/date.util';
+import { toKSTString } from '../common/date.util';
 
 @Injectable()
 export class BookingTool {

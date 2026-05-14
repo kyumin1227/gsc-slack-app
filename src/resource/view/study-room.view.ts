@@ -1,6 +1,6 @@
 import type { View } from '@slack/types';
 import { Resource } from '../resource.entity';
-import { toKST } from '../../utils/date.util';
+import { toKST } from '../../common/date.util';
 import { multiUsersSelectBlock } from '../../common/blocks';
 import { CALENDAR_COLORS } from '../../common/constants';
 
