@@ -14,7 +14,17 @@ import { GoogleModule } from '../google/google.module';
 @Module({
   imports: [TypeOrmModule.forFeature([User]), StudentClassModule, GoogleModule],
   controllers: [UserController, UserAdminController, UserClassRepController],
-  providers: [UserService, UserAdminService, UserClassRepService, PermissionService],
-  exports: [UserService, UserAdminService, UserClassRepService, PermissionService],
+  providers: [
+    UserService,
+    UserAdminService,
+    UserClassRepService,
+    PermissionService,
+  ],
+  exports: [
+    UserService,
+    UserAdminService,
+    UserClassRepService,
+    PermissionService,
+  ],
 })
 export class UserModule {}
