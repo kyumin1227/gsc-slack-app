@@ -36,7 +36,7 @@ export class StudyRoomService {
     try {
       acl = await this.googleAclService.getCalendarAcl(calendarId);
     } catch (e) {
-      const status = (e as any)?.response?.status ?? (e as any)?.code;
+      const status = e?.response?.status ?? e?.code;
       if (status === 404 || status === 410) {
         throw new BusinessError(ResourceErrorCode.STUDY_ROOM_NOT_FOUND);
       }
@@ -217,7 +217,7 @@ export class StudyRoomService {
         eventId,
       );
     } catch (e) {
-      const status = (e as any)?.response?.status ?? (e as any)?.code;
+      const status = e?.response?.status ?? e?.code;
       if (status === 404 || status === 410) {
         throw new BusinessError(ResourceErrorCode.BOOKING_NOT_FOUND);
       }

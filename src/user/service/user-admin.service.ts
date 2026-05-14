@@ -2,7 +2,11 @@ import { Injectable } from '@nestjs/common';
 import { InjectRepository } from '@nestjs/typeorm';
 import { Repository } from 'typeorm';
 import { User, UserStatus } from '../user.entity';
-import { UpdateUserInfoDto, UserListFilter, FindFilteredResult } from '../dto/user-admin.dto';
+import {
+  UpdateUserInfoDto,
+  UserListFilter,
+  FindFilteredResult,
+} from '../dto/user-admin.dto';
 import { UserService } from './user.service';
 
 @Injectable()

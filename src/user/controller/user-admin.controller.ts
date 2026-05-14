@@ -72,7 +72,10 @@ export class UserAdminController {
       await this.userService.approveUser(targetSlackId);
 
       const approvedUser = await this.userService.findBySlackId(targetSlackId);
-      await this.inviteToClassChannel(targetSlackId, approvedUser?.studentClassId);
+      await this.inviteToClassChannel(
+        targetSlackId,
+        approvedUser?.studentClassId,
+      );
 
       await client.chat.postMessage({
         channel: targetSlackId,

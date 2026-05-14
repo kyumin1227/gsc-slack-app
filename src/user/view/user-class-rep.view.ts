@@ -1,5 +1,10 @@
 import type { View } from '@slack/types';
-import { PendingUser, ROLE_LABELS, STATUS_LABELS, UserListItem } from './user.view';
+import {
+  PendingUser,
+  ROLE_LABELS,
+  STATUS_LABELS,
+  UserListItem,
+} from './user.view';
 
 export class UserClassRepView {
   // 반대표: 자기 반 승인 대기 모달 (승인만, 거절 없음)
