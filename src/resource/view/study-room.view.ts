@@ -1,6 +1,6 @@
 import type { View } from '@slack/types';
 import { Resource } from '../resource.entity';
-import { toKST } from '../../utils/date.util';
+import { toKST } from '../../common/date.util';
 import { multiUsersSelectBlock } from '../../common/blocks';
 import { CALENDAR_COLORS } from '../../common/constants';
 
@@ -198,6 +198,7 @@ export class StudyRoomView {
       summary: string;
       startTime: Date;
       endTime: Date;
+      parentViewId?: string;
     },
     initialAttendeeSlackIds: string[] = [],
   ): View {
@@ -221,6 +222,7 @@ export class StudyRoomView {
         calendarId: booking.calendarId,
         eventId: booking.eventId,
         roomName: booking.roomName,
+        parentViewId: booking.parentViewId ?? '',
       }),
       blocks: [
         {
@@ -297,6 +299,32 @@ export class StudyRoomView {
           initialUsers: initialAttendeeSlackIds,
           optional: true,
         }),
+      ],
+    };
+  }
+
+  // 예약 취소 확인 모달
+  static cancelConfirmModal(params: {
+    calendarId: string;
+    eventId: string;
+    roomName: string;
+    parentViewId: string;
+  }): View {
+    return {
+      type: 'modal',
+      callback_id: 'study-room:modal:cancel-confirm',
+      title: { type: 'plain_text', text: '예약 취소' },
+      submit: { type: 'plain_text', text: '취소하기' },
+      close: { type: 'plain_text', text: '돌아가기' },
+      private_metadata: JSON.stringify(params),
+      blocks: [
+        {
+          type: 'section',
+          text: {
+            type: 'mrkdwn',
+            text: `*${params.roomName}* 예약을 취소하시겠습니까?\n이 작업은 되돌릴 수 없습니다.`,
+          },
+        },
       ],
     };
   }
