@@ -15,10 +15,10 @@ export enum CleaningAssignmentStatus {
   ASSIGNED = '배정',
   COMPLETED = '완료',
   CANCELED = '취소',
-  NON_COMPLIANT = '불이행',
+  NON_COMPLIANT = '미실시',
 }
 
-@Unique(['studentId', 'cleaningDate'])
+@Unique(['scheduleId', 'userId'])
 @Entity('cleaning_assignments')
 export class CleaningAssignment {
   @PrimaryGeneratedColumn()
@@ -31,13 +31,10 @@ export class CleaningAssignment {
   scheduleId: number;
 
   @ManyToOne(() => User)
-  student: User;
+  user: User;
 
   @Column()
-  studentId: number;
-
-  @Column({ type: 'date' })
-  cleaningDate: string;
+  userId: number;
 
   @Column({
     type: 'enum',

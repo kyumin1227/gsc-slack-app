@@ -9,16 +9,11 @@ import {
   Unique,
 } from 'typeorm';
 import { CleaningRule } from './cleaning-rule.entity';
+import { User } from '../user/user.entity';
 
-export enum CleaningScheduleStatus {
-  SCHEDULED = '예정',
-  COMPLETED = '완료',
-  CANCELED = '취소',
-}
-
-@Unique(['ruleId', 'cleaningDate'])
-@Entity('cleaning_schedules')
-export class CleaningSchedule {
+@Unique(['ruleId', 'userId'])
+@Entity('cleaning_rule_users')
+export class CleaningRuleUser {
   @PrimaryGeneratedColumn()
   id: number;
 
@@ -28,18 +23,11 @@ export class CleaningSchedule {
   @Column()
   ruleId: number;
 
-  @Column({ type: 'date' })
-  cleaningDate: string;
+  @ManyToOne(() => User)
+  user: User;
 
   @Column()
-  needPeoples: number;
-
-  @Column({
-    type: 'enum',
-    enum: CleaningScheduleStatus,
-    default: CleaningScheduleStatus.SCHEDULED,
-  })
-  status: CleaningScheduleStatus;
+  userId: number;
 
   @CreateDateColumn()
   createdAt: Date;
