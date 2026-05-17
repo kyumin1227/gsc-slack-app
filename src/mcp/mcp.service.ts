@@ -31,7 +31,8 @@ interface AuthCode {
   codeChallenge: string;
 }
 
-const MCP_SESSION_TTL = 7 * 24 * 60 * 60 * 1000; // 7일
+const ACCESS_TOKEN_TTL = 60 * 60 * 1000; // 1시간
+const REFRESH_TOKEN_TTL = 365 * 24 * 60 * 60 * 1000; // 365일
 const PKCE_TTL = 10 * 60 * 1000; // 10분
 const AUTH_CODE_TTL = 5 * 60 * 1000; // 5분
 
@@ -55,7 +56,7 @@ export class McpService {
       token_endpoint: `${baseUrl}/mcp/auth/token`,
       registration_endpoint: `${baseUrl}/mcp/auth/register`,
       response_types_supported: ['code'],
-      grant_types_supported: ['authorization_code'],
+      grant_types_supported: ['authorization_code', 'refresh_token'],
       code_challenge_methods_supported: ['S256'],
       token_endpoint_auth_methods_supported: ['none'],
     };
@@ -138,25 +139,43 @@ export class McpService {
 
   // ─── OAuth 2.0 Token Endpoint ────────────────────────────────────────────
 
-  async issueToken(code: string, codeVerifier: string): Promise<string | null> {
+  async issueToken(
+    code: string,
+    codeVerifier: string,
+  ): Promise<{ accessToken: string; refreshToken: string } | null> {
     const authCode = await this.cache.get<AuthCode>(`mcp:authcode:${code}`);
     if (!authCode) return null;
 
     await this.cache.del(`mcp:authcode:${code}`);
 
-    // PKCE S256 검증
     const computed = createHash('sha256')
       .update(codeVerifier)
       .digest('base64url');
     if (computed !== authCode.codeChallenge) return null;
 
-    const token = randomUUID();
-    await this.cache.set(
-      `mcp:session:${token}`,
-      authCode.slackId,
-      MCP_SESSION_TTL,
-    );
-    return token;
+    return this.mintTokenPair(authCode.slackId);
+  }
+
+  async refreshToken(
+    refreshToken: string,
+  ): Promise<{ accessToken: string; refreshToken: string } | null> {
+    const slackId = await this.cache.get<string>(`mcp:refresh:${refreshToken}`);
+    if (!slackId) return null;
+
+    await this.cache.del(`mcp:refresh:${refreshToken}`);
+    return this.mintTokenPair(slackId);
+  }
+
+  private async mintTokenPair(
+    slackId: string,
+  ): Promise<{ accessToken: string; refreshToken: string }> {
+    const accessToken = randomUUID();
+    const refreshToken = randomUUID();
+    await Promise.all([
+      this.cache.set(`mcp:session:${accessToken}`, slackId, ACCESS_TOKEN_TTL),
+      this.cache.set(`mcp:refresh:${refreshToken}`, slackId, REFRESH_TOKEN_TTL),
+    ]);
+    return { accessToken, refreshToken };
   }
 
   // ─── MCP 요청 처리 ───────────────────────────────────────────────────────

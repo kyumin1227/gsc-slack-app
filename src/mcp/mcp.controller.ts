@@ -70,22 +70,25 @@ export class McpController {
   // ─── OAuth 2.0 Token Endpoint ─────────────────────────────────────────────
 
   @Post('auth/token')
-  async token(
-    @Body('code') code: string,
-    @Body('code_verifier') codeVerifier: string,
-    @Res() res: Response,
-  ) {
-    const accessToken = await this.mcpService.issueToken(code, codeVerifier);
+  async token(@Body() body: Record<string, string>, @Res() res: Response) {
+    let result: { accessToken: string; refreshToken: string } | null;
 
-    if (!accessToken) {
+    if (body.grant_type === 'refresh_token') {
+      result = await this.mcpService.refreshToken(body.refresh_token);
+    } else {
+      result = await this.mcpService.issueToken(body.code, body.code_verifier);
+    }
+
+    if (!result) {
       res.status(400).json({ error: 'invalid_grant' });
       return;
     }
 
     res.json({
-      access_token: accessToken,
+      access_token: result.accessToken,
+      refresh_token: result.refreshToken,
       token_type: 'bearer',
-      expires_in: 7 * 24 * 60 * 60, // 7일 (초)
+      expires_in: 60 * 60, // 1시간 (초)
     });
   }
 
