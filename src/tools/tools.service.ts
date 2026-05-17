@@ -1,14 +1,15 @@
 import { Injectable } from '@nestjs/common';
 import type Anthropic from '@anthropic-ai/sdk';
 import { BookingTool } from './booking.tool';
+import { TimeTool } from './time.tool';
 import { BusinessError } from '../common/errors/base.error';
 
 @Injectable()
 export class ToolsService {
-  private readonly tools: BookingTool[];
+  private readonly tools: (BookingTool | TimeTool)[];
 
-  constructor(private readonly bookingTool: BookingTool) {
-    this.tools = [bookingTool];
+  constructor(bookingTool: BookingTool, timeTool: TimeTool) {
+    this.tools = [bookingTool, timeTool];
   }
 
   getDefinitions(): Anthropic.Tool[] {
