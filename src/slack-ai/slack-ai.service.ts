@@ -7,7 +7,7 @@ import { UserService } from '../user/service/user.service';
 
 const MODEL = 'claude-haiku-4-5-20251001';
 const HISTORY_TTL_MS = 60 * 60 * 1000; // 1시간
-const MAX_HISTORY_MESSAGES = 20; // 최근 10턴
+const MAX_HISTORY_MESSAGES = 50; // 최근 25턴
 
 const buildSystemPrompt = (userName: string | null) => {
   const now = new Date().toLocaleString('ko-KR', {
