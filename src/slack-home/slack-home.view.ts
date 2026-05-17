@@ -204,6 +204,36 @@ export class HomeView {
                   },
                 ],
               },
+              { type: 'divider' as const },
+              {
+                type: 'section' as const,
+                text: {
+                  type: 'mrkdwn' as const,
+                  text: '*📍청소 규칙 관리*\n청소 규칙(주기, 요일 등)을 *추가・수정・삭제* 할 수 있어요.',
+                },
+              },
+              {
+                type: 'actions' as const,
+                elements: [
+                  {
+                    type: 'button' as const,
+                    text: { type: 'plain_text' as const, text: '추가', emoji: true },
+                    style: 'primary' as const,
+                    action_id: 'cleaning:rule:open-create',
+                  },
+                  {
+                    type: 'button' as const,
+                    text: { type: 'plain_text' as const, text: '수정', emoji: true },
+                    action_id: 'cleaning:rule:open-edit-list',
+                  },
+                  {
+                    type: 'button' as const,
+                    text: { type: 'plain_text' as const, text: '삭제', emoji: true },
+                    style: 'danger' as const,
+                    action_id: 'cleaning:rule:open-delete-list',
+                  },
+                ],
+              },
             ]
           : [{ type: 'divider' as const }]),
         {
@@ -509,6 +539,36 @@ export class HomeView {
               type: 'button',
               text: { type: 'plain_text', text: '태그 목록' },
               action_id: 'home:open-tags',
+            },
+          ],
+        },
+        { type: 'divider' },
+        {
+          type: 'section',
+          text: {
+            type: 'mrkdwn',
+            text: '*📜청소 규칙 관리*\n청소 규칙(주기, 요일 등)을 *추가・수정・삭제* 할 수 있어요.',
+          },
+        },
+        {
+          type: 'actions',
+          elements: [
+            {
+              type: 'button',
+              text: { type: 'plain_text', text: '추가', emoji: true },
+              style: 'primary',
+              action_id: 'cleaning:rule:open-create',
+            },
+            {
+              type: 'button',
+              text: { type: 'plain_text', text: '수정', emoji: true },
+              action_id: 'cleaning:rule:open-edit-list',
+            },
+            {
+              type: 'button',
+              text: { type: 'plain_text', text: '삭제', emoji: true },
+              style: 'danger',
+              action_id: 'cleaning:rule:open-delete-list',
             },
           ],
         },
