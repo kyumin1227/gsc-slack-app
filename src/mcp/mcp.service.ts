@@ -1,4 +1,5 @@
-import { Injectable } from '@nestjs/common';
+import { Inject, Injectable } from '@nestjs/common';
+import { createHash } from 'node:crypto';
 import { randomUUID } from 'node:crypto';
 import { Server } from '@modelcontextprotocol/sdk/server/index.js';
 import { StreamableHTTPServerTransport } from '@modelcontextprotocol/sdk/server/streamableHttp.js';
@@ -7,23 +8,158 @@ import {
   ListToolsRequestSchema,
 } from '@modelcontextprotocol/sdk/types.js';
 import type { IncomingMessage, ServerResponse } from 'node:http';
+import { CACHE_MANAGER } from '@nestjs/cache-manager';
+import type { Cache } from 'cache-manager';
 import { ToolsService } from '../tools/tools.service';
 import { UserService } from '../user/service/user.service';
+import { GoogleOAuthService } from '../google/oauth/google-oauth.service';
 
 interface McpSession {
   server: Server;
   transport: StreamableHTTPServerTransport;
 }
 
+interface PkceSession {
+  codeChallenge: string;
+  codeChallengeMethod: string;
+  clientRedirectUri: string;
+  clientState: string;
+}
+
+interface AuthCode {
+  slackId: string;
+  codeChallenge: string;
+}
+
+const MCP_SESSION_TTL = 7 * 24 * 60 * 60 * 1000; // 7일
+const PKCE_TTL = 10 * 60 * 1000; // 10분
+const AUTH_CODE_TTL = 5 * 60 * 1000; // 5분
+
 @Injectable()
 export class McpService {
-  // sessionId → { server, transport }
   private readonly sessions = new Map<string, McpSession>();
 
   constructor(
     private readonly toolsService: ToolsService,
     private readonly userService: UserService,
+    private readonly googleOAuthService: GoogleOAuthService,
+    @Inject(CACHE_MANAGER) private readonly cache: Cache,
   ) {}
+
+  // ─── OAuth 2.0 메타데이터 ────────────────────────────────────────────────
+
+  getAuthorizationServerMetadata(baseUrl: string) {
+    return {
+      issuer: baseUrl,
+      authorization_endpoint: `${baseUrl}/mcp/auth/authorize`,
+      token_endpoint: `${baseUrl}/mcp/auth/token`,
+      registration_endpoint: `${baseUrl}/mcp/auth/register`,
+      response_types_supported: ['code'],
+      grant_types_supported: ['authorization_code'],
+      code_challenge_methods_supported: ['S256'],
+      token_endpoint_auth_methods_supported: ['none'],
+    };
+  }
+
+  registerClient(
+    clientMetadata: Record<string, unknown>,
+  ): Record<string, unknown> {
+    const clientId = randomUUID();
+    return {
+      client_id: clientId,
+      client_id_issued_at: Math.floor(Date.now() / 1000),
+      ...clientMetadata,
+    };
+  }
+
+  getProtectedResourceMetadata(baseUrl: string) {
+    return {
+      resource: `${baseUrl}/mcp`,
+      authorization_servers: [baseUrl],
+    };
+  }
+
+  // ─── OAuth 2.0 Authorization Endpoint ───────────────────────────────────
+
+  async startAuthorize(params: {
+    codeChallenge: string;
+    codeChallengeMethod: string;
+    clientRedirectUri: string;
+    clientState: string;
+  }): Promise<string> {
+    const ourState = randomUUID();
+    await this.cache.set(
+      `mcp:pkce:${ourState}`,
+      params satisfies PkceSession,
+      PKCE_TTL,
+    );
+
+    const redirectUri = process.env.MCP_GOOGLE_REDIRECT_URI ?? '';
+    return this.googleOAuthService.getGoogleAuthUrl(ourState, redirectUri);
+  }
+
+  // ─── Google OAuth Callback ───────────────────────────────────────────────
+
+  async handleGoogleCallback(
+    code: string,
+    ourState: string,
+  ): Promise<{ clientRedirectUri: string; clientState: string } | null> {
+    const pkce = await this.cache.get<PkceSession>(`mcp:pkce:${ourState}`);
+    if (!pkce) return null;
+
+    await this.cache.del(`mcp:pkce:${ourState}`);
+
+    const redirectUri = process.env.MCP_GOOGLE_REDIRECT_URI ?? '';
+    const { accessToken } = await this.googleOAuthService.exchangeCodeForTokens(
+      code,
+      redirectUri,
+    );
+    const { email } =
+      await this.googleOAuthService.getGoogleUserInfo(accessToken);
+
+    const user = await this.userService.findByEmail(email);
+    if (!user) return null;
+
+    const authCode = randomUUID();
+    await this.cache.set(
+      `mcp:authcode:${authCode}`,
+      {
+        slackId: user.slackId,
+        codeChallenge: pkce.codeChallenge,
+      } satisfies AuthCode,
+      AUTH_CODE_TTL,
+    );
+
+    return {
+      clientRedirectUri: `${pkce.clientRedirectUri}?code=${authCode}&state=${encodeURIComponent(pkce.clientState)}`,
+      clientState: pkce.clientState,
+    };
+  }
+
+  // ─── OAuth 2.0 Token Endpoint ────────────────────────────────────────────
+
+  async issueToken(code: string, codeVerifier: string): Promise<string | null> {
+    const authCode = await this.cache.get<AuthCode>(`mcp:authcode:${code}`);
+    if (!authCode) return null;
+
+    await this.cache.del(`mcp:authcode:${code}`);
+
+    // PKCE S256 검증
+    const computed = createHash('sha256')
+      .update(codeVerifier)
+      .digest('base64url');
+    if (computed !== authCode.codeChallenge) return null;
+
+    const token = randomUUID();
+    await this.cache.set(
+      `mcp:session:${token}`,
+      authCode.slackId,
+      MCP_SESSION_TTL,
+    );
+    return token;
+  }
+
+  // ─── MCP 요청 처리 ───────────────────────────────────────────────────────
 
   private buildServer(slackId: string): Server {
     const server = new Server(
@@ -61,14 +197,12 @@ export class McpService {
   ): Promise<void> {
     const sessionId = (req.headers['mcp-session-id'] as string) ?? undefined;
 
-    // 기존 세션 재사용
     if (sessionId && this.sessions.has(sessionId)) {
       const session = this.sessions.get(sessionId)!;
       await session.transport.handleRequest(req, res, body);
       return;
     }
 
-    // initialize 요청인지 확인 (새 세션 생성 가능)
     const isInit =
       body !== null &&
       typeof body === 'object' &&
@@ -83,7 +217,6 @@ export class McpService {
       return;
     }
 
-    // 새 세션 생성
     const newSessionId = randomUUID();
     const transport = new StreamableHTTPServerTransport({
       sessionIdGenerator: () => newSessionId,
@@ -91,10 +224,7 @@ export class McpService {
     const server = this.buildServer(slackId);
 
     this.sessions.set(newSessionId, { server, transport });
-
-    transport.onclose = () => {
-      this.sessions.delete(newSessionId);
-    };
+    transport.onclose = () => this.sessions.delete(newSessionId);
 
     await server.connect(transport);
     await transport.handleRequest(req, res, body);
@@ -105,9 +235,7 @@ export class McpService {
     const token = authHeader.slice(7).trim();
     if (!token) return null;
 
-    // POC: Bearer 토큰 = slackId 직접 사용
-    // TODO: Google OAuth 세션 토큰으로 교체
-    const user = await this.userService.findBySlackId(token);
-    return user ? token : null;
+    const slackId = await this.cache.get<string>(`mcp:session:${token}`);
+    return slackId ?? null;
   }
 }
