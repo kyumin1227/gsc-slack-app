@@ -14,7 +14,7 @@ export interface CreateRuleDto {
   studentClassId: number;
   cycle: number;
   needPeoples: number;
-  dayOfWeek: number;
+  daysOfWeek: number[];
   resourceId: number;
   slackUserIds: string[];
 }
@@ -22,7 +22,7 @@ export interface CreateRuleDto {
 export interface UpdateRuleDto {
   cycle: number;
   needPeoples: number;
-  dayOfWeek: number;
+  daysOfWeek: number[];
   resourceId: number;
 }
 
@@ -97,7 +97,7 @@ export class CleaningRuleService {
         studentClassId: dto.studentClassId,
         cycle: dto.cycle,
         needPeoples: dto.needPeoples,
-        dayOfWeek: dto.dayOfWeek,
+        daysOfWeek: dto.daysOfWeek,
       }),
     );
 
@@ -117,7 +117,7 @@ export class CleaningRuleService {
     await this.ruleRepo.update(id, {
       cycle: dto.cycle,
       needPeoples: dto.needPeoples,
-      dayOfWeek: dto.dayOfWeek,
+      daysOfWeek: dto.daysOfWeek,
     });
 
     const existing = await this.ruleResourceRepo.findOne({
