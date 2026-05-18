@@ -3,17 +3,26 @@ import type { Channel } from '@slack/web-api/dist/types/response/ConversationsLi
 import type { Announcement } from '../announcement.entity';
 
 export class AnnouncementView {
+  static readonly PAGE_SIZE = 10;
+
   /** 공지 목록 모달 */
-  static listModal(announcements: Announcement[]): View {
+  static listModal(
+    announcements: Announcement[],
+    offset: number,
+    total: number,
+  ): View {
+    const limit = AnnouncementView.PAGE_SIZE;
+    const currentPage = Math.floor(offset / limit) + 1;
+    const totalPages = Math.max(1, Math.ceil(total / limit));
+    const hasPrev = offset > 0;
+    const hasNext = offset + limit < total;
+
     const announcementBlocks: KnownBlock[] =
       announcements.length === 0
         ? [
             {
               type: 'section',
-              text: {
-                type: 'mrkdwn',
-                text: '아직 등록된 공지가 없습니다.',
-              },
+              text: { type: 'mrkdwn', text: '아직 등록된 공지가 없습니다.' },
             },
           ]
         : announcements.flatMap<KnownBlock>((a) => [
@@ -46,7 +55,10 @@ export class AnnouncementView {
                   value: String(a.id),
                   confirm: {
                     title: { type: 'plain_text', text: '공지 삭제' },
-                    text: { type: 'mrkdwn', text: '정말 삭제하시겠습니까?\n채널의 원본 메시지도 함께 삭제됩니다.' },
+                    text: {
+                      type: 'mrkdwn',
+                      text: '정말 삭제하시겠습니까?\n채널의 원본 메시지도 함께 삭제됩니다.',
+                    },
                     confirm: { type: 'plain_text', text: '삭제' },
                     deny: { type: 'plain_text', text: '취소' },
                     style: 'danger',
@@ -56,12 +68,53 @@ export class AnnouncementView {
             },
           ]);
 
+    const paginationElements: {
+      type: 'button';
+      text: { type: 'plain_text'; text: string };
+      action_id: string;
+      value: string;
+    }[] = [];
+    if (hasPrev) {
+      paginationElements.push({
+        type: 'button' as const,
+        text: { type: 'plain_text' as const, text: '◀ 이전' },
+        action_id: 'announcement:list:prev',
+        value: String(offset - limit),
+      });
+    }
+    if (hasNext) {
+      paginationElements.push({
+        type: 'button' as const,
+        text: { type: 'plain_text' as const, text: '다음 ▶' },
+        action_id: 'announcement:list:next',
+        value: String(offset + limit),
+      });
+    }
+
     return {
       type: 'modal',
       callback_id: 'announcement:modal:list',
+      private_metadata: String(offset),
       title: { type: 'plain_text', text: '공지 목록' },
       close: { type: 'plain_text', text: '닫기' },
-      blocks: [...announcementBlocks],
+      blocks: [
+        {
+          type: 'context',
+          elements: [
+            {
+              type: 'mrkdwn',
+              text: `${currentPage} / ${totalPages} 페이지 (총 ${total}건)`,
+            },
+          ],
+        } as KnownBlock,
+        ...announcementBlocks,
+        ...(hasPrev || hasNext
+          ? [
+              { type: 'divider' } as KnownBlock,
+              { type: 'actions', elements: paginationElements } as KnownBlock,
+            ]
+          : []),
+      ],
     };
   }
 

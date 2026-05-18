@@ -48,11 +48,12 @@ export class AnnouncementController {
       throw e;
     }
 
-    const announcements = await this.announcementService.findRecent(10);
+    const limit = AnnouncementView.PAGE_SIZE;
+    const { items, total } = await this.announcementService.findPage(0, limit);
 
     await client.views.open({
       trigger_id: body.trigger_id,
-      view: AnnouncementView.listModal(announcements),
+      view: AnnouncementView.listModal(items, 0, total),
     });
   }
 
@@ -154,10 +155,67 @@ export class AnnouncementController {
     await this.announcementService.softDelete(id);
     this.logger.log(`공지 삭제 완료 — id: ${id}, by: ${userId}`);
 
-    const announcements = await this.announcementService.findRecent(10);
+    const limit = AnnouncementView.PAGE_SIZE;
+    const offset = Number(body.view?.private_metadata ?? '0');
+    const { items, total } = await this.announcementService.findPage(offset, limit);
+    // 삭제 후 현재 페이지 항목이 없으면 이전 페이지로 이동
+    const adjustedOffset = items.length === 0 && offset > 0 ? offset - limit : offset;
+    const page =
+      adjustedOffset !== offset
+        ? await this.announcementService.findPage(adjustedOffset, limit)
+        : { items, total };
+
+    const viewId = body.view?.id;
+    if (!viewId) {
+      this.logger.error('삭제 후 목록 갱신 실패: view_id 없음');
+      return;
+    }
+
     await client.views.update({
-      view_id: body.view?.id ?? '',
-      view: AnnouncementView.listModal(announcements),
+      view_id: viewId,
+      hash: body.view?.hash,
+      view: AnnouncementView.listModal(page.items, adjustedOffset, page.total),
+    });
+  }
+
+  /** 이전 페이지 — action.value = 이동할 offset */
+  @Action('announcement:list:prev')
+  async handleListPrev(
+    args: SlackActionMiddlewareArgs<BlockAction<ButtonAction>> & AllMiddlewareArgs,
+  ) {
+    return this.handleListPage(args);
+  }
+
+  /** 다음 페이지 — action.value = 이동할 offset */
+  @Action('announcement:list:next')
+  async handleListNext(
+    args: SlackActionMiddlewareArgs<BlockAction<ButtonAction>> & AllMiddlewareArgs,
+  ) {
+    return this.handleListPage(args);
+  }
+
+  private async handleListPage({
+    ack,
+    client,
+    body,
+    action,
+  }: SlackActionMiddlewareArgs<BlockAction<ButtonAction>> & AllMiddlewareArgs) {
+    await ack();
+
+    const offset = Number(action.value);
+    const limit = AnnouncementView.PAGE_SIZE;
+    const { items, total } = await this.announcementService.findPage(offset, limit);
+
+    const viewId = body.view?.id;
+    if (!viewId) {
+      this.logger.error('페이지 이동 실패: view_id 없음');
+      return;
+    }
+
+    await client.views.update({
+      view_id: viewId,
+      hash: body.view?.hash,
+      view: AnnouncementView.listModal(items, offset, total),
     });
   }
 

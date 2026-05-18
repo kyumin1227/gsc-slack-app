@@ -15,13 +15,18 @@ export class AnnouncementService {
     private readonly announcementRepository: Repository<Announcement>,
   ) {}
 
-  /** 최근 공지 최대 n개 조회 (author 포함) */
-  async findRecent(limit = 10): Promise<Announcement[]> {
-    return this.announcementRepository.find({
+  /** 페이지 단위 공지 조회 (author 포함) */
+  async findPage(
+    offset: number,
+    limit: number,
+  ): Promise<{ items: Announcement[]; total: number }> {
+    const [items, total] = await this.announcementRepository.findAndCount({
       order: { createdAt: 'DESC' },
+      skip: offset,
       take: limit,
       relations: { author: true },
     });
+    return { items, total };
   }
 
   /** 단일 공지 조회 */
