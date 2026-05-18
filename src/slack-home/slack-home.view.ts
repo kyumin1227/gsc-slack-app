@@ -3,6 +3,7 @@ import { join } from 'path';
 import type { View } from '@slack/types';
 import type { User } from '../user/user.entity';
 import { UserRole } from '../user/user.entity';
+import { AnnouncementView } from '../announcement/view/announcement.view';
 
 const APP_VERSION: string = JSON.parse(
   readFileSync(join(__dirname, '../../package.json'), 'utf-8'),
@@ -512,6 +513,7 @@ export class HomeView {
             },
           ],
         },
+        ...AnnouncementView.homeSection(),
         { type: 'divider' },
         {
           type: 'actions',

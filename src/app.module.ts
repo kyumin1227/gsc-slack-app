@@ -20,6 +20,7 @@ import { slackErrorMiddleware } from './common/slack-error.middleware';
 import { CleaningModule } from './cleaning/cleaning.module';
 import { SlackAiModule } from './slack-ai/slack-ai.module';
 import { McpModule } from './mcp/mcp.module';
+import { AnnouncementModule } from './announcement/announcement.module';
 
 @Module({
   imports: [
@@ -75,6 +76,7 @@ import { McpModule } from './mcp/mcp.module';
     CleaningModule,
     SlackAiModule,
     McpModule,
+    AnnouncementModule,
   ],
   controllers: [AppController],
   providers: [AppService],
