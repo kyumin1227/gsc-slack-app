@@ -3,7 +3,7 @@ export interface CreateAnnouncementDto {
   messageTs: string;
   title: string;
   content: string;
-  authorSlackId: string;
+  authorId: number;
 }
 
 export interface UpdateAnnouncementDto {

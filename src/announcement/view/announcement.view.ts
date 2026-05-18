@@ -25,7 +25,7 @@ export class AnnouncementView {
                 text: [
                   `*${a.title}*`,
                   `채널: <#${a.channelId}>`,
-                  `작성자: ${a.author?.name ?? '알 수 없음'}  |  ${formatDate(a.createdAt)}`,
+                  `작성자: ${a.author?.slackId ? `<@${a.author.slackId}>` : (a.author?.name ?? '알 수 없음')}  |  ${formatDate(a.createdAt)}`,
                 ].join('\n'),
               },
               accessory: {

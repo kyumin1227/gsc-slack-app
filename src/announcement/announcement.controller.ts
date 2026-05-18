@@ -10,6 +10,7 @@ import type {
 import { AnnouncementService } from './announcement.service';
 import { AnnouncementView } from './view/announcement.view';
 import { PermissionService } from '../user/service/permission.service';
+import { UserService } from '../user/service/user.service';
 import { BusinessError } from '../common/errors';
 
 @Controller()
@@ -19,6 +20,7 @@ export class AnnouncementController {
   constructor(
     private readonly announcementService: AnnouncementService,
     private readonly permissionService: PermissionService,
+    private readonly userService: UserService,
   ) {}
 
   /** 공지 목록 모달 열기 */
@@ -198,12 +200,18 @@ export class AnnouncementController {
 
       const messageTs = result.ts ?? '';
 
+      const author = await this.userService.findBySlackId(userId);
+      if (!author) {
+        this.logger.error(`공지 작성자를 찾을 수 없음 — slackId: ${userId}`);
+        return;
+      }
+
       await this.announcementService.create({
         channelId,
         messageTs,
         title,
         content: contentJson,
-        authorSlackId: userId,
+        authorId: author.id,
       });
 
       this.logger.log(

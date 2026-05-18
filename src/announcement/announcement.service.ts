@@ -39,7 +39,7 @@ export class AnnouncementService {
       messageTs: dto.messageTs,
       title: dto.title,
       content: dto.content,
-      author: { slackId: dto.authorSlackId } as unknown as User,
+      author: { id: dto.authorId } as unknown as User,
     });
     return this.announcementRepository.save(announcement);
   }
