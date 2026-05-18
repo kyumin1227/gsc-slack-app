@@ -33,10 +33,10 @@ export class CleaningController {
   }: SlackActionMiddlewareArgs<BlockAction> & AllMiddlewareArgs) {
     await ack();
 
-    const user = await this.permissionService.requireCleaningAccess(
+    const user = await this.permissionService.requireAdminOrClassRep(
       body.user.id,
     );
-    const resources = await this.resourceService.findAll();
+    const resources = await this.resourceService.findSpaces();
 
     if (resources.length === 0) {
       await client.chat.postMessage({
@@ -91,7 +91,7 @@ export class CleaningController {
   }: SlackActionMiddlewareArgs<BlockAction> & AllMiddlewareArgs) {
     await ack();
 
-    const user = await this.permissionService.requireCleaningAccess(
+    const user = await this.permissionService.requireAdminOrClassRep(
       body.user.id,
     );
     const classId =
@@ -113,7 +113,7 @@ export class CleaningController {
   }: SlackActionMiddlewareArgs<BlockAction> & AllMiddlewareArgs) {
     await ack();
 
-    const user = await this.permissionService.requireCleaningAccess(
+    const user = await this.permissionService.requireAdminOrClassRep(
       body.user.id,
     );
     const classId =
@@ -135,7 +135,7 @@ export class CleaningController {
   }: SlackActionMiddlewareArgs<BlockAction> & AllMiddlewareArgs) {
     await ack();
 
-    const user = await this.permissionService.requireCleaningAccess(
+    const user = await this.permissionService.requireAdminOrClassRep(
       body.user.id,
     );
     const action = body.actions[0] as { value: string };
@@ -143,7 +143,7 @@ export class CleaningController {
 
     const [rule, resources, slackIds] = await Promise.all([
       this.cleaningRuleService.findOneWithDetails(ruleId),
-      this.resourceService.findAll(true),
+      this.resourceService.findSpaces(true),
       this.cleaningRuleService.getUserSlackIds(ruleId),
     ]);
     if (!rule) return;
@@ -172,7 +172,7 @@ export class CleaningController {
   }: SlackActionMiddlewareArgs<BlockAction> & AllMiddlewareArgs) {
     await ack();
 
-    const user = await this.permissionService.requireCleaningAccess(
+    const user = await this.permissionService.requireAdminOrClassRep(
       body.user.id,
     );
     const action = body.actions[0] as { value: string };
@@ -223,10 +223,9 @@ export class CleaningController {
       values.need_peoples_block.need_peoples_input.value ?? '',
       10,
     );
-    const dayOfWeek = parseInt(
-      values.day_of_week_block.day_of_week_select.selected_option?.value ?? '',
-      10,
-    );
+    const daysOfWeek: number[] = (
+      (values.day_of_week_block.day_of_week_select as any).selected_options ?? []
+    ).map((o: { value: string }) => parseInt(o.value, 10));
     const resourceId = parseInt(
       values.resource_block.resource_select.selected_option?.value ?? '',
       10,
@@ -256,7 +255,7 @@ export class CleaningController {
       studentClassId,
       cycle,
       needPeoples,
-      dayOfWeek,
+      daysOfWeek,
       resourceId,
       slackUserIds,
     });
@@ -281,10 +280,9 @@ export class CleaningController {
       values.need_peoples_block.need_peoples_input.value ?? '',
       10,
     );
-    const dayOfWeek = parseInt(
-      values.day_of_week_block.day_of_week_select.selected_option?.value ?? '',
-      10,
-    );
+    const daysOfWeek: number[] = (
+      (values.day_of_week_block.day_of_week_select as any).selected_options ?? []
+    ).map((o: { value: string }) => parseInt(o.value, 10));
     const resourceId = parseInt(
       values.resource_block.resource_select.selected_option?.value ?? '',
       10,
@@ -315,13 +313,13 @@ export class CleaningController {
       this.cleaningRuleService.update(ruleId, {
         cycle,
         needPeoples,
-        dayOfWeek,
+        daysOfWeek,
         resourceId,
       }),
       this.cleaningRuleService.setUsers(ruleId, slackUserIds),
     ]);
 
-    const user = await this.permissionService.requireCleaningAccess(
+    const user = await this.permissionService.requireAdminOrClassRep(
       body.user.id,
     );
     const classId =
@@ -352,7 +350,7 @@ export class CleaningController {
     const ruleId = parseInt(view.private_metadata, 10);
     await this.cleaningRuleService.delete(ruleId);
 
-    const user = await this.permissionService.requireCleaningAccess(
+    const user = await this.permissionService.requireAdminOrClassRep(
       body.user.id,
     );
     const classId =

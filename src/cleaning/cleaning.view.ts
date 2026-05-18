@@ -7,7 +7,8 @@ import { RuleWithDetails } from './cleaning-rule.service';
 
 type UserOption = { label: string; value: string };
 
-const DAY_LABELS = ['월', '화', '수', '목', '금', '토', '일'];
+// 0=일, 1=월, ..., 6=토 (JS Date.getDay() 기준)
+const DAY_LABELS = ['일', '월', '화', '수', '목', '금', '토'];
 
 const DAY_OPTIONS = DAY_LABELS.map((label, index) => ({
   text: { type: 'plain_text' as const, text: `${label}요일` },
@@ -23,9 +24,9 @@ function ruleLabel(rule: RuleWithDetails): string {
 }
 
 function ruleInfoText(rule: RuleWithDetails): string {
-  const dayLabel = DAY_LABELS[rule.dayOfWeek] ?? '?';
+  const dayLabel = rule.daysOfWeek.map((d) => DAY_LABELS[d] ?? '?').join('/') + '요일';
   const resourceName = rule.ruleResource?.resource?.name ?? '미지정';
-  return `*${ruleLabel(rule)}* | ${rule.cycle}주 주기 | ${rule.needPeoples}명 | ${dayLabel}요일 | ${resourceName}`;
+  return `*${ruleLabel(rule)}* | ${rule.cycle}주 주기 | ${rule.needPeoples}명 | ${dayLabel} | ${resourceName}`;
 }
 
 export class CleaningView {
@@ -180,7 +181,7 @@ export class CleaningView {
           block_id: 'day_of_week_block',
           label: { type: 'plain_text', text: '청소 요일' },
           element: {
-            type: 'static_select',
+            type: 'multi_static_select',
             action_id: 'day_of_week_select',
             placeholder: { type: 'plain_text', text: '요일을 선택하세요' },
             options: DAY_OPTIONS,
@@ -228,7 +229,6 @@ export class CleaningView {
     }));
 
     const currentResource = rule.ruleResource?.resource;
-    const currentDay = rule.dayOfWeek;
 
     return {
       type: 'modal',
@@ -263,16 +263,13 @@ export class CleaningView {
           block_id: 'day_of_week_block',
           label: { type: 'plain_text', text: '청소 요일' },
           element: {
-            type: 'static_select',
+            type: 'multi_static_select',
             action_id: 'day_of_week_select',
             options: DAY_OPTIONS,
-            initial_option: {
-              text: {
-                type: 'plain_text',
-                text: `${DAY_LABELS[currentDay]}요일`,
-              },
-              value: String(currentDay),
-            },
+            initial_options: rule.daysOfWeek.map((d) => ({
+              text: { type: 'plain_text' as const, text: `${DAY_LABELS[d]}요일` },
+              value: String(d),
+            })),
           },
         },
         {
