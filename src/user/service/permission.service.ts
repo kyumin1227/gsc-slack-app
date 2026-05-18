@@ -23,12 +23,12 @@ export class PermissionService {
     return user;
   }
 
-  /** 청소 시스템 접근 권한 확인 (교수/조교/반대표) — User 반환, 없으면 BusinessError throw */
-  async requireCleaningAccess(slackId: string): Promise<User> {
+  /** 교수/조교/반대표 권한 확인 — User 반환, 없으면 BusinessError throw */
+  async requireAdminOrClassRep(slackId: string): Promise<User> {
     const user = await this.userService.findBySlackIdWithClass(slackId);
     const allowed = [UserRole.PROFESSOR, UserRole.TA, UserRole.CLASS_REP];
     if (!user || user.status !== UserStatus.ACTIVE || !allowed.includes(user.role)) {
-      throw new BusinessError(UserErrorCode.ADMIN_REQUIRED);
+      throw new BusinessError(UserErrorCode.ADMIN_OR_CLASS_REP_REQUIRED);
     }
     return user;
   }
