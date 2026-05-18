@@ -19,6 +19,8 @@ import { httpReceiver } from './slack-receiver';
 import { slackErrorMiddleware } from './common/slack-error.middleware';
 import { CleaningModule } from './cleaning/cleaning.module';
 import { SlackAiModule } from './slack-ai/slack-ai.module';
+import { McpModule } from './mcp/mcp.module';
+import { AnnouncementModule } from './announcement/announcement.module';
 
 @Module({
   imports: [
@@ -73,6 +75,8 @@ import { SlackAiModule } from './slack-ai/slack-ai.module';
     ResourceModule,
     CleaningModule,
     SlackAiModule,
+    McpModule,
+    AnnouncementModule,
   ],
   controllers: [AppController],
   providers: [AppService],
