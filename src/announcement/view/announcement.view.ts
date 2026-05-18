@@ -28,12 +28,31 @@ export class AnnouncementView {
                   `작성자: ${a.author?.slackId ? `<@${a.author.slackId}>` : (a.author?.name ?? '알 수 없음')}  |  ${formatDate(a.createdAt)}`,
                 ].join('\n'),
               },
-              accessory: {
-                type: 'button',
-                text: { type: 'plain_text', text: '수정' },
-                action_id: 'announcement:edit:open-modal',
-                value: String(a.id),
-              },
+            },
+            {
+              type: 'actions',
+              elements: [
+                {
+                  type: 'button',
+                  text: { type: 'plain_text', text: '수정' },
+                  action_id: 'announcement:edit:open-modal',
+                  value: String(a.id),
+                },
+                {
+                  type: 'button',
+                  text: { type: 'plain_text', text: '삭제' },
+                  action_id: 'announcement:delete',
+                  style: 'danger',
+                  value: String(a.id),
+                  confirm: {
+                    title: { type: 'plain_text', text: '공지 삭제' },
+                    text: { type: 'mrkdwn', text: '정말 삭제하시겠습니까?\n채널의 원본 메시지도 함께 삭제됩니다.' },
+                    confirm: { type: 'plain_text', text: '삭제' },
+                    deny: { type: 'plain_text', text: '취소' },
+                    style: 'danger',
+                  },
+                },
+              ],
             },
           ]);
 

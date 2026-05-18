@@ -51,4 +51,9 @@ export class AnnouncementService {
       content: dto.content,
     });
   }
+
+  /** 공지 소프트 삭제 */
+  async softDelete(id: number): Promise<void> {
+    await this.announcementRepository.softDelete(id);
+  }
 }

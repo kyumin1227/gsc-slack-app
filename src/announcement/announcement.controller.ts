@@ -95,6 +95,72 @@ export class AnnouncementController {
     });
   }
 
+  /** 공지 삭제 — action.value = announcement.id */
+  @Action('announcement:delete')
+  async handleDelete({
+    ack,
+    client,
+    body,
+    action,
+  }: SlackActionMiddlewareArgs<BlockAction<ButtonAction>> & AllMiddlewareArgs) {
+    await ack();
+
+    const userId = body.user.id;
+
+    try {
+      await this.permissionService.requireAdmin(userId);
+    } catch (e) {
+      if (e instanceof BusinessError) {
+        await client.chat.postEphemeral({
+          channel: userId,
+          user: userId,
+          text: e.message,
+        });
+        return;
+      }
+      throw e;
+    }
+
+    const id = Number(action.value);
+    const announcement = await this.announcementService.findOne(id);
+
+    if (!announcement) {
+      await client.chat.postEphemeral({
+        channel: userId,
+        user: userId,
+        text: '해당 공지를 찾을 수 없습니다.',
+      });
+      return;
+    }
+
+    try {
+      await client.chat.delete({
+        channel: announcement.channelId,
+        ts: announcement.messageTs,
+      });
+    } catch (error: unknown) {
+      const code = extractSlackErrorCode(error);
+      if (code !== 'message_not_found') {
+        this.logger.error(`채널 메시지 삭제 실패 — id: ${id}, error: ${code}`);
+        await client.chat.postEphemeral({
+          channel: userId,
+          user: userId,
+          text: `채널 메시지 삭제에 실패했습니다: ${code}`,
+        });
+        return;
+      }
+    }
+
+    await this.announcementService.softDelete(id);
+    this.logger.log(`공지 삭제 완료 — id: ${id}, by: ${userId}`);
+
+    const announcements = await this.announcementService.findRecent(10);
+    await client.views.update({
+      view_id: body.view?.id ?? '',
+      view: AnnouncementView.listModal(announcements),
+    });
+  }
+
   /** 수정 모달 열기 — action.value = announcement.id */
   @Action('announcement:edit:open-modal')
   async openEditModal({
