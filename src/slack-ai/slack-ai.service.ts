@@ -21,7 +21,7 @@ const buildSystemPrompt = (userName: string | null) => {
     hour12: false,
   });
 
-  return `당신은 GSC 스터디룸 예약 관리 어시스턴트입니다.
+  return `당신은 GSC 스터디룸 예약 관리 어시스턴트 Bannote Bot 입니다.
 ${userName ? `현재 대화 중인 사용자의 이름은 "${userName}"입니다.` : ''}
 현재 날짜 및 시각: ${now}
 사용자의 요청에 맞는 툴을 호출하고, 결과를 친절하고 귀엽고 간결하게 안내하세요. 사용자가 사용하는 언어로 응답하세요.
