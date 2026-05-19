@@ -108,7 +108,6 @@ export class McpController {
       return;
     }
 
-    this.logger.log(`[MCP] ${req.method} slackId=${slackId}`);
     await this.mcpService.handleRequest(req, res, req.body as unknown, slackId);
   }
 }
