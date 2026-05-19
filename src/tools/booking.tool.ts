@@ -52,12 +52,12 @@ export class BookingTool {
           startDatetime: {
             type: 'string',
             description:
-              '조회 시작 일시 (ISO 8601, 예: 2025-05-10T00:00:00+09:00)',
+              '조회 시작 일시 (ISO 8601, 반드시 +09:00 오프셋 포함, 예: 2025-05-10T00:00:00+09:00)',
           },
           endDatetime: {
             type: 'string',
             description:
-              '조회 종료 일시 (ISO 8601, 예: 2025-05-10T23:59:00+09:00)',
+              '조회 종료 일시 (ISO 8601, 반드시 +09:00 오프셋 포함, 예: 2025-05-10T23:59:00+09:00)',
           },
           roomId: {
             type: 'number',
@@ -86,12 +86,12 @@ export class BookingTool {
           startDatetime: {
             type: 'string',
             description:
-              '예약 시작 일시 (ISO 8601, 반드시 15분 단위, 예: 2025-05-10T14:00:00+09:00, 2025-05-10T14:15:00+09:00)',
+              '예약 시작 일시 (ISO 8601, 반드시 15분 단위 & +09:00 오프셋 포함, 예: 2025-05-10T14:00:00+09:00, 2025-05-10T14:15:00+09:00)',
           },
           endDatetime: {
             type: 'string',
             description:
-              '예약 종료 일시 (ISO 8601, 반드시 15분 단위, 예: 2025-05-10T16:00:00+09:00, 2025-05-10T15:45:00+09:00)',
+              '예약 종료 일시 (ISO 8601, 반드시 15분 단위 & +09:00 오프셋 포함, 예: 2025-05-10T16:00:00+09:00, 2025-05-10T15:45:00+09:00)',
           },
           attendeeSlackIds: {
             type: 'array',
@@ -149,11 +149,11 @@ export class BookingTool {
           },
           startDatetime: {
             type: 'string',
-            description: '수정할 시작 일시 (ISO 8601, 15분 단위)',
+            description: '수정할 시작 일시 (ISO 8601, 반드시 15분 단위 & +09:00 오프셋 포함, 예: 2025-05-10T14:00:00+09:00, 2025-05-10T14:15:00+09:00)',
           },
           endDatetime: {
             type: 'string',
-            description: '수정할 종료 일시 (ISO 8601, 15분 단위)',
+            description: '수정할 종료 일시 (ISO 8601, 반드시 15분 단위 & +09:00 오프셋 포함, 예: 2025-05-10T16:00:00+09:00, 2025-05-10T15:45:00+09:00)',
           },
           attendeeSlackIds: {
             type: 'array',
