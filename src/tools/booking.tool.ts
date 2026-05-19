@@ -45,24 +45,24 @@ export class BookingTool {
     {
       name: 'check_room_availability',
       description:
-        '지정한 시간 범위 내 스터디룸별 예약 현황을 조회합니다. 빈 방과 예약된 방, 예약 시간대를 반환합니다. roomName을 사용할 경우 반드시 이 툴보다 먼저 get_study_rooms를 호출해 정확한 이름을 확인하세요.',
+        '지정한 시간 범위 내 스터디룸별 예약 현황을 조회합니다. 빈 방과 예약된 방, 예약 시간대를 반환합니다. roomId를 사용할 경우 반드시 이 툴보다 먼저 get_study_rooms를 호출해 정확한 ID를 확인하세요.',
       input_schema: {
         type: 'object' as const,
         properties: {
           startDatetime: {
             type: 'string',
             description:
-              '조회 시작 일시 (ISO 8601, 예: 2025-05-10T09:00:00+09:00)',
+              '조회 시작 일시 (ISO 8601, 예: 2025-05-10T00:00:00+09:00)',
           },
           endDatetime: {
             type: 'string',
             description:
-              '조회 종료 일시 (ISO 8601, 예: 2025-05-10T22:00:00+09:00)',
+              '조회 종료 일시 (ISO 8601, 예: 2025-05-10T23:59:00+09:00)',
           },
-          roomName: {
-            type: 'string',
+          roomId: {
+            type: 'number',
             description:
-              '특정 방만 조회할 경우 방 이름 또는 alias. 반드시 get_study_rooms로 정확한 이름을 확인 후 입력. 생략 시 전체 방 조회.',
+              '특정 방만 조회할 경우 get_study_rooms에서 반환된 방 ID. 생략 시 전체 방 조회.',
           },
         },
         required: ['startDatetime', 'endDatetime'],
@@ -231,15 +231,15 @@ export class BookingTool {
     }
 
     if (name === 'check_room_availability') {
-      const { startDatetime, endDatetime, roomName } = input as {
+      const { startDatetime, endDatetime, roomId } = input as {
         startDatetime: string;
         endDatetime: string;
-        roomName?: string;
+        roomId?: number;
       };
       const availability = await this.studyRoomService.getRoomAvailability(
         new Date(startDatetime),
         new Date(endDatetime),
-        roomName,
+        roomId,
       );
       return availability.map((r) => ({
         roomName: r.roomName,
