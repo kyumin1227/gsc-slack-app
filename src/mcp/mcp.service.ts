@@ -1,4 +1,4 @@
-import { Inject, Injectable } from '@nestjs/common';
+import { Inject, Injectable, Logger } from '@nestjs/common';
 import { createHash } from 'node:crypto';
 import { randomUUID } from 'node:crypto';
 import { Server } from '@modelcontextprotocol/sdk/server/index.js';
@@ -178,6 +178,8 @@ export class McpService {
     return { accessToken, refreshToken };
   }
 
+  private readonly logger = new Logger(McpService.name);
+
   // ─── MCP 요청 처리 ───────────────────────────────────────────────────────
 
   private buildServer(slackId: string): Server {
@@ -195,14 +197,33 @@ export class McpService {
     }));
 
     server.setRequestHandler(CallToolRequestSchema, async (req) => {
-      const result = await this.toolsService.execute(
-        req.params.name,
-        req.params.arguments ?? {},
-        slackId,
-      );
-      return {
-        content: [{ type: 'text' as const, text: JSON.stringify(result) }],
-      };
+      const tool = req.params.name;
+      try {
+        const result = await this.toolsService.execute(
+          tool,
+          req.params.arguments ?? {},
+          slackId,
+        );
+        return {
+          content: [{ type: 'text' as const, text: JSON.stringify(result) }],
+        };
+      } catch (e) {
+        this.logger.error(
+          `Tool execution failed — tool=${tool} slackId=${slackId} error=${e instanceof Error ? e.message : String(e)}`,
+        );
+        return {
+          content: [
+            {
+              type: 'text' as const,
+              text: JSON.stringify({
+                success: false,
+                error: e instanceof Error ? e.message : String(e),
+              }),
+            },
+          ],
+          isError: true,
+        };
+      }
     });
 
     return server;
@@ -219,6 +240,14 @@ export class McpService {
     if (sessionId && this.sessions.has(sessionId)) {
       const session = this.sessions.get(sessionId)!;
       await session.transport.handleRequest(req, res, body);
+      return;
+    }
+
+    // 세션 ID가 있지만 서버에 없는 경우 (재시작 등) → 404로 클라이언트 재연결 유도
+    if (sessionId) {
+      this.logger.warn(`Session not found (expired or server restarted) — sessionId=${sessionId} slackId=${slackId}`);
+      res.writeHead(404, { 'Content-Type': 'application/json' });
+      res.end(JSON.stringify({ error: 'Session not found. Please reinitialize.' }));
       return;
     }
 
@@ -243,7 +272,11 @@ export class McpService {
     const server = this.buildServer(slackId);
 
     this.sessions.set(newSessionId, { server, transport });
-    transport.onclose = () => this.sessions.delete(newSessionId);
+    this.logger.log(`Session created — sessionId=${newSessionId} slackId=${slackId}`);
+    transport.onclose = () => {
+      this.sessions.delete(newSessionId);
+      this.logger.log(`Session closed — sessionId=${newSessionId} slackId=${slackId}`);
+    };
 
     await server.connect(transport);
     await transport.handleRequest(req, res, body);
