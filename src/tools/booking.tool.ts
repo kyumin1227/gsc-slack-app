@@ -277,7 +277,16 @@ export class BookingTool {
         bookerSlackId: slackId,
         attendeeSlackIds,
       });
-      return { success: true, eventId };
+      return {
+        success: true,
+        eventId,
+        booking: {
+          roomId,
+          title,
+          startTime: toKSTString(start),
+          endTime: toKSTString(end),
+        },
+      };
     }
 
     if (name === 'cancel_booking') {
@@ -326,7 +335,17 @@ export class BookingTool {
           attendeeSlackIds,
         });
         await this.studyRoomService.cancelBooking(calendarId, eventId);
-        return { success: true, result: 'room-changed', eventId: newEventId };
+        return {
+          success: true,
+          result: 'room-changed',
+          eventId: newEventId,
+          booking: {
+            roomId: newRoomId,
+            title,
+            startTime: toKSTString(start),
+            endTime: toKSTString(end),
+          },
+        };
       }
 
       const result = await this.studyRoomService.modifyBooking(
@@ -339,7 +358,15 @@ export class BookingTool {
           attendeeSlackIds,
         },
       );
-      return { success: true, result };
+      return {
+        success: true,
+        result,
+        booking: {
+          title,
+          startTime: toKSTString(start),
+          endTime: toKSTString(end),
+        },
+      };
     }
 
     return null;
