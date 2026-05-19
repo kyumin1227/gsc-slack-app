@@ -5,7 +5,7 @@ export class AddCleaningEntities1778064597031 implements MigrationInterface {
 
   public async up(queryRunner: QueryRunner): Promise<void> {
     await queryRunner.query(
-      `CREATE TABLE "cleaning_rules" ("id" SERIAL NOT NULL, "studentClassId" integer NOT NULL, "cycle" integer NOT NULL, "needPeoples" integer NOT NULL, "dayOfWeek" integer NOT NULL, "createdAt" TIMESTAMP NOT NULL DEFAULT now(), "updatedAt" TIMESTAMP NOT NULL DEFAULT now(), "deletedAt" TIMESTAMP, CONSTRAINT "PK_cleaning_rules" PRIMARY KEY ("id"))`,
+      `CREATE TABLE "cleaning_rules" ("id" SERIAL NOT NULL, "studentClassId" integer NOT NULL, "cycle" integer NOT NULL, "needPeoples" integer NOT NULL, "daysOfWeek" integer[] NOT NULL, "createdAt" TIMESTAMP NOT NULL DEFAULT now(), "updatedAt" TIMESTAMP NOT NULL DEFAULT now(), "deletedAt" TIMESTAMP, CONSTRAINT "PK_cleaning_rules" PRIMARY KEY ("id"))`,
     );
     await queryRunner.query(
       `CREATE TABLE "cleaning_rule_resources" ("id" SERIAL NOT NULL, "ruleId" integer NOT NULL, "resourceId" integer NOT NULL, "createdAt" TIMESTAMP NOT NULL DEFAULT now(), "updatedAt" TIMESTAMP NOT NULL DEFAULT now(), "deletedAt" TIMESTAMP, CONSTRAINT "UQ_cleaning_rule_resources_ruleId" UNIQUE ("ruleId"), CONSTRAINT "PK_cleaning_rule_resources" PRIMARY KEY ("id"))`,

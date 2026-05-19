@@ -26,8 +26,8 @@ export class CleaningRule {
   @Column()
   needPeoples: number;
 
-  @Column()
-  dayOfWeek: number;
+  @Column('int', { array: true })
+  daysOfWeek: number[];
 
   @CreateDateColumn()
   createdAt: Date;
