@@ -104,7 +104,7 @@ resource "aws_security_group" "alb" {
   }
 }
 
-# ECS 보안 그룹 — ALB에서 컨테이너 포트만 허용
+# ECS 보안 그룹 — ALB에서 컨테이너 포트, 모니터링 EC2에서 /metrics 스크랩 허용
 resource "aws_security_group" "ecs" {
   name        = "${local.name_prefix}-ecs-sg"
   description = "ECS tasks security group"
@@ -115,6 +115,14 @@ resource "aws_security_group" "ecs" {
     to_port         = var.container_port
     protocol        = "tcp"
     security_groups = [aws_security_group.alb.id]
+  }
+
+  ingress {
+    description     = "Prometheus scrape from monitoring EC2"
+    from_port       = var.container_port
+    to_port         = var.container_port
+    protocol        = "tcp"
+    security_groups = [aws_security_group.monitoring.id]
   }
 
   egress {

@@ -1,10 +1,9 @@
-# PROMETHEUS_TARGET은 docker-compose.monitoring.yml의 APP_HOST 환경변수로 치환됨
-# 로컬: host.docker.internal:3000 / dev 서버: app:3000 / prod: <ALB DNS>:3000
+# 로컬/dev 서버 공용 — prod는 prometheus.prod.yml 사용
 global:
   scrape_interval: 15s
 
 scrape_configs:
   - job_name: 'gsc-slack-app'
     static_configs:
-      - targets: ['PROMETHEUS_TARGET']
+      - targets: ['host.docker.internal:3000']
     metrics_path: /metrics

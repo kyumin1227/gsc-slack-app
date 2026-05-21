@@ -1,0 +1,19 @@
+# prod 전용 — aws_sd_configs로 ECS Fargate 태스크 자동 탐색
+# EC2 IAM 역할에 ecs:ListClusters, ecs:ListTasks, ecs:DescribeTasks, ecs:DescribeTaskDefinition 권한 필요
+global:
+  scrape_interval: 15s
+
+scrape_configs:
+  - job_name: 'gsc-slack-app'
+    aws_sd_configs:
+      - region: ap-northeast-2
+        role: ecs
+    relabel_configs:
+      - source_labels: [__meta_ecs_task_definition_family]
+        action: keep
+        regex: bannote-prod-task
+      - source_labels: [__address__]
+        regex: '(.*)'
+        replacement: '$1:3000'
+        target_label: __address__
+    metrics_path: /metrics
