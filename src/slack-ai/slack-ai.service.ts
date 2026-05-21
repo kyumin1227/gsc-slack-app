@@ -4,6 +4,7 @@ import { CACHE_MANAGER } from '@nestjs/cache-manager';
 import type { Cache } from 'cache-manager';
 import { ToolsService } from '../tools/tools.service';
 import { UserService } from '../user/service/user.service';
+import { AppMetrics } from '../common/metrics/app.metrics';
 
 const MODEL = 'claude-haiku-4-5-20251001';
 const HISTORY_TTL_MS = 60 * 60 * 1000; // 1시간
@@ -41,6 +42,7 @@ export class SlackAiService {
   constructor(
     private readonly toolsService: ToolsService,
     private readonly userService: UserService,
+    private readonly appMetrics: AppMetrics,
     @Inject(CACHE_MANAGER) private readonly cache: Cache,
   ) {}
 
@@ -102,6 +104,22 @@ export class SlackAiService {
     text: string,
     onProgress?: (msg: string) => Promise<void>,
   ): Promise<string> {
+    this.appMetrics.aiMessagesTotal.inc();
+    this.appMetrics.aiProcessingCurrent.inc();
+    const endTimer = this.appMetrics.aiMessageDurationSeconds.startTimer();
+    try {
+      return await this._handleMessage(slackId, text, onProgress);
+    } finally {
+      endTimer();
+      this.appMetrics.aiProcessingCurrent.dec();
+    }
+  }
+
+  private async _handleMessage(
+    slackId: string,
+    text: string,
+    onProgress?: (msg: string) => Promise<void>,
+  ): Promise<string> {
     const tools = this.toolsService
       .getDefinitions()
       .filter((t) => t.name !== 'get_current_time'); // 프롬프트에 시간이 있으므로 툴 제외
@@ -124,12 +142,22 @@ export class SlackAiService {
         messages,
       });
 
+      this.appMetrics.aiTokensTotal.inc(
+        { type: 'input' },
+        response.usage.input_tokens,
+      );
+      this.appMetrics.aiTokensTotal.inc(
+        { type: 'output' },
+        response.usage.output_tokens,
+      );
+
       if (response.stop_reason !== 'tool_use') {
         const replyText = this.extractText(response.content);
         await this.saveHistory(slackId, [
           ...messages,
           { role: 'assistant', content: replyText },
         ]);
+        this.appMetrics.aiMessageRounds.observe(round + 1);
         this.logger.log(
           `[handleMessage] 완료 (${round + 1}라운드) length=${replyText.length}`,
         );
