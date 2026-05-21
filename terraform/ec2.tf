@@ -30,7 +30,10 @@ resource "aws_iam_role_policy" "monitoring_prometheus_sd" {
         Effect = "Allow"
         Action = [
           "ecs:ListClusters",
+          "ecs:ListServices",
           "ecs:ListTasks",
+          "ecs:DescribeClusters",
+          "ecs:DescribeServices",
           "ecs:DescribeTasks",
           "ecs:DescribeTaskDefinition",
           "ec2:DescribeInstances",
@@ -122,9 +125,11 @@ resource "aws_instance" "monitoring" {
     systemctl start docker
     usermod -aG docker ec2-user
 
-    # Docker Compose 설치
+    # Docker Compose 설치 (standalone + plugin 심링크)
     curl -L "https://github.com/docker/compose/releases/download/v2.36.0/docker-compose-$(uname -s)-$(uname -m)" -o /usr/local/bin/docker-compose
     chmod +x /usr/local/bin/docker-compose
+    mkdir -p /usr/libexec/docker/cli-plugins
+    ln -sf /usr/local/bin/docker-compose /usr/libexec/docker/cli-plugins/docker-compose
 
     # 리포지토리 clone
     git clone https://github.com/kyumin1227/gsc-slack-app.git /home/ec2-user/gsc-slack-app
