@@ -55,7 +55,7 @@ jobs:
           RESULT=$(aws ssm get-command-invocation \
             --command-id ${{ steps.pull.outputs.command_id }} \
             --instance-id ${{ steps.instance.outputs.id }} --output json)
-          echo "$RESULT" | python3 -c "import sys,json; r=json.load(sys.stdin); print(r['StandardOutputContent'] or r['StandardErrorContent'])"
+          echo "$RESULT" | python3 -c "import sys,json; r=json.load(sys.stdin); print(r['StandardOutputContent']); print(r['StandardErrorContent'])"
           echo "$RESULT" | python3 -c "import sys,json; r=json.load(sys.stdin); exit(0 if r['Status']=='Success' else 1)"
 
       - name: Write .env file
@@ -77,7 +77,29 @@ jobs:
           RESULT=$(aws ssm get-command-invocation \
             --command-id ${{ steps.env.outputs.command_id }} \
             --instance-id ${{ steps.instance.outputs.id }} --output json)
-          echo "$RESULT" | python3 -c "import sys,json; r=json.load(sys.stdin); print(r['StandardOutputContent'] or r['StandardErrorContent'])"
+          echo "$RESULT" | python3 -c "import sys,json; r=json.load(sys.stdin); print(r['StandardOutputContent']); print(r['StandardErrorContent'])"
+          echo "$RESULT" | python3 -c "import sys,json; r=json.load(sys.stdin); exit(0 if r['Status']=='Success' else 1)"
+
+      - name: Ensure docker compose plugin
+        id: setup
+        run: |
+          COMMAND_ID=$(aws ssm send-command \
+            --instance-id ${{ steps.instance.outputs.id }} \
+            --document-name "AWS-RunShellScript" \
+            --parameters '{"commands":["mkdir -p /usr/libexec/docker/cli-plugins && ln -sf /usr/local/bin/docker-compose /usr/libexec/docker/cli-plugins/docker-compose && docker compose version"]}' \
+            --query "Command.CommandId" \
+            --output text)
+          echo "command_id=$COMMAND_ID" >> $GITHUB_OUTPUT
+
+      - name: Wait and get setup result
+        run: |
+          aws ssm wait command-executed \
+            --command-id ${{ steps.setup.outputs.command_id }} \
+            --instance-id ${{ steps.instance.outputs.id }} || true
+          RESULT=$(aws ssm get-command-invocation \
+            --command-id ${{ steps.setup.outputs.command_id }} \
+            --instance-id ${{ steps.instance.outputs.id }} --output json)
+          echo "$RESULT" | python3 -c "import sys,json; r=json.load(sys.stdin); print(r['StandardOutputContent']); print(r['StandardErrorContent'])"
           echo "$RESULT" | python3 -c "import sys,json; r=json.load(sys.stdin); exit(0 if r['Status']=='Success' else 1)"
 
       - name: Deploy monitoring stack
@@ -99,5 +121,5 @@ jobs:
           RESULT=$(aws ssm get-command-invocation \
             --command-id ${{ steps.deploy.outputs.command_id }} \
             --instance-id ${{ steps.instance.outputs.id }} --output json)
-          echo "$RESULT" | python3 -c "import sys,json; r=json.load(sys.stdin); print(r['StandardOutputContent'] or r['StandardErrorContent'])"
+          echo "$RESULT" | python3 -c "import sys,json; r=json.load(sys.stdin); print(r['StandardOutputContent']); print(r['StandardErrorContent'])"
           echo "$RESULT" | python3 -c "import sys,json; r=json.load(sys.stdin); exit(0 if r['Status']=='Success' else 1)"
