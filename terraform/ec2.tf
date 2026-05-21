@@ -75,14 +75,6 @@ resource "aws_security_group" "monitoring" {
     security_groups = [aws_security_group.alb.id]
   }
 
-  ingress {
-    description     = "Loki from ECS"
-    from_port       = 3100
-    to_port         = 3100
-    protocol        = "tcp"
-    security_groups = [aws_security_group.ecs.id]
-  }
-
   egress {
     from_port   = 0
     to_port     = 0
