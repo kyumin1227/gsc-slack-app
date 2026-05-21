@@ -1,9 +1,25 @@
 import { Injectable } from '@nestjs/common';
 import { calendar_v3 } from 'googleapis';
 import { GoogleCalendarBaseService } from './base.service';
+import { AppMetrics } from '../../common/metrics/app.metrics';
 
 @Injectable()
 export class GoogleEventsService extends GoogleCalendarBaseService {
+  constructor(private readonly appMetrics: AppMetrics) {
+    super();
+  }
+
+  private async callApi<T>(
+    operation: string,
+    fn: () => Promise<T>,
+  ): Promise<T> {
+    try {
+      return await fn();
+    } catch (error) {
+      this.appMetrics.googleApiErrorsTotal.inc({ operation });
+      throw error;
+    }
+  }
   // ========== 서비스 계정 기반 이벤트 ==========
 
   async createEventAsServiceAccount(
@@ -18,18 +34,20 @@ export class GoogleEventsService extends GoogleCalendarBaseService {
     },
   ): Promise<string> {
     const calendar = this.getCalendarClient();
-    const response = await calendar.events.insert({
-      calendarId,
-      sendUpdates: 'none',
-      requestBody: {
-        summary: params.summary,
-        description: params.description,
-        location: params.location,
-        start: { dateTime: params.startDateTime, timeZone: 'Asia/Seoul' },
-        end: { dateTime: params.endDateTime, timeZone: 'Asia/Seoul' },
-        extendedProperties: { private: { groupId: params.groupId } },
-      },
-    });
+    const response = await this.callApi('createEvent', () =>
+      calendar.events.insert({
+        calendarId,
+        sendUpdates: 'none',
+        requestBody: {
+          summary: params.summary,
+          description: params.description,
+          location: params.location,
+          start: { dateTime: params.startDateTime, timeZone: 'Asia/Seoul' },
+          end: { dateTime: params.endDateTime, timeZone: 'Asia/Seoul' },
+          extendedProperties: { private: { groupId: params.groupId } },
+        },
+      }),
+    );
 
     if (!response.data.id) throw new Error('Failed to create calendar event');
     return response.data.id;
@@ -64,7 +82,9 @@ export class GoogleEventsService extends GoogleCalendarBaseService {
     eventId: string,
   ): Promise<void> {
     const calendar = this.getCalendarClient();
-    await calendar.events.delete({ calendarId, eventId, sendUpdates: 'none' });
+    await this.callApi('deleteEvent', () =>
+      calendar.events.delete({ calendarId, eventId, sendUpdates: 'none' }),
+    );
   }
 
   async updateEventAsServiceAccount(
@@ -87,12 +107,14 @@ export class GoogleEventsService extends GoogleCalendarBaseService {
       body.start = { dateTime: params.startDateTime, timeZone: 'Asia/Seoul' };
     if (params.endDateTime)
       body.end = { dateTime: params.endDateTime, timeZone: 'Asia/Seoul' };
-    await calendar.events.patch({
-      calendarId,
-      eventId,
-      sendUpdates: 'none',
-      requestBody: body,
-    });
+    await this.callApi('updateEvent', () =>
+      calendar.events.patch({
+        calendarId,
+        eventId,
+        sendUpdates: 'none',
+        requestBody: body,
+      }),
+    );
   }
 
   async patchEventPrivateExtendedProperty(

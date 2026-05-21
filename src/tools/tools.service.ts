@@ -3,12 +3,17 @@ import type Anthropic from '@anthropic-ai/sdk';
 import { BookingTool } from './booking.tool';
 import { TimeTool } from './time.tool';
 import { BusinessError } from '../common/errors/base.error';
+import { AppMetrics } from '../common/metrics/app.metrics';
 
 @Injectable()
 export class ToolsService {
   private readonly tools: (BookingTool | TimeTool)[];
 
-  constructor(bookingTool: BookingTool, timeTool: TimeTool) {
+  constructor(
+    bookingTool: BookingTool,
+    timeTool: TimeTool,
+    private readonly appMetrics: AppMetrics,
+  ) {
     this.tools = [bookingTool, timeTool];
   }
 
@@ -24,10 +29,24 @@ export class ToolsService {
     try {
       for (const tool of this.tools) {
         const result = await tool.execute(name, input, slackId);
-        if (result !== null) return result;
+        if (result !== null) {
+          this.appMetrics.toolExecutionsTotal.inc({
+            tool_name: name,
+            success: 'true',
+          });
+          return result;
+        }
       }
+      this.appMetrics.toolExecutionsTotal.inc({
+        tool_name: name,
+        success: 'false',
+      });
       return { error: `알 수 없는 툴: ${name}` };
     } catch (e) {
+      this.appMetrics.toolExecutionsTotal.inc({
+        tool_name: name,
+        success: 'false',
+      });
       if (e instanceof BusinessError)
         return { success: false, error: e.message };
       throw e;

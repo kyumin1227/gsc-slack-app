@@ -27,6 +27,10 @@ jobs:
         working-directory: ${{ vars.DEPLOY_DIR }}
         run: make dev
 
+      - name: Restart monitoring stack
+        working-directory: ${{ vars.DEPLOY_DIR }}
+        run: make monitoring
+
       - name: Verify app is running
         run: |
           sleep 10
