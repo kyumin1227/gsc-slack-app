@@ -1,4 +1,4 @@
-.PHONY: db local local-d dev prod down-local down-dev down-prod down-db logs logs-app backup restore clean
+.PHONY: db local local-d dev prod down-local down-dev down-prod down-db monitoring down-monitoring logs logs-app backup restore clean
 
 # DB + Redis 실행 (로컬 개발용)
 db:
@@ -35,6 +35,16 @@ down-prod:
 # DB + Redis 종료 (로컬 개발용)
 down-db:
 	docker compose -f docker-compose.yml -f docker-compose.local.yml down
+
+# 모니터링 스택 실행 (Alloy, Prometheus, Grafana)
+# 로컬: APP_HOST 기본값 host.docker.internal:3000
+# dev 서버: APP_HOST=app:3000 make monitoring
+monitoring:
+	docker compose -f docker-compose.monitoring.yml up -d
+
+# 모니터링 스택 종료
+down-monitoring:
+	docker compose -f docker-compose.monitoring.yml down
 
 # 로그 확인
 logs:
