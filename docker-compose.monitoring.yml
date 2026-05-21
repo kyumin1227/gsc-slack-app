@@ -3,19 +3,13 @@ services:
     image: prom/prometheus:v3.11.3
     container_name: gsc-prometheus
     restart: unless-stopped
-    environment:
-      APP_HOST: ${APP_HOST:-host.docker.internal:3000}
-    # sed로 PROMETHEUS_TARGET을 환경변수 APP_HOST로 치환 후 실행
-    entrypoint:
-      - sh
-      - -c
-      - |
-        sed "s|PROMETHEUS_TARGET|${APP_HOST}|g" /etc/prometheus/prometheus.yml.tmpl > /tmp/prometheus.yml &&
-        exec /bin/prometheus --config.file=/tmp/prometheus.yml --storage.tsdb.retention.time=30d
+    command:
+      - '--config.file=/etc/prometheus/prometheus.yml'
+      - '--storage.tsdb.retention.time=30d'
     extra_hosts:
       - "host.docker.internal:host-gateway"
     volumes:
-      - ./monitoring/prometheus/prometheus.yml:/etc/prometheus/prometheus.yml.tmpl:ro
+      - ${PROMETHEUS_CONFIG:-./monitoring/prometheus/prometheus.yml}:/etc/prometheus/prometheus.yml:ro
       - prometheus_data:/prometheus
 
   loki:

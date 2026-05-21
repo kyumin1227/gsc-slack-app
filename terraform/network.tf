@@ -104,7 +104,7 @@ resource "aws_security_group" "alb" {
   }
 }
 
-# ECS 보안 그룹 — ALB에서 컨테이너 포트만 허용
+# ECS 보안 그룹 — ALB에서 컨테이너 포트, 모니터링 EC2에서 /metrics 스크랩 허용
 resource "aws_security_group" "ecs" {
   name        = "${local.name_prefix}-ecs-sg"
   description = "ECS tasks security group"
@@ -163,4 +163,25 @@ resource "aws_security_group" "cache" {
   tags = {
     Name = "${local.name_prefix}-cache-sg"
   }
+}
+
+# 순환 참조 방지: monitoring ↔ ecs SG cross-reference는 별도 rule로 분리
+resource "aws_security_group_rule" "monitoring_loki_from_ecs" {
+  type                     = "ingress"
+  description              = "Loki from ECS"
+  from_port                = 3100
+  to_port                  = 3100
+  protocol                 = "tcp"
+  source_security_group_id = aws_security_group.ecs.id
+  security_group_id        = aws_security_group.monitoring.id
+}
+
+resource "aws_security_group_rule" "ecs_prometheus_from_monitoring" {
+  type                     = "ingress"
+  description              = "Prometheus scrape from monitoring EC2"
+  from_port                = var.container_port
+  to_port                  = var.container_port
+  protocol                 = "tcp"
+  source_security_group_id = aws_security_group.monitoring.id
+  security_group_id        = aws_security_group.ecs.id
 }

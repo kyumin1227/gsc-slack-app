@@ -5,7 +5,7 @@ on:
     branches:
       - dev
   release:
-    types: [ published ]
+    types: [published]
 
 env:
   REGISTRY: ghcr.io
@@ -54,6 +54,8 @@ jobs:
     permissions:
       id-token: write
       contents: read
+    outputs:
+      monitoring_instance_id: ${{ steps.tf_output.outputs.instance_id }}
 
     steps:
       - name: Checkout repository
@@ -84,6 +86,11 @@ jobs:
             -var="ecs_task_role_arn=${{ secrets.ECS_TASK_ROLE_ARN }}" \
             -var="acm_certificate_arn=${{ secrets.ACM_CERTIFICATE_ARN }}"
 
+      - name: Get monitoring instance ID
+        id: tf_output
+        working-directory: terraform
+        run: echo "instance_id=$(terraform output -raw monitoring_instance_id)" >> $GITHUB_OUTPUT
+
       - name: Force new ECS deployment
         run: |
           TASK_DEF_ARN=$(aws ecs describe-task-definition \
@@ -108,3 +115,11 @@ jobs:
             --cluster bannote-prod-cluster \
             --services bannote-prod-service \
             --region ap-northeast-2
+
+  deploy-monitoring-stack:
+    name: Deploy monitoring stack
+    needs: deploy-prod
+    uses: ./.github/workflows/deploy-monitoring.yml
+    with:
+      instance_id: ${{ needs.deploy-prod.outputs.monitoring_instance_id }}
+    secrets: inherit

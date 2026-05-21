@@ -36,9 +36,7 @@ down-prod:
 down-db:
 	docker compose -f docker-compose.yml -f docker-compose.local.yml down
 
-# 모니터링 스택 실행 (Alloy, Prometheus, Grafana)
-# 로컬: APP_HOST 기본값 host.docker.internal:3000
-# dev 서버: APP_HOST=app:3000 make monitoring
+# 모니터링 스택 실행 (Prometheus, Loki, Grafana)
 monitoring:
 	docker compose -f docker-compose.monitoring.yml up -d
 
