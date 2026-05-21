@@ -18,6 +18,6 @@ cache_node_type = "cache.t4g.micro"
 
 # Monitoring EC2
 grafana_domain           = "grafana.gsc-lab.io"
-monitoring_instance_type = "t3.micro"
+monitoring_instance_type = "t3.small"
 monitoring_key_name      = "monitoring-key"
 

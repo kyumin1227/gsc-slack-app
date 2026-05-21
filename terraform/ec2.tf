@@ -56,27 +56,11 @@ resource "aws_iam_instance_profile" "monitoring_ec2" {
   role = aws_iam_role.monitoring_ec2.name
 }
 
-# EC2 보안 그룹 — SSH, Grafana(3001), Loki(3100) 허용
+# EC2 보안 그룹 — inline ingress 없이 별도 rule로 관리 (inline + rule 혼용 시 충돌)
 resource "aws_security_group" "monitoring" {
   name        = "${local.name_prefix}-monitoring-sg"
   description = "Monitoring EC2 security group"
   vpc_id      = aws_vpc.main.id
-
-  ingress {
-    description = "SSH"
-    from_port   = 22
-    to_port     = 22
-    protocol    = "tcp"
-    cidr_blocks = ["0.0.0.0/0"]
-  }
-
-  ingress {
-    description     = "Grafana from ALB"
-    from_port       = 3001
-    to_port         = 3001
-    protocol        = "tcp"
-    security_groups = [aws_security_group.alb.id]
-  }
 
   egress {
     from_port   = 0

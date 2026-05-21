@@ -168,6 +168,27 @@ resource "aws_security_group" "cache" {
   }
 }
 
+# monitoring SG ingress rules
+resource "aws_security_group_rule" "monitoring_ssh_ingress" {
+  type              = "ingress"
+  description       = "SSH"
+  from_port         = 22
+  to_port           = 22
+  protocol          = "tcp"
+  cidr_blocks       = ["0.0.0.0/0"]
+  security_group_id = aws_security_group.monitoring.id
+}
+
+resource "aws_security_group_rule" "monitoring_grafana_ingress" {
+  type                     = "ingress"
+  description              = "Grafana from ALB"
+  from_port                = 3001
+  to_port                  = 3001
+  protocol                 = "tcp"
+  source_security_group_id = aws_security_group.alb.id
+  security_group_id        = aws_security_group.monitoring.id
+}
+
 # 순환 참조 방지: monitoring ↔ ecs SG cross-reference는 별도 rule로 분리
 resource "aws_security_group_rule" "monitoring_loki_from_ecs" {
   type                     = "ingress"
