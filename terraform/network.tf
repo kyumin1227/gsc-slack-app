@@ -104,18 +104,11 @@ resource "aws_security_group" "alb" {
   }
 }
 
-# ECS 보안 그룹 — ALB에서 컨테이너 포트, 모니터링 EC2에서 /metrics 스크랩 허용
+# ECS 보안 그룹 — inline ingress 없이 별도 rule로 관리 (inline + rule 혼용 시 충돌)
 resource "aws_security_group" "ecs" {
   name        = "${local.name_prefix}-ecs-sg"
   description = "ECS tasks security group"
   vpc_id      = aws_vpc.main.id
-
-  ingress {
-    from_port       = var.container_port
-    to_port         = var.container_port
-    protocol        = "tcp"
-    security_groups = [aws_security_group.alb.id]
-  }
 
   egress {
     from_port   = 0
@@ -127,6 +120,16 @@ resource "aws_security_group" "ecs" {
   tags = {
     Name = "${local.name_prefix}-ecs-sg"
   }
+}
+
+resource "aws_security_group_rule" "ecs_alb_ingress" {
+  type                     = "ingress"
+  description              = "App port from ALB"
+  from_port                = var.container_port
+  to_port                  = var.container_port
+  protocol                 = "tcp"
+  source_security_group_id = aws_security_group.alb.id
+  security_group_id        = aws_security_group.ecs.id
 }
 
 # RDS 보안 그룹 — ECS에서 5432 포트만 허용
