@@ -42,7 +42,7 @@ jobs:
           COMMAND_ID=$(aws ssm send-command \
             --instance-id ${{ steps.instance.outputs.id }} \
             --document-name "AWS-RunShellScript" \
-            --parameters '{"commands":["git config --global --add safe.directory /home/ec2-user/gsc-slack-app && cd /home/ec2-user/gsc-slack-app && git pull origin main"]}' \
+            --parameters '{"commands":["sudo su - ec2-user -c \"cd /home/ec2-user/gsc-slack-app && git pull origin main\""]}' \
             --query "Command.CommandId" \
             --output text)
           echo "command_id=$COMMAND_ID" >> $GITHUB_OUTPUT
@@ -86,7 +86,7 @@ jobs:
           COMMAND_ID=$(aws ssm send-command \
             --instance-id ${{ steps.instance.outputs.id }} \
             --document-name "AWS-RunShellScript" \
-            --parameters '{"commands":["cd /home/ec2-user/gsc-slack-app && make monitoring"]}' \
+            --parameters '{"commands":["sudo su - ec2-user -c \"cd /home/ec2-user/gsc-slack-app && make monitoring\""]}' \
             --query "Command.CommandId" \
             --output text)
           echo "command_id=$COMMAND_ID" >> $GITHUB_OUTPUT
