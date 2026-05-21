@@ -9,10 +9,10 @@ scrape_configs:
       - region: ap-northeast-2
         role: ecs
     relabel_configs:
-      - source_labels: [__meta_ecs_task_definition_family]
+      - source_labels: [__meta_ecs_task_definition]
         action: keep
-        regex: bannote-prod-task
-      - source_labels: [__address__]
+        regex: '.*task-definition/bannote-prod-task:.*'
+      - source_labels: [__meta_ecs_ip_address]
         regex: '(.*)'
         replacement: '$1:3000'
         target_label: __address__
