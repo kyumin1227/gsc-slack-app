@@ -1,0 +1,101 @@
+name: Deploy Monitoring Stack
+
+# workflow_call: docker-publish.yml의 운영 환경 배포(release) 완료 후 자동 호출
+on:
+  workflow_dispatch:
+  workflow_call:
+    inputs:
+      instance_id:
+        type: string
+        required: false
+
+jobs:
+  deploy:
+    name: Deploy to monitoring EC2
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Configure AWS credentials
+        uses: aws-actions/configure-aws-credentials@v4
+        with:
+          role-to-assume: ${{ secrets.AWS_ROLE_ARN }}
+          aws-region: ap-northeast-2
+
+      - name: Resolve instance ID
+        id: instance
+        run: |
+          INSTANCE_ID="${{ inputs.instance_id }}"
+          if [ -z "$INSTANCE_ID" ] || [ "$INSTANCE_ID" = "null" ]; then
+            INSTANCE_ID=$(aws ec2 describe-instances \
+              --filters "Name=tag:Name,Values=bannote-prod-monitoring" "Name=instance-state-name,Values=running" \
+              --query "Reservations[0].Instances[0].InstanceId" \
+              --output text)
+          fi
+          echo "id=$INSTANCE_ID" >> $GITHUB_OUTPUT
+
+      - name: Pull latest code
+        id: pull
+        run: |
+          COMMAND_ID=$(aws ssm send-command \
+            --instance-id ${{ steps.instance.outputs.id }} \
+            --document-name "AWS-RunShellScript" \
+            --parameters '{"commands":["cd /home/ec2-user/gsc-slack-app && git pull origin main"]}' \
+            --query "Command.CommandId" \
+            --output text)
+          echo "command_id=$COMMAND_ID" >> $GITHUB_OUTPUT
+
+      - name: Wait and get pull result
+        run: |
+          aws ssm wait command-executed \
+            --command-id ${{ steps.pull.outputs.command_id }} \
+            --instance-id ${{ steps.instance.outputs.id }}
+          aws ssm get-command-invocation \
+            --command-id ${{ steps.pull.outputs.command_id }} \
+            --instance-id ${{ steps.instance.outputs.id }} \
+            --query "StandardOutputContent" \
+            --output text
+
+      - name: Write .env file
+        id: env
+        run: |
+          COMMAND_ID=$(aws ssm send-command \
+            --instance-id ${{ steps.instance.outputs.id }} \
+            --document-name "AWS-RunShellScript" \
+            --parameters '{"commands":["GRAFANA_PASSWORD=$(aws secretsmanager get-secret-value --secret-id ${{ secrets.SECRETS_ARN }} --region ap-northeast-2 --query SecretString --output text | python3 -c \"import sys,json; print(json.load(sys.stdin)[\\\"grafana_password\\\"])\") && printf \"GRAFANA_PASSWORD=%s\\nPROMETHEUS_CONFIG=./monitoring/prometheus/prometheus.prod.yml\\n\" \"$GRAFANA_PASSWORD\" > /home/ec2-user/gsc-slack-app/.env && echo done"]}' \
+            --query "Command.CommandId" \
+            --output text)
+          echo "command_id=$COMMAND_ID" >> $GITHUB_OUTPUT
+
+      - name: Wait and get env result
+        run: |
+          aws ssm wait command-executed \
+            --command-id ${{ steps.env.outputs.command_id }} \
+            --instance-id ${{ steps.instance.outputs.id }}
+          aws ssm get-command-invocation \
+            --command-id ${{ steps.env.outputs.command_id }} \
+            --instance-id ${{ steps.instance.outputs.id }} \
+            --query "StandardOutputContent" \
+            --output text
+
+      - name: Deploy monitoring stack
+        id: deploy
+        run: |
+          COMMAND_ID=$(aws ssm send-command \
+            --instance-id ${{ steps.instance.outputs.id }} \
+            --document-name "AWS-RunShellScript" \
+            --parameters '{"commands":["cd /home/ec2-user/gsc-slack-app && make monitoring"]}' \
+            --query "Command.CommandId" \
+            --output text)
+          echo "command_id=$COMMAND_ID" >> $GITHUB_OUTPUT
+
+      - name: Wait and get deploy result
+        run: |
+          aws ssm wait command-executed \
+            --command-id ${{ steps.deploy.outputs.command_id }} \
+            --instance-id ${{ steps.instance.outputs.id }}
+          aws ssm get-command-invocation \
+            --command-id ${{ steps.deploy.outputs.command_id }} \
+            --instance-id ${{ steps.instance.outputs.id }} \
+            --query "StandardOutputContent" \
+            --output text
+          echo "✅ Monitoring stack deployed"

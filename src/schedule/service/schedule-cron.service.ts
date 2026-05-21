@@ -8,6 +8,7 @@ import { ScheduleWatchService } from './schedule-watch.service';
 import { ResourceMirrorService } from '../../resource/resource-mirror.service';
 import { ResourceService } from '../../resource/service/resource.service';
 import { GoogleEventsService } from '../../google/calendar/events.service';
+import { AppMetrics } from '../../common/metrics/app.metrics';
 
 const CRON_SUPPRESS_KEY = 'suppress:cron:sync';
 
@@ -21,6 +22,7 @@ export class ScheduleCronService {
     private readonly resourceMirrorService: ResourceMirrorService,
     private readonly resourceService: ResourceService,
     private readonly googleEventsService: GoogleEventsService,
+    private readonly appMetrics: AppMetrics,
     @Inject(CACHE_MANAGER) private readonly cache: Cache,
   ) {}
 
@@ -35,14 +37,24 @@ export class ScheduleCronService {
   // Google Calendar Watch 최대 만료 7일, 주 1회 갱신으로 충분
   @Cron('0 0 * * 1')
   async renewWatches(): Promise<void> {
-    this.logger.log('Starting weekly watch renewal...');
-    await this.scheduleWatchService.renewAllActiveWatches();
-    this.logger.log('Weekly watch renewal completed');
+    const end = this.appMetrics.cronJobDurationSeconds.startTimer({
+      job_name: 'renewWatches',
+    });
+    try {
+      this.logger.log('Starting weekly watch renewal...');
+      await this.scheduleWatchService.renewAllActiveWatches();
+      this.logger.log('Weekly watch renewal completed');
+    } finally {
+      end();
+    }
   }
 
   // 매일 새벽 3시 — 오늘부터 30일 이내 이벤트 미러링 동기화
   @Cron('0 3 * * *', { timeZone: 'Asia/Seoul' })
   async syncMirrors(): Promise<void> {
+    const endCron = this.appMetrics.cronJobDurationSeconds.startTimer({
+      job_name: 'syncMirrors',
+    });
     try {
       this.logger.log('Starting daily mirror sync...');
       await this.cache.set(CRON_SUPPRESS_KEY, 1, 60 * 60 * 1000); // 1시간 failsafe TTL
@@ -144,6 +156,7 @@ export class ScheduleCronService {
         `Daily mirror sync completed: ${synced} synced, ${removed} removed, ${failed} failed`,
       );
     } finally {
+      endCron();
       // 동기화 직후 발생하는 지연 웹훅들을 무시하기 위해 suppress 상태를 3분간 유지
       await this.cache.set(CRON_SUPPRESS_KEY, 1, 3 * 60 * 1000);
     }
