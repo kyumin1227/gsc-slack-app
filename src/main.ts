@@ -1,11 +1,15 @@
 import { NestFactory } from '@nestjs/core';
+import { WinstonModule } from 'nest-winston';
 import { AppModule } from './app.module';
 import { httpReceiver } from './slack-receiver';
 import { ScheduleCronService } from './schedule/service/schedule-cron.service';
 import { AppMetrics } from './common/metrics/app.metrics';
+import { winstonConfig } from './common/logger/logger.config';
 
 async function bootstrap() {
-  const app = await NestFactory.create(AppModule);
+  const app = await NestFactory.create(AppModule, {
+    logger: WinstonModule.createLogger(winstonConfig),
+  });
 
   if (httpReceiver) {
     app.use(httpReceiver.router);

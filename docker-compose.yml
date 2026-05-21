@@ -36,6 +36,7 @@ services:
       redis:
         condition: service_healthy
     environment:
+      NODE_ENV: ${NODE_ENV:-production}
       DB_HOST: db
       DB_PORT: 5432
       DB_USERNAME: ${DB_USERNAME:-postgres}
@@ -61,3 +62,4 @@ services:
       ADMIN_SLACK_ID: ${ADMIN_SLACK_ID}
       MCP_BASE_URL: ${MCP_BASE_URL}
       MCP_GOOGLE_REDIRECT_URI: ${MCP_GOOGLE_REDIRECT_URI}
+      LOKI_URL: ${LOKI_URL}
