@@ -61,7 +61,7 @@ jobs:
           COMMAND_ID=$(aws ssm send-command \
             --instance-id ${{ steps.instance.outputs.id }} \
             --document-name "AWS-RunShellScript" \
-            --parameters "{\"commands\":[\"cat > /home/ec2-user/gsc-slack-app/.env <<'ENV'\nGRAFANA_PASSWORD=${{ secrets.GRAFANA_PASSWORD }}\nPROMETHEUS_CONFIG=./monitoring/prometheus/prometheus.prod.yml\nENV\necho 'done'\"]}" \
+            --parameters '{"commands":["GRAFANA_PASSWORD=$(aws secretsmanager get-secret-value --secret-id ${{ secrets.SECRETS_ARN }} --region ap-northeast-2 --query SecretString --output text | python3 -c \"import sys,json; print(json.load(sys.stdin)[\\\"grafana_password\\\"])\") && printf \"GRAFANA_PASSWORD=%s\\nPROMETHEUS_CONFIG=./monitoring/prometheus/prometheus.prod.yml\\n\" \"$GRAFANA_PASSWORD\" > /home/ec2-user/gsc-slack-app/.env && echo done"]}' \
             --query "Command.CommandId" \
             --output text)
           echo "command_id=$COMMAND_ID" >> $GITHUB_OUTPUT

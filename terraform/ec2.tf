@@ -18,25 +18,33 @@ resource "aws_iam_role_policy_attachment" "monitoring_ssm" {
 }
 
 # Prometheus aws_sd_configs가 ECS 태스크를 탐색하기 위한 권한
+# + Grafana 비밀번호를 Secrets Manager에서 읽기 위한 권한
 resource "aws_iam_role_policy" "monitoring_prometheus_sd" {
   name = "${local.name_prefix}-prometheus-sd-policy"
   role = aws_iam_role.monitoring_ec2.id
 
   policy = jsonencode({
     Version = "2012-10-17"
-    Statement = [{
-      Effect = "Allow"
-      Action = [
-        "ecs:ListClusters",
-        "ecs:ListTasks",
-        "ecs:DescribeTasks",
-        "ecs:DescribeTaskDefinition",
-        "ec2:DescribeInstances",
-        "ec2:DescribeAvailabilityZones",
-        "ec2:DescribeNetworkInterfaces"
-      ]
-      Resource = "*"
-    }]
+    Statement = [
+      {
+        Effect = "Allow"
+        Action = [
+          "ecs:ListClusters",
+          "ecs:ListTasks",
+          "ecs:DescribeTasks",
+          "ecs:DescribeTaskDefinition",
+          "ec2:DescribeInstances",
+          "ec2:DescribeAvailabilityZones",
+          "ec2:DescribeNetworkInterfaces"
+        ]
+        Resource = "*"
+      },
+      {
+        Effect   = "Allow"
+        Action   = ["secretsmanager:GetSecretValue"]
+        Resource = var.secrets_arn
+      }
+    ]
   })
 }
 
