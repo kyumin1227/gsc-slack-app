@@ -9,7 +9,7 @@ import {
   Unique,
 } from 'typeorm';
 import { CleaningRule } from './cleaning-rule.entity';
-import { Resource } from '../resource/resource.entity';
+import { Resource } from '../../resource/resource.entity';
 
 @Unique(['ruleId'])
 @Entity('cleaning_rule_resources')
@@ -17,7 +17,7 @@ export class CleaningRuleResource {
   @PrimaryGeneratedColumn()
   id: number;
 
-  @ManyToOne(() => CleaningRule)
+  @ManyToOne(() => CleaningRule, (r) => r.ruleResource)
   rule: CleaningRule;
 
   @Column()

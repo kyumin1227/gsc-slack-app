@@ -9,7 +9,7 @@ import {
   Unique,
 } from 'typeorm';
 import { CleaningRule } from './cleaning-rule.entity';
-import { User } from '../user/user.entity';
+import { User } from '../../user/user.entity';
 
 @Unique(['ruleId', 'userId'])
 @Entity('cleaning_rule_users')

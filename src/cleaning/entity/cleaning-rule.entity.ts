@@ -6,8 +6,10 @@ import {
   UpdateDateColumn,
   DeleteDateColumn,
   ManyToOne,
+  OneToMany,
 } from 'typeorm';
-import { StudentClass } from '../student-class/student-class.entity';
+import { StudentClass } from '../../student-class/student-class.entity';
+import { CleaningRuleResource } from './cleaning-rule-resource.entity';
 
 @Entity('cleaning_rules')
 export class CleaningRule {
@@ -37,4 +39,7 @@ export class CleaningRule {
 
   @DeleteDateColumn()
   deletedAt: Date;
+
+  @OneToMany(() => CleaningRuleResource, (rr) => rr.rule)
+  ruleResource: CleaningRuleResource[] | undefined;
 }

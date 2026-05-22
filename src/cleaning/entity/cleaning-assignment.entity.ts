@@ -9,7 +9,7 @@ import {
   Unique,
 } from 'typeorm';
 import { CleaningSchedule } from './cleaning-schedule.entity';
-import { User } from '../user/user.entity';
+import { User } from '../../user/user.entity';
 
 export enum CleaningAssignmentStatus {
   ASSIGNED = '배정',
