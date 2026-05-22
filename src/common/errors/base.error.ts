@@ -2,12 +2,14 @@ import { USER_ERROR_MESSAGES } from './user.errors';
 import { GOOGLE_ERROR_MESSAGES } from './google.errors';
 import { SCHEDULE_ERROR_MESSAGES } from './schedule.errors';
 import { RESOURCE_ERROR_MESSAGES } from './resource.errors';
+import { CLEANING_ERROR_MESSAGES } from './cleaning.errors';
 
 const ALL_ERROR_MESSAGES: Record<string, string> = {
   ...USER_ERROR_MESSAGES,
   ...GOOGLE_ERROR_MESSAGES,
   ...SCHEDULE_ERROR_MESSAGES,
   ...RESOURCE_ERROR_MESSAGES,
+  ...CLEANING_ERROR_MESSAGES,
 };
 
 export class BusinessError extends Error {
