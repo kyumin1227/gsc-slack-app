@@ -296,11 +296,7 @@ export class McpService {
     );
 
     server.setRequestHandler(ListToolsRequestSchema, async () => ({
-      tools: this.toolsService.getDefinitions().map((t) => ({
-        name: t.name,
-        description: t.description ?? '',
-        inputSchema: t.input_schema,
-      })),
+      tools: this.toolsService.getMcpDefinitions(),
     }));
 
     server.setRequestHandler(CallToolRequestSchema, async (req) => {
@@ -313,8 +309,13 @@ export class McpService {
         );
         return {
           content: [{ type: 'text' as const, text: JSON.stringify(result) }],
+          structuredContent: this.toolsService.toStructuredContent(result),
         };
       } catch (e) {
+        const structuredContent = {
+          success: false,
+          error: e instanceof Error ? e.message : String(e),
+        };
         this.logger.error(
           `Tool execution failed — tool=${tool} slackId=${slackId} error=${e instanceof Error ? e.message : String(e)}`,
         );
@@ -322,12 +323,10 @@ export class McpService {
           content: [
             {
               type: 'text' as const,
-              text: JSON.stringify({
-                success: false,
-                error: e instanceof Error ? e.message : String(e),
-              }),
+              text: JSON.stringify(structuredContent),
             },
           ],
+          structuredContent,
           isError: true,
         };
       }
