@@ -28,6 +28,10 @@ describe('McpService auth hardening', () => {
     exchangeCodeForTokens: jest.Mock;
     getGoogleUserInfo: jest.Mock;
   };
+  let toolsService: {
+    getDefinitions: jest.Mock;
+    execute: jest.Mock;
+  };
   let userService: {
     findByEmail: jest.Mock;
   };
@@ -48,9 +52,13 @@ describe('McpService auth hardening', () => {
     userService = {
       findByEmail: jest.fn(async () => ({ slackId: 'U123' })),
     };
+    toolsService = {
+      getDefinitions: jest.fn(),
+      execute: jest.fn(),
+    };
 
     service = new McpService(
-      { getDefinitions: jest.fn(), execute: jest.fn() } as never,
+      toolsService as never,
       userService as never,
       googleOAuthService as never,
       cache as unknown as Cache,
@@ -183,5 +191,71 @@ describe('McpService auth hardening', () => {
       service.isOriginAllowed('https://chat.openai.com/session', baseUrl),
     ).toBe(true);
     delete process.env.MCP_ALLOWED_ORIGINS;
+  });
+
+  it('lists and renders booking workflow prompts', () => {
+    expect(service.listPrompts().prompts.map((prompt) => prompt.name)).toEqual([
+      'reserve_study_room',
+      'change_study_room_booking',
+      'cancel_study_room_booking',
+      'find_available_study_room',
+    ]);
+
+    expect(
+      service.getPrompt('reserve_study_room', {
+        date: 'tomorrow',
+        start_time: '14:00',
+      }),
+    ).toMatchObject({
+      description: 'Reserve Study Room',
+      messages: [
+        {
+          role: 'user',
+          content: {
+            type: 'text',
+            text: expect.stringContaining('check_room_availability'),
+          },
+        },
+      ],
+    });
+  });
+
+  it('lists and reads guide and user resources', async () => {
+    toolsService.execute.mockImplementation(async (name: string) => {
+      if (name === 'get_study_rooms') return [{ id: 1, name: 'Room A' }];
+      if (name === 'get_my_bookings') return [{ eventId: 'event-1' }];
+      return null;
+    });
+
+    expect(
+      service.listResources().resources.map((resource) => resource.uri),
+    ).toEqual([
+      'bannote://guide/study-room-booking',
+      'bannote://guide/tool-workflows',
+      'bannote://rooms',
+      'bannote://me/bookings',
+    ]);
+
+    await expect(
+      service.readResource('bannote://guide/study-room-booking', 'U123'),
+    ).resolves.toMatchObject({
+      contents: [
+        {
+          mimeType: 'text/markdown',
+          text: expect.stringContaining('get_current_time'),
+        },
+      ],
+    });
+
+    await expect(
+      service.readResource('bannote://rooms', 'U123'),
+    ).resolves.toMatchObject({
+      contents: [
+        {
+          mimeType: 'application/json',
+          text: expect.stringContaining('Room A'),
+        },
+      ],
+    });
   });
 });
