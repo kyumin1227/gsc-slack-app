@@ -1,4 +1,4 @@
-import { Module } from '@nestjs/common';
+import { Module, forwardRef } from '@nestjs/common';
 import { TypeOrmModule } from '@nestjs/typeorm';
 import { Resource } from './resource.entity';
 import { ResourceService } from './service/resource.service';
@@ -13,7 +13,7 @@ import { UserModule } from '../user/user.module';
 import { GoogleModule } from '../google/google.module';
 
 @Module({
-  imports: [TypeOrmModule.forFeature([Resource]), UserModule, GoogleModule],
+  imports: [TypeOrmModule.forFeature([Resource]), forwardRef(() => UserModule), GoogleModule],
   controllers: [
     ResourceController,
     StudyRoomController,
