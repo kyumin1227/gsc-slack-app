@@ -6,28 +6,28 @@ import {
   UpdateDateColumn,
   DeleteDateColumn,
   ManyToOne,
+  Unique,
 } from 'typeorm';
-import { StudentClass } from '../student-class/student-class.entity';
+import { CleaningRule } from './cleaning-rule.entity';
+import { User } from '../../user/user.entity';
 
-@Entity('cleaning_rules')
-export class CleaningRule {
+@Unique(['ruleId', 'userId'])
+@Entity('cleaning_rule_users')
+export class CleaningRuleUser {
   @PrimaryGeneratedColumn()
   id: number;
 
-  @ManyToOne(() => StudentClass)
-  studentClass: StudentClass;
+  @ManyToOne(() => CleaningRule)
+  rule: CleaningRule;
 
   @Column()
-  studentClassId: number;
+  ruleId: number;
+
+  @ManyToOne(() => User)
+  user: User;
 
   @Column()
-  cycle: number;
-
-  @Column()
-  needPeoples: number;
-
-  @Column('int', { array: true })
-  daysOfWeek: number[];
+  userId: number;
 
   @CreateDateColumn()
   createdAt: Date;
