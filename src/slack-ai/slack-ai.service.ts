@@ -103,12 +103,13 @@ export class SlackAiService {
     slackId: string,
     text: string,
     onProgress?: (msg: string) => Promise<void>,
+    onChunk?: (text: string) => Promise<void>,
   ): Promise<string> {
     this.appMetrics.aiMessagesTotal.inc();
     this.appMetrics.aiProcessingCurrent.inc();
     const endTimer = this.appMetrics.aiMessageDurationSeconds.startTimer();
     try {
-      return await this._handleMessage(slackId, text, onProgress);
+      return await this._handleMessage(slackId, text, onProgress, onChunk);
     } finally {
       endTimer();
       this.appMetrics.aiProcessingCurrent.dec();
@@ -119,6 +120,7 @@ export class SlackAiService {
     slackId: string,
     text: string,
     onProgress?: (msg: string) => Promise<void>,
+    onChunk?: (text: string) => Promise<void>,
   ): Promise<string> {
     const tools = this.toolsService
       .getDefinitions()
@@ -134,13 +136,26 @@ export class SlackAiService {
 
     const MAX_ROUNDS = 10;
     for (let round = 0; round < MAX_ROUNDS; round++) {
-      const response = await this.anthropic.messages.create({
+      const stream = this.anthropic.messages.stream({
         model: MODEL,
         max_tokens: 2048,
         system: systemPrompt,
         tools,
         messages,
       });
+
+      let streamedText = '';
+      for await (const event of stream) {
+        if (
+          event.type === 'content_block_delta' &&
+          event.delta.type === 'text_delta'
+        ) {
+          streamedText += event.delta.text;
+          if (onChunk) await onChunk(streamedText);
+        }
+      }
+
+      const response = await stream.finalMessage();
 
       this.appMetrics.aiTokensTotal.inc(
         { type: 'input' },

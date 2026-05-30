@@ -117,14 +117,27 @@ export class SlackAiHandler {
 
     await this.slackAiService.setProcessing(slackId);
     try {
+      let lastStreamedText = '';
+
       const reply = await this.slackAiService.handleMessage(
         slackId,
         text,
         async (msg) => {
+          const displayText = lastStreamedText
+            ? `${lastStreamedText}\n\n${msg}`
+            : msg;
           await client.chat.update({
             channel,
             ts: loadingMsg.ts as string,
-            text: msg,
+            text: displayText,
+          });
+        },
+        async (chunk) => {
+          lastStreamedText = chunk;
+          await client.chat.update({
+            channel,
+            ts: loadingMsg.ts as string,
+            text: chunk + ' ▌',
           });
         },
       );
