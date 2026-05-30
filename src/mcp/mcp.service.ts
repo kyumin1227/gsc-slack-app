@@ -20,21 +20,40 @@ interface McpSession {
 }
 
 interface PkceSession {
+  clientId: string;
   codeChallenge: string;
   codeChallengeMethod: string;
   clientRedirectUri: string;
   clientState: string;
+  resource: string;
 }
 
 interface AuthCode {
   slackId: string;
+  clientId: string;
   codeChallenge: string;
+  clientRedirectUri: string;
+  resource: string;
+}
+
+interface McpRegisteredClient {
+  clientId: string;
+  redirectUris: string[];
+  clientName?: string;
+  scope?: string;
+}
+
+interface McpTokenSession {
+  slackId: string;
+  clientId: string;
+  resource: string;
 }
 
 const ACCESS_TOKEN_TTL = 60 * 60 * 1000; // 1시간
 const REFRESH_TOKEN_TTL = 365 * 24 * 60 * 60 * 1000; // 365일
 const PKCE_TTL = 10 * 60 * 1000; // 10분
 const AUTH_CODE_TTL = 5 * 60 * 1000; // 5분
+const CLIENT_TTL = 365 * 24 * 60 * 60 * 1000; // 365일
 
 @Injectable()
 export class McpService {
@@ -59,39 +78,95 @@ export class McpService {
       grant_types_supported: ['authorization_code', 'refresh_token'],
       code_challenge_methods_supported: ['S256'],
       token_endpoint_auth_methods_supported: ['none'],
+      scopes_supported: ['mcp:tools'],
     };
   }
 
-  registerClient(
+  async registerClient(
     clientMetadata: Record<string, unknown>,
-  ): Record<string, unknown> {
+  ): Promise<Record<string, unknown> | null> {
+    const redirectUris = this.normalizeRedirectUris(
+      clientMetadata.redirect_uris,
+    );
+    if (redirectUris.length === 0) return null;
+
     const clientId = randomUUID();
+    const client: McpRegisteredClient = {
+      clientId,
+      redirectUris,
+      clientName:
+        typeof clientMetadata.client_name === 'string'
+          ? clientMetadata.client_name
+          : undefined,
+      scope:
+        typeof clientMetadata.scope === 'string'
+          ? clientMetadata.scope
+          : undefined,
+    };
+
+    await this.cache.set(`mcp:client:${clientId}`, client, CLIENT_TTL);
+
     return {
       client_id: clientId,
       client_id_issued_at: Math.floor(Date.now() / 1000),
-      ...clientMetadata,
+      redirect_uris: redirectUris,
+      ...(client.clientName ? { client_name: client.clientName } : {}),
+      ...(client.scope ? { scope: client.scope } : {}),
     };
   }
 
   getProtectedResourceMetadata(baseUrl: string) {
     return {
-      resource: `${baseUrl}/mcp`,
+      resource: this.getResourceUrl(baseUrl),
       authorization_servers: [baseUrl],
+      scopes_supported: ['mcp:tools'],
+      bearer_methods_supported: ['header'],
     };
   }
 
   // ─── OAuth 2.0 Authorization Endpoint ───────────────────────────────────
 
   async startAuthorize(params: {
+    baseUrl: string;
+    clientId: string;
+    responseType: string;
     codeChallenge: string;
     codeChallengeMethod: string;
     clientRedirectUri: string;
     clientState: string;
-  }): Promise<string> {
+    resource?: string;
+    scope?: string;
+  }): Promise<string | null> {
+    if (
+      params.responseType !== 'code' ||
+      params.codeChallengeMethod !== 'S256' ||
+      !params.codeChallenge ||
+      !params.clientState
+    ) {
+      return null;
+    }
+
+    const client = await this.cache.get<McpRegisteredClient>(
+      `mcp:client:${params.clientId}`,
+    );
+    if (!client) return null;
+
+    if (!client.redirectUris.includes(params.clientRedirectUri)) return null;
+
+    const resource = params.resource ?? this.getResourceUrl(params.baseUrl);
+    if (resource !== this.getResourceUrl(params.baseUrl)) return null;
+
     const ourState = randomUUID();
     await this.cache.set(
       `mcp:pkce:${ourState}`,
-      params satisfies PkceSession,
+      {
+        clientId: params.clientId,
+        codeChallenge: params.codeChallenge,
+        codeChallengeMethod: params.codeChallengeMethod,
+        clientRedirectUri: params.clientRedirectUri,
+        clientState: params.clientState,
+        resource,
+      } satisfies PkceSession,
       PKCE_TTL,
     );
 
@@ -126,7 +201,10 @@ export class McpService {
       `mcp:authcode:${authCode}`,
       {
         slackId: user.slackId,
+        clientId: pkce.clientId,
         codeChallenge: pkce.codeChallenge,
+        clientRedirectUri: pkce.clientRedirectUri,
+        resource: pkce.resource,
       } satisfies AuthCode,
       AUTH_CODE_TTL,
     );
@@ -142,38 +220,67 @@ export class McpService {
   async issueToken(
     code: string,
     codeVerifier: string,
+    clientId: string,
+    clientRedirectUri?: string,
   ): Promise<{ accessToken: string; refreshToken: string } | null> {
+    if (!code || !codeVerifier || !clientId) return null;
+
     const authCode = await this.cache.get<AuthCode>(`mcp:authcode:${code}`);
     if (!authCode) return null;
 
     await this.cache.del(`mcp:authcode:${code}`);
+    if (authCode.clientId !== clientId) return null;
+    if (
+      clientRedirectUri !== undefined &&
+      authCode.clientRedirectUri !== clientRedirectUri
+    ) {
+      return null;
+    }
 
     const computed = createHash('sha256')
       .update(codeVerifier)
       .digest('base64url');
     if (computed !== authCode.codeChallenge) return null;
 
-    return this.mintTokenPair(authCode.slackId);
+    return this.mintTokenPair(
+      authCode.slackId,
+      authCode.clientId,
+      authCode.resource,
+    );
   }
 
   async refreshToken(
     refreshToken: string,
   ): Promise<{ accessToken: string; refreshToken: string } | null> {
-    const slackId = await this.cache.get<string>(`mcp:refresh:${refreshToken}`);
-    if (!slackId) return null;
+    if (!refreshToken) return null;
+
+    const session = await this.cache.get<McpTokenSession | string>(
+      `mcp:refresh:${refreshToken}`,
+    );
+    if (!session) return null;
 
     await this.cache.del(`mcp:refresh:${refreshToken}`);
-    return this.mintTokenPair(slackId);
+    if (typeof session === 'string') {
+      return this.mintTokenPair(session, 'legacy-client', '');
+    }
+    return this.mintTokenPair(
+      session.slackId,
+      session.clientId,
+      session.resource,
+    );
   }
 
   private async mintTokenPair(
     slackId: string,
+    clientId: string,
+    resource: string,
   ): Promise<{ accessToken: string; refreshToken: string }> {
     const accessToken = randomUUID();
     const refreshToken = randomUUID();
+    const session = { slackId, clientId, resource } satisfies McpTokenSession;
     await Promise.all([
-      this.cache.set(`mcp:session:${accessToken}`, slackId, ACCESS_TOKEN_TTL),
-      this.cache.set(`mcp:refresh:${refreshToken}`, slackId, REFRESH_TOKEN_TTL),
+      this.cache.set(`mcp:session:${accessToken}`, session, ACCESS_TOKEN_TTL),
+      this.cache.set(`mcp:refresh:${refreshToken}`, session, REFRESH_TOKEN_TTL),
     ]);
     return { accessToken, refreshToken };
   }
@@ -245,9 +352,13 @@ export class McpService {
 
     // 세션 ID가 있지만 서버에 없는 경우 (재시작 등) → 404로 클라이언트 재연결 유도
     if (sessionId) {
-      this.logger.warn(`Session not found (expired or server restarted) — sessionId=${sessionId} slackId=${slackId}`);
+      this.logger.warn(
+        `Session not found (expired or server restarted) — sessionId=${sessionId} slackId=${slackId}`,
+      );
       res.writeHead(404, { 'Content-Type': 'application/json' });
-      res.end(JSON.stringify({ error: 'Session not found. Please reinitialize.' }));
+      res.end(
+        JSON.stringify({ error: 'Session not found. Please reinitialize.' }),
+      );
       return;
     }
 
@@ -272,10 +383,14 @@ export class McpService {
     const server = this.buildServer(slackId);
 
     this.sessions.set(newSessionId, { server, transport });
-    this.logger.log(`Session created — sessionId=${newSessionId} slackId=${slackId}`);
+    this.logger.log(
+      `Session created — sessionId=${newSessionId} slackId=${slackId}`,
+    );
     transport.onclose = () => {
       this.sessions.delete(newSessionId);
-      this.logger.log(`Session closed — sessionId=${newSessionId} slackId=${slackId}`);
+      this.logger.log(
+        `Session closed — sessionId=${newSessionId} slackId=${slackId}`,
+      );
     };
 
     await server.connect(transport);
@@ -287,7 +402,60 @@ export class McpService {
     const token = authHeader.slice(7).trim();
     if (!token) return null;
 
-    const slackId = await this.cache.get<string>(`mcp:session:${token}`);
-    return slackId ?? null;
+    const session = await this.cache.get<McpTokenSession | string>(
+      `mcp:session:${token}`,
+    );
+    if (!session) return null;
+    return typeof session === 'string' ? session : session.slackId;
+  }
+
+  isOriginAllowed(originHeader: string | undefined, baseUrl: string): boolean {
+    if (!originHeader) return true;
+
+    const configuredOrigins = (process.env.MCP_ALLOWED_ORIGINS ?? '')
+      .split(',')
+      .map((origin) => origin.trim())
+      .filter(Boolean);
+    if (configuredOrigins.includes('*')) return true;
+
+    const allowedOrigins = new Set([
+      new URL(baseUrl).origin,
+      ...configuredOrigins.flatMap((origin) => {
+        try {
+          return [new URL(origin).origin];
+        } catch {
+          return [];
+        }
+      }),
+    ]);
+
+    try {
+      return allowedOrigins.has(new URL(originHeader).origin);
+    } catch {
+      return false;
+    }
+  }
+
+  getResourceUrl(baseUrl: string): string {
+    return `${baseUrl}/mcp`;
+  }
+
+  getProtectedResourceMetadataUrl(baseUrl: string): string {
+    return `${baseUrl}/.well-known/oauth-protected-resource/mcp`;
+  }
+
+  private normalizeRedirectUris(value: unknown): string[] {
+    if (!Array.isArray(value)) return [];
+
+    return value
+      .filter((uri): uri is string => typeof uri === 'string')
+      .filter((uri) => {
+        try {
+          const parsed = new URL(uri);
+          return parsed.protocol === 'https:' || parsed.protocol === 'http:';
+        } catch {
+          return false;
+        }
+      });
   }
 }
