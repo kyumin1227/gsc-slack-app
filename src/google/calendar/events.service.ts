@@ -1,25 +1,15 @@
 import { Injectable } from '@nestjs/common';
 import { calendar_v3 } from 'googleapis';
-import { GoogleCalendarBaseService } from './base.service';
+import { GoogleCalendarBaseService, API_PRIORITY } from './base.service';
+import { GoogleApiLimiter } from '../google-api-limiter.service';
 import { AppMetrics } from '../../common/metrics/app.metrics';
 
 @Injectable()
 export class GoogleEventsService extends GoogleCalendarBaseService {
-  constructor(private readonly appMetrics: AppMetrics) {
-    super();
+  constructor(limiter: GoogleApiLimiter, appMetrics: AppMetrics) {
+    super(limiter, appMetrics);
   }
 
-  private async callApi<T>(
-    operation: string,
-    fn: () => Promise<T>,
-  ): Promise<T> {
-    try {
-      return await fn();
-    } catch (error) {
-      this.appMetrics.googleApiErrorsTotal.inc({ operation });
-      throw error;
-    }
-  }
   // ========== 서비스 계정 기반 이벤트 ==========
 
   async createEventAsServiceAccount(
@@ -62,14 +52,16 @@ export class GoogleEventsService extends GoogleCalendarBaseService {
     let pageToken: string | undefined;
 
     do {
-      const response = await calendar.events.list({
-        calendarId,
-        privateExtendedProperty: [`groupId=${groupId}`],
-        showDeleted: false,
-        singleEvents: true,
-        maxResults: 2500,
-        ...(pageToken ? { pageToken } : {}),
-      });
+      const response = await this.callApi('listEventsByGroupId', () =>
+        calendar.events.list({
+          calendarId,
+          privateExtendedProperty: [`groupId=${groupId}`],
+          showDeleted: false,
+          singleEvents: true,
+          maxResults: 2500,
+          ...(pageToken ? { pageToken } : {}),
+        }),
+      );
       events.push(...(response.data.items ?? []));
       pageToken = response.data.nextPageToken ?? undefined;
     } while (pageToken);
@@ -123,12 +115,14 @@ export class GoogleEventsService extends GoogleCalendarBaseService {
     privateProps: Record<string, string>,
   ): Promise<void> {
     const calendar = this.getCalendarClient();
-    await calendar.events.patch({
-      calendarId,
-      eventId,
-      sendUpdates: 'none',
-      requestBody: { extendedProperties: { private: privateProps } },
-    });
+    await this.callApi('patchEventExtendedProperty', () =>
+      calendar.events.patch({
+        calendarId,
+        eventId,
+        sendUpdates: 'none',
+        requestBody: { extendedProperties: { private: privateProps } },
+      }),
+    );
   }
 
   async searchByExtendedProperty(
@@ -137,12 +131,14 @@ export class GoogleEventsService extends GoogleCalendarBaseService {
     value: string,
   ): Promise<calendar_v3.Schema$Event[]> {
     const calendar = this.getCalendarClient();
-    const response = await calendar.events.list({
-      calendarId,
-      privateExtendedProperty: [`${key}=${value}`],
-      maxResults: 1,
-      showDeleted: false,
-    });
+    const response = await this.callApi('searchByExtendedProperty', () =>
+      calendar.events.list({
+        calendarId,
+        privateExtendedProperty: [`${key}=${value}`],
+        maxResults: 1,
+        showDeleted: false,
+      }),
+    );
     return response.data.items ?? [];
   }
 
@@ -158,18 +154,20 @@ export class GoogleEventsService extends GoogleCalendarBaseService {
     },
   ): Promise<string> {
     const calendar = this.getCalendarClient();
-    const response = await calendar.events.insert({
-      calendarId,
-      sendUpdates: 'none',
-      requestBody: {
-        summary: params.summary,
-        description: params.description,
-        location: params.location,
-        start: { dateTime: params.startDateTime, timeZone: 'Asia/Seoul' },
-        end: { dateTime: params.endDateTime, timeZone: 'Asia/Seoul' },
-        extendedProperties: params.extendedProperties,
-      },
-    });
+    const response = await this.callApi('createMirrorEvent', () =>
+      calendar.events.insert({
+        calendarId,
+        sendUpdates: 'none',
+        requestBody: {
+          summary: params.summary,
+          description: params.description,
+          location: params.location,
+          start: { dateTime: params.startDateTime, timeZone: 'Asia/Seoul' },
+          end: { dateTime: params.endDateTime, timeZone: 'Asia/Seoul' },
+          extendedProperties: params.extendedProperties,
+        },
+      }),
+    );
     if (!response.data.id)
       throw new Error('Failed to create mirror calendar event');
     return response.data.id;
@@ -198,12 +196,14 @@ export class GoogleEventsService extends GoogleCalendarBaseService {
       body.end = { dateTime: params.endDateTime, timeZone: 'Asia/Seoul' };
     if (params.extendedProperties)
       body.extendedProperties = params.extendedProperties;
-    await calendar.events.patch({
-      calendarId,
-      eventId,
-      sendUpdates: 'none',
-      requestBody: body,
-    });
+    await this.callApi('updateMirrorEvent', () =>
+      calendar.events.patch({
+        calendarId,
+        eventId,
+        sendUpdates: 'none',
+        requestBody: body,
+      }),
+    );
   }
 
   // ========== 공통 조회 ==========
@@ -214,7 +214,9 @@ export class GoogleEventsService extends GoogleCalendarBaseService {
   ): Promise<calendar_v3.Schema$Event | null> {
     const calendar = this.getCalendarClient();
     try {
-      const response = await calendar.events.get({ calendarId, eventId });
+      const response = await this.callApi('getEvent', () =>
+        calendar.events.get({ calendarId, eventId }),
+      );
       return response.data;
     } catch (error: any) {
       if (error.code === 404 || error.code === 410) return null;
@@ -232,15 +234,20 @@ export class GoogleEventsService extends GoogleCalendarBaseService {
     let pageToken: string | undefined;
 
     while (true) {
-      const response = await calendar.events.list({
-        calendarId,
-        timeMin: timeMin.toISOString(),
-        timeMax: timeMax.toISOString(),
-        showDeleted: false,
-        singleEvents: true,
-        maxResults: 2500,
-        ...(pageToken ? { pageToken } : {}),
-      });
+      const response = await this.callApi(
+        'listEventsInRange',
+        () =>
+          calendar.events.list({
+            calendarId,
+            timeMin: timeMin.toISOString(),
+            timeMax: timeMax.toISOString(),
+            showDeleted: false,
+            singleEvents: true,
+            maxResults: 2500,
+            ...(pageToken ? { pageToken } : {}),
+          }),
+        API_PRIORITY.CRON,
+      );
       events.push(...(response.data.items ?? []));
       if (!response.data.nextPageToken) break;
       pageToken = response.data.nextPageToken;
@@ -259,16 +266,21 @@ export class GoogleEventsService extends GoogleCalendarBaseService {
     let pageToken: string | undefined;
 
     while (true) {
-      const response = await calendar.events.list({
-        calendarId,
-        timeMin: timeMin.toISOString(),
-        timeMax: timeMax.toISOString(),
-        privateExtendedProperty: ['mirroredBy=gsc-bot'],
-        showDeleted: false,
-        singleEvents: true,
-        maxResults: 2500,
-        ...(pageToken ? { pageToken } : {}),
-      });
+      const response = await this.callApi(
+        'listMirrorEventsInRange',
+        () =>
+          calendar.events.list({
+            calendarId,
+            timeMin: timeMin.toISOString(),
+            timeMax: timeMax.toISOString(),
+            privateExtendedProperty: ['mirroredBy=gsc-bot'],
+            showDeleted: false,
+            singleEvents: true,
+            maxResults: 2500,
+            ...(pageToken ? { pageToken } : {}),
+          }),
+        API_PRIORITY.CRON,
+      );
       events.push(...(response.data.items ?? []));
       if (!response.data.nextPageToken) break;
       pageToken = response.data.nextPageToken;
@@ -282,13 +294,15 @@ export class GoogleEventsService extends GoogleCalendarBaseService {
   ): Promise<calendar_v3.Schema$Event[]> {
     const calendar = this.getCalendarClient();
     const updatedMin = new Date(Date.now() - 30_000);
-    const response = await calendar.events.list({
-      calendarId,
-      updatedMin: updatedMin.toISOString(),
-      showDeleted: true,
-      singleEvents: true,
-      maxResults: 10,
-    });
+    const response = await this.callApi('getRecentChangedEvents', () =>
+      calendar.events.list({
+        calendarId,
+        updatedMin: updatedMin.toISOString(),
+        showDeleted: true,
+        singleEvents: true,
+        maxResults: 10,
+      }),
+    );
     return response.data.items ?? [];
   }
 
@@ -299,13 +313,18 @@ export class GoogleEventsService extends GoogleCalendarBaseService {
     let pageToken: string | undefined;
 
     while (true) {
-      const response = await calendar.events.list({
-        calendarId,
-        showDeleted: true,
-        singleEvents: true,
-        maxResults: 2500,
-        ...(pageToken ? { pageToken } : {}),
-      });
+      const response = await this.callApi(
+        'getInitialSyncToken',
+        () =>
+          calendar.events.list({
+            calendarId,
+            showDeleted: true,
+            singleEvents: true,
+            maxResults: 2500,
+            ...(pageToken ? { pageToken } : {}),
+          }),
+        API_PRIORITY.CRON,
+      );
 
       if (response.data.nextSyncToken) return response.data.nextSyncToken;
       if (!response.data.nextPageToken)
@@ -322,12 +341,17 @@ export class GoogleEventsService extends GoogleCalendarBaseService {
   ): Promise<{ events: calendar_v3.Schema$Event[]; nextSyncToken: string }> {
     const calendar = this.getCalendarClient();
     try {
-      const response = await calendar.events.list({
-        calendarId,
-        syncToken,
-        showDeleted: true,
-        singleEvents: true,
-      });
+      const response = await this.callApi(
+        'getChangedEventsBySyncToken',
+        () =>
+          calendar.events.list({
+            calendarId,
+            syncToken,
+            showDeleted: true,
+            singleEvents: true,
+          }),
+        API_PRIORITY.CRON,
+      );
       return {
         events: response.data.items ?? [],
         nextSyncToken: response.data.nextSyncToken!,
@@ -356,21 +380,26 @@ export class GoogleEventsService extends GoogleCalendarBaseService {
     },
   ): Promise<string> {
     const calendar = this.getUserCalendarClient(refreshToken);
-    const response = await calendar.events.insert({
-      calendarId,
-      sendUpdates: 'none',
-      requestBody: {
-        summary: params.summary,
-        description: params.description,
-        location: params.location,
-        start: {
-          dateTime: params.startTime.toISOString(),
-          timeZone: 'Asia/Seoul',
+    const response = await this.callApi('createUserEvent', () =>
+      calendar.events.insert({
+        calendarId,
+        sendUpdates: 'none',
+        requestBody: {
+          summary: params.summary,
+          description: params.description,
+          location: params.location,
+          start: {
+            dateTime: params.startTime.toISOString(),
+            timeZone: 'Asia/Seoul',
+          },
+          end: {
+            dateTime: params.endTime.toISOString(),
+            timeZone: 'Asia/Seoul',
+          },
+          attendees: params.attendeeEmails?.map((email) => ({ email })),
         },
-        end: { dateTime: params.endTime.toISOString(), timeZone: 'Asia/Seoul' },
-        attendees: params.attendeeEmails?.map((email) => ({ email })),
-      },
-    });
+      }),
+    );
 
     if (!response.data.id) throw new Error('Failed to create calendar event');
     return response.data.id;
@@ -382,7 +411,9 @@ export class GoogleEventsService extends GoogleCalendarBaseService {
     eventId: string,
   ): Promise<void> {
     const calendar = this.getUserCalendarClient(refreshToken);
-    await calendar.events.delete({ calendarId, eventId, sendUpdates: 'none' });
+    await this.callApi('deleteUserEvent', () =>
+      calendar.events.delete({ calendarId, eventId, sendUpdates: 'none' }),
+    );
   }
 
   // primary 캘린더에서 삭제하고 교수에게 취소 알림 발송
@@ -391,11 +422,13 @@ export class GoogleEventsService extends GoogleCalendarBaseService {
     eventId: string,
   ): Promise<void> {
     const calendar = this.getUserCalendarClient(refreshToken);
-    await calendar.events.delete({
-      calendarId: 'primary',
-      eventId,
-      sendUpdates: 'all',
-    });
+    await this.callApi('cancelConsultationEvent', () =>
+      calendar.events.delete({
+        calendarId: 'primary',
+        eventId,
+        sendUpdates: 'all',
+      }),
+    );
   }
 
   async updateEvent(
@@ -430,12 +463,14 @@ export class GoogleEventsService extends GoogleCalendarBaseService {
     if (params.attendeeEmails !== undefined)
       requestBody.attendees = params.attendeeEmails.map((email) => ({ email }));
 
-    await calendar.events.update({
-      calendarId,
-      eventId,
-      sendUpdates: 'none',
-      requestBody,
-    });
+    await this.callApi('updateUserEvent', () =>
+      calendar.events.update({
+        calendarId,
+        eventId,
+        sendUpdates: 'none',
+        requestBody,
+      }),
+    );
   }
 
   async listUserPrimaryEvents(
@@ -448,15 +483,17 @@ export class GoogleEventsService extends GoogleCalendarBaseService {
     let pageToken: string | undefined;
 
     while (true) {
-      const response = await calendar.events.list({
-        calendarId: 'primary',
-        timeMin: timeMin.toISOString(),
-        timeMax: timeMax.toISOString(),
-        showDeleted: false,
-        singleEvents: true,
-        maxResults: 2500,
-        ...(pageToken ? { pageToken } : {}),
-      });
+      const response = await this.callApi('listUserPrimaryEvents', () =>
+        calendar.events.list({
+          calendarId: 'primary',
+          timeMin: timeMin.toISOString(),
+          timeMax: timeMax.toISOString(),
+          showDeleted: false,
+          singleEvents: true,
+          maxResults: 2500,
+          ...(pageToken ? { pageToken } : {}),
+        }),
+      );
       events.push(...(response.data.items ?? []));
       if (!response.data.nextPageToken) break;
       pageToken = response.data.nextPageToken;
@@ -478,13 +515,15 @@ export class GoogleEventsService extends GoogleCalendarBaseService {
 
     await Promise.all(
       calendarIds.map(async (calendarId) => {
-        const response = await calendar.events.list({
-          calendarId,
-          q: userEmail,
-          timeMin: now,
-          singleEvents: true,
-          orderBy: 'startTime',
-        });
+        const response = await this.callApi('getUserBookings', () =>
+          calendar.events.list({
+            calendarId,
+            q: userEmail,
+            timeMin: now,
+            singleEvents: true,
+            orderBy: 'startTime',
+          }),
+        );
         for (const event of response.data.items ?? []) {
           if (event.attendees?.some((a) => a.email === userEmail)) {
             results.push({ calendarId, event });

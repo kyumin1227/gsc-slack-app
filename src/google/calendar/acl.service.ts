@@ -2,6 +2,8 @@ import { Inject, Injectable } from '@nestjs/common';
 import { CACHE_MANAGER } from '@nestjs/cache-manager';
 import type { Cache } from 'cache-manager';
 import { GoogleCalendarBaseService } from './base.service';
+import { GoogleApiLimiter } from '../google-api-limiter.service';
+import { AppMetrics } from '../../common/metrics/app.metrics';
 
 export interface CalendarAclEntry {
   email: string;
@@ -19,19 +21,25 @@ export class GoogleAclService extends GoogleCalendarBaseService {
   private readonly ACL_CACHE_KEY = (id: string) => `google:acl:${id}`;
   private readonly ACL_TTL_MS = 15 * 60 * 1000;
 
-  constructor(@Inject(CACHE_MANAGER) private readonly cache: Cache) {
-    super();
+  constructor(
+    limiter: GoogleApiLimiter,
+    appMetrics: AppMetrics,
+    @Inject(CACHE_MANAGER) private readonly cache: Cache,
+  ) {
+    super(limiter, appMetrics);
   }
 
   async shareCalendar(options: ShareCalendarOptions): Promise<void> {
     const calendar = this.getCalendarClient();
-    await calendar.acl.insert({
-      calendarId: options.calendarId,
-      requestBody: {
-        role: options.role,
-        scope: { type: 'user', value: options.email },
-      },
-    });
+    await this.callApi('shareCalendar', () =>
+      calendar.acl.insert({
+        calendarId: options.calendarId,
+        requestBody: {
+          role: options.role,
+          scope: { type: 'user', value: options.email },
+        },
+      }),
+    );
     await this.cache.del(this.ACL_CACHE_KEY(options.calendarId));
   }
 
@@ -39,7 +47,9 @@ export class GoogleAclService extends GoogleCalendarBaseService {
     const calendar = this.getCalendarClient();
     const ruleId = `user:${email}`;
     try {
-      await calendar.acl.delete({ calendarId, ruleId });
+      await this.callApi('unshareCalendar', () =>
+        calendar.acl.delete({ calendarId, ruleId }),
+      );
     } catch (error: any) {
       if (error.code === 404) {
         await this.cache.del(this.ACL_CACHE_KEY(calendarId));
@@ -52,13 +62,15 @@ export class GoogleAclService extends GoogleCalendarBaseService {
 
   async makeCalendarPublic(calendarId: string): Promise<void> {
     const calendar = this.getCalendarClient();
-    await calendar.acl.insert({
-      calendarId,
-      requestBody: {
-        role: 'reader',
-        scope: { type: 'default' },
-      },
-    });
+    await this.callApi('makeCalendarPublic', () =>
+      calendar.acl.insert({
+        calendarId,
+        requestBody: {
+          role: 'reader',
+          scope: { type: 'default' },
+        },
+      }),
+    );
   }
 
   // Redis 15분 캐싱
@@ -76,7 +88,9 @@ export class GoogleAclService extends GoogleCalendarBaseService {
     calendarId: string,
   ): Promise<CalendarAclEntry[]> {
     const calendar = this.getCalendarClient();
-    const response = await calendar.acl.list({ calendarId });
+    const response = await this.callApi('fetchCalendarAcl', () =>
+      calendar.acl.list({ calendarId }),
+    );
     const items = response.data.items ?? [];
 
     return items
