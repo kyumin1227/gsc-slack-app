@@ -1,15 +1,23 @@
 import { Injectable } from '@nestjs/common';
 import { GoogleCalendarBaseService } from './base.service';
+import { GoogleApiLimiter } from '../google-api-limiter.service';
+import { AppMetrics } from '../../common/metrics/app.metrics';
 
 @Injectable()
 export class GoogleCalendarListService extends GoogleCalendarBaseService {
+  constructor(limiter: GoogleApiLimiter, appMetrics: AppMetrics) {
+    super(limiter, appMetrics);
+  }
+
   async addCalendarToUserList(
     calendarId: string,
     userRefreshToken: string,
   ): Promise<void> {
     const calendar = this.getUserCalendarClient(userRefreshToken);
     try {
-      await calendar.calendarList.insert({ requestBody: { id: calendarId } });
+      await this.callApi('addCalendarToUserList', () =>
+        calendar.calendarList.insert({ requestBody: { id: calendarId } }),
+      );
     } catch (error: unknown) {
       const err = error as { code?: number };
       if (err.code === 409) return; // 이미 추가된 경우 무시
@@ -23,7 +31,9 @@ export class GoogleCalendarListService extends GoogleCalendarBaseService {
   ): Promise<void> {
     const calendar = this.getUserCalendarClient(userRefreshToken);
     try {
-      await calendar.calendarList.delete({ calendarId });
+      await this.callApi('removeCalendarFromUserList', () =>
+        calendar.calendarList.delete({ calendarId }),
+      );
     } catch (error: unknown) {
       const err = error as { code?: number };
       if (err.code === 404) return; // 이미 제거된 경우 무시
@@ -37,10 +47,12 @@ export class GoogleCalendarListService extends GoogleCalendarBaseService {
     let pageToken: string | undefined;
 
     do {
-      const res = await calendar.calendarList.list({
-        maxResults: 250,
-        pageToken,
-      });
+      const res = await this.callApi('getUserCalendarIds', () =>
+        calendar.calendarList.list({
+          maxResults: 250,
+          pageToken,
+        }),
+      );
       for (const item of res.data.items ?? []) {
         if (item.id) ids.add(item.id);
       }

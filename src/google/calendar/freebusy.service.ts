@@ -1,11 +1,17 @@
 import { Injectable } from '@nestjs/common';
 import { GoogleCalendarBaseService } from './base.service';
+import { GoogleApiLimiter } from '../google-api-limiter.service';
+import { AppMetrics } from '../../common/metrics/app.metrics';
 import { GoogleEventsService } from './events.service';
 
 @Injectable()
 export class GoogleFreebusyService extends GoogleCalendarBaseService {
-  constructor(private readonly eventsService: GoogleEventsService) {
-    super();
+  constructor(
+    limiter: GoogleApiLimiter,
+    appMetrics: AppMetrics,
+    private readonly eventsService: GoogleEventsService,
+  ) {
+    super(limiter, appMetrics);
   }
 
   async isTimeSlotBusy(
@@ -15,14 +21,16 @@ export class GoogleFreebusyService extends GoogleCalendarBaseService {
     endTime: Date,
   ): Promise<boolean> {
     const calendar = this.getUserCalendarClient(refreshToken);
-    const response = await calendar.freebusy.query({
-      requestBody: {
-        timeMin: startTime.toISOString(),
-        timeMax: endTime.toISOString(),
-        timeZone: 'Asia/Seoul',
-        items: [{ id: calendarId }],
-      },
-    });
+    const response = await this.callApi('freebusyQuery', () =>
+      calendar.freebusy.query({
+        requestBody: {
+          timeMin: startTime.toISOString(),
+          timeMax: endTime.toISOString(),
+          timeZone: 'Asia/Seoul',
+          items: [{ id: calendarId }],
+        },
+      }),
+    );
     const busy = response.data.calendars?.[calendarId]?.busy ?? [];
     return busy.length > 0;
   }
