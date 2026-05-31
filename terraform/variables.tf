@@ -97,6 +97,11 @@ variable "secrets_arn" {
 }
 
 # Monitoring EC2
+variable "monitoring_ami_id" {
+  description = "AMI ID for monitoring EC2 instance (pin to avoid unintended replacement)"
+  type        = string
+}
+
 variable "monitoring_instance_type" {
   description = "EC2 instance type for monitoring stack"
   type        = string
