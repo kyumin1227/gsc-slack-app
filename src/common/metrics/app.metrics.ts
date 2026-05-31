@@ -31,6 +31,13 @@ export class AppMetrics implements OnModuleInit {
     registers: [this.registry],
   });
 
+  readonly aiSlackUpdatesPerMessage = new Histogram({
+    name: 'ai_slack_updates_per_message',
+    help: 'AI 메시지 처리 중 Slack chat.update 호출 횟수',
+    buckets: [5, 8, 10, 15, 20, 30, 50, 100],
+    registers: [this.registry],
+  });
+
   readonly aiProcessingCurrent = new Gauge({
     name: 'ai_processing_current',
     help: '현재 AI 메시지 처리 중인 수',

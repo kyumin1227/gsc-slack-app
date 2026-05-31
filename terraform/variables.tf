@@ -113,3 +113,9 @@ variable "grafana_domain" {
   description = "Grafana subdomain (e.g. grafana.gsc-lab.io)"
   type        = string
 }
+
+variable "mcp_allowed_origins" {
+  description = "Comma-separated browser origins allowed to call the remote MCP endpoint"
+  type        = string
+  default     = ""
+}

@@ -103,12 +103,13 @@ export class SlackAiService {
     slackId: string,
     text: string,
     onProgress?: (msg: string) => Promise<void>,
-  ): Promise<string> {
+    onChunk?: (text: string) => Promise<void>,
+  ): Promise<{ reply: string; rounds: number }> {
     this.appMetrics.aiMessagesTotal.inc();
     this.appMetrics.aiProcessingCurrent.inc();
     const endTimer = this.appMetrics.aiMessageDurationSeconds.startTimer();
     try {
-      return await this._handleMessage(slackId, text, onProgress);
+      return await this._handleMessage(slackId, text, onProgress, onChunk);
     } finally {
       endTimer();
       this.appMetrics.aiProcessingCurrent.dec();
@@ -119,7 +120,8 @@ export class SlackAiService {
     slackId: string,
     text: string,
     onProgress?: (msg: string) => Promise<void>,
-  ): Promise<string> {
+    onChunk?: (text: string) => Promise<void>,
+  ): Promise<{ reply: string; rounds: number }> {
     const tools = this.toolsService
       .getDefinitions()
       .filter((t) => t.name !== 'get_current_time'); // 프롬프트에 시간이 있으므로 툴 제외
@@ -134,13 +136,26 @@ export class SlackAiService {
 
     const MAX_ROUNDS = 10;
     for (let round = 0; round < MAX_ROUNDS; round++) {
-      const response = await this.anthropic.messages.create({
+      const stream = this.anthropic.messages.stream({
         model: MODEL,
         max_tokens: 2048,
         system: systemPrompt,
         tools,
         messages,
       });
+
+      let streamedText = '';
+      for await (const event of stream) {
+        if (
+          event.type === 'content_block_delta' &&
+          event.delta.type === 'text_delta'
+        ) {
+          streamedText += event.delta.text;
+          if (onChunk) await onChunk(streamedText);
+        }
+      }
+
+      const response = await stream.finalMessage();
 
       this.appMetrics.aiTokensTotal.inc(
         { type: 'input' },
@@ -158,10 +173,7 @@ export class SlackAiService {
           { role: 'assistant', content: replyText },
         ]);
         this.appMetrics.aiMessageRounds.observe(round + 1);
-        this.logger.log(
-          `[handleMessage] 완료 (${round + 1}라운드) length=${replyText.length}`,
-        );
-        return replyText;
+        return { reply: replyText, rounds: round + 1 };
       }
 
       const toolResults: Anthropic.ToolResultBlockParam[] = [];
@@ -194,7 +206,11 @@ export class SlackAiService {
       );
     }
 
-    return '요청 처리 중 오류가 발생했습니다. 다시 시도해 주세요.';
+    return {
+      reply:
+        '요청이 너무 복잡해서 한 번에 처리하지 못했어요 😅 일부 작업이 진행됐을 수 있으니 현황을 확인 후 다시 시도해 주세요!',
+      rounds: MAX_ROUNDS,
+    };
   }
 
   private extractText(content: Anthropic.ContentBlock[]): string {

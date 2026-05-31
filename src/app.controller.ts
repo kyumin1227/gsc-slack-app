@@ -38,13 +38,22 @@ export class AppController {
 
   @Get('.well-known/oauth-authorization-server')
   getOAuthMeta(@Req() req: Request) {
-    const baseUrl = process.env.MCP_BASE_URL ?? `${req.protocol}://${req.get('host')}`;
+    const baseUrl =
+      process.env.MCP_BASE_URL ?? `${req.protocol}://${req.get('host')}`;
     return this.mcpService.getAuthorizationServerMetadata(baseUrl);
   }
 
   @Get('.well-known/oauth-protected-resource')
   getProtectedResourceMeta(@Req() req: Request) {
-    const baseUrl = process.env.MCP_BASE_URL ?? `${req.protocol}://${req.get('host')}`;
+    const baseUrl =
+      process.env.MCP_BASE_URL ?? `${req.protocol}://${req.get('host')}`;
+    return this.mcpService.getProtectedResourceMetadata(baseUrl);
+  }
+
+  @Get('.well-known/oauth-protected-resource/mcp')
+  getMcpProtectedResourceMeta(@Req() req: Request) {
+    const baseUrl =
+      process.env.MCP_BASE_URL ?? `${req.protocol}://${req.get('host')}`;
     return this.mcpService.getProtectedResourceMetadata(baseUrl);
   }
 

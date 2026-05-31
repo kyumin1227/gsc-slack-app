@@ -21,3 +21,6 @@ grafana_domain           = "grafana.gsc-lab.io"
 monitoring_instance_type = "t3.small"
 monitoring_key_name      = "monitoring-key"
 
+# Optional: comma-separated browser origins for remote MCP calls.
+# Requests without an Origin header and requests from app_domain are allowed by default.
+mcp_allowed_origins = ""

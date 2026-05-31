@@ -62,6 +62,7 @@ resource "aws_ecs_task_definition" "app" {
         { name = "ADMIN_SLACK_ID", value = var.admin_slack_id },
         { name = "MCP_GOOGLE_REDIRECT_URI", value = "https://${var.app_domain}/mcp/auth/callback" },
         { name = "MCP_BASE_URL", value = "https://${var.app_domain}" },
+        { name = "MCP_ALLOWED_ORIGINS", value = var.mcp_allowed_origins },
         { name = "LOKI_URL", value = "http://${aws_instance.monitoring.private_ip}:3100" },
       ]
 
