@@ -78,9 +78,30 @@ export class AppMetrics implements OnModuleInit {
     registers: [this.registry],
   });
 
+  readonly googleApiRequestsTotal = new Counter({
+    name: 'google_api_requests_total',
+    help: 'Google Calendar API 요청 횟수',
+    labelNames: ['operation'] as const,
+    registers: [this.registry],
+  });
+
   readonly googleApiErrorsTotal = new Counter({
     name: 'google_api_errors_total',
     help: 'Google Calendar API 에러 횟수',
+    labelNames: ['operation'] as const,
+    registers: [this.registry],
+  });
+
+  readonly googleApiRateLimitTotal = new Counter({
+    name: 'google_api_rate_limit_total',
+    help: 'Google Calendar API Rate Limit(429) 발생 횟수',
+    labelNames: ['operation'] as const,
+    registers: [this.registry],
+  });
+
+  readonly googleApiRetryTotal = new Counter({
+    name: 'google_api_retry_total',
+    help: 'Google Calendar API 재시도 횟수',
     labelNames: ['operation'] as const,
     registers: [this.registry],
   });

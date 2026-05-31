@@ -37,6 +37,7 @@
     "@nestjs/typeorm": "^11.0.0",
     "@slack/bolt": "^4.6.0",
     "@slack/types": "^2.19.0",
+    "bottleneck": "^2.19.5",
     "cache-manager": "^7.2.8",
     "googleapis": "^170.1.0",
     "nest-winston": "^1.10.2",
