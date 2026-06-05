@@ -7,11 +7,11 @@ services:
       POSTGRES_PASSWORD: ${DB_PASSWORD:-postgres}
       POSTGRES_DB: ${DB_DATABASE:-gsc_slack_app}
     ports:
-      - "5432:5432"
+      - '5432:5432'
     volumes:
       - ./postgres_data:/var/lib/postgresql/data
     healthcheck:
-      test: ["CMD-SHELL", "pg_isready -U ${DB_USERNAME:-postgres}"]
+      test: ['CMD-SHELL', 'pg_isready -U ${DB_USERNAME:-postgres}']
       interval: 10s
       timeout: 5s
       retries: 5
@@ -21,9 +21,9 @@ services:
     container_name: gsc-redis
     command: redis-server --requirepass ${REDIS_PASSWORD:-redis}
     ports:
-      - "6379:6379"
+      - '6379:6379'
     healthcheck:
-      test: ["CMD", "redis-cli", "-a", "${REDIS_PASSWORD:-redis}", "ping"]
+      test: ['CMD', 'redis-cli', '-a', '${REDIS_PASSWORD:-redis}', 'ping']
       interval: 10s
       timeout: 5s
       retries: 5
@@ -36,7 +36,7 @@ services:
       redis:
         condition: service_healthy
     extra_hosts:
-      - "host.docker.internal:host-gateway"
+      - 'host.docker.internal:host-gateway'
     environment:
       NODE_ENV: ${NODE_ENV:-production}
       DB_HOST: db

@@ -3,7 +3,7 @@ services:
     image: ${DOCKER_IMAGE:-gsc-slack-app:latest}
     restart: always
     logging:
-      driver: "json-file"
+      driver: 'json-file'
       options:
-        max-size: "10m"
-        max-file: "3"
+        max-size: '10m'
+        max-file: '3'

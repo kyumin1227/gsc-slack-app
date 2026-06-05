@@ -157,9 +157,13 @@ export class AnnouncementController {
 
     const limit = AnnouncementView.PAGE_SIZE;
     const offset = Number(body.view?.private_metadata ?? '0');
-    const { items, total } = await this.announcementService.findPage(offset, limit);
+    const { items, total } = await this.announcementService.findPage(
+      offset,
+      limit,
+    );
     // 삭제 후 현재 페이지 항목이 없으면 이전 페이지로 이동
-    const adjustedOffset = items.length === 0 && offset > 0 ? offset - limit : offset;
+    const adjustedOffset =
+      items.length === 0 && offset > 0 ? offset - limit : offset;
     const page =
       adjustedOffset !== offset
         ? await this.announcementService.findPage(adjustedOffset, limit)
@@ -181,7 +185,8 @@ export class AnnouncementController {
   /** 이전 페이지 — action.value = 이동할 offset */
   @Action('announcement:list:prev')
   async handleListPrev(
-    args: SlackActionMiddlewareArgs<BlockAction<ButtonAction>> & AllMiddlewareArgs,
+    args: SlackActionMiddlewareArgs<BlockAction<ButtonAction>> &
+      AllMiddlewareArgs,
   ) {
     return this.handleListPage(args);
   }
@@ -189,7 +194,8 @@ export class AnnouncementController {
   /** 다음 페이지 — action.value = 이동할 offset */
   @Action('announcement:list:next')
   async handleListNext(
-    args: SlackActionMiddlewareArgs<BlockAction<ButtonAction>> & AllMiddlewareArgs,
+    args: SlackActionMiddlewareArgs<BlockAction<ButtonAction>> &
+      AllMiddlewareArgs,
   ) {
     return this.handleListPage(args);
   }
@@ -204,7 +210,10 @@ export class AnnouncementController {
 
     const offset = Number(action.value);
     const limit = AnnouncementView.PAGE_SIZE;
-    const { items, total } = await this.announcementService.findPage(offset, limit);
+    const { items, total } = await this.announcementService.findPage(
+      offset,
+      limit,
+    );
 
     const viewId = body.view?.id;
     if (!viewId) {
@@ -292,8 +301,9 @@ export class AnnouncementController {
       values.channel_block.channel_input.selected_option?.value ?? '';
     const title = values.title_block.title_input.value ?? '';
     // rich_text_input은 rich_text_value로 읽음 (Slack Block Kit 타입 미지원 → any 캐스팅)
-    // eslint-disable-next-line @typescript-eslint/no-explicit-any
-    const richTextBlock = (values.content_block?.content_input as any)?.rich_text_value ?? null;
+
+    const richTextBlock =
+      (values.content_block?.content_input as any)?.rich_text_value ?? null;
 
     if (!channelId) {
       await ack({
@@ -315,7 +325,10 @@ export class AnnouncementController {
     const contentJson = JSON.stringify(richTextBlock);
 
     try {
-      const message = AnnouncementView.announcementMessage(title, richTextBlock);
+      const message = AnnouncementView.announcementMessage(
+        title,
+        richTextBlock,
+      );
       const result = await client.chat.postMessage({
         channel: channelId,
         text: message.text,
@@ -378,8 +391,9 @@ export class AnnouncementController {
     const id = Number(view.private_metadata);
     const values = view.state.values;
     const title = values.title_block.title_input.value ?? '';
-    // eslint-disable-next-line @typescript-eslint/no-explicit-any
-    const richTextBlock = (values.content_block?.content_input as any)?.rich_text_value ?? null;
+
+    const richTextBlock =
+      (values.content_block?.content_input as any)?.rich_text_value ?? null;
 
     if (!richTextBlock) {
       await ack({
@@ -404,7 +418,10 @@ export class AnnouncementController {
     }
 
     try {
-      const message = AnnouncementView.announcementMessage(title, richTextBlock);
+      const message = AnnouncementView.announcementMessage(
+        title,
+        richTextBlock,
+      );
       await client.chat.update({
         channel: announcement.channelId,
         ts: announcement.messageTs,
@@ -412,7 +429,10 @@ export class AnnouncementController {
         blocks: message.blocks,
       });
 
-      await this.announcementService.update(id, { title, content: contentJson });
+      await this.announcementService.update(id, {
+        title,
+        content: contentJson,
+      });
 
       this.logger.log(
         `공지 수정 완료 — id: ${id}, channel: ${announcement.channelId}`,
