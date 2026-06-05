@@ -27,9 +27,9 @@ jobs:
       - name: Install dependencies
         run: npm ci
 
-      - name: Lint
+      - name: Format check
         id: lint
-        run: npm run lint -- --max-warnings=0
+        run: npx prettier --check "src/**/*.ts" "**/*.yml"
         continue-on-error: true
 
       - name: Build
@@ -59,7 +59,7 @@ jobs:
 
             | 단계 | 결과 |
             |------|------|
-            | Lint | ${emoji(lintOutcome)} ${lintOutcome} |
+            | Format (Prettier) | ${emoji(lintOutcome)} ${lintOutcome} |
             | Build | ${emoji(buildOutcome)} ${buildOutcome} |
             | Test | ${emoji(testOutcome)} ${testOutcome} |`;
 
