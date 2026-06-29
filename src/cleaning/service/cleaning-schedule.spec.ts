@@ -177,5 +177,42 @@ describe('CleaningScheduleService', () => {
       // 중복 일정 2개를 제외하고 1개 일정이 생성됨.
       expect(result.count).toBe(1);
     })
+
+    it('기간 미입력시 담당 인원 / 필요 인원 수 만큼의 일정을 생성', async () => {
+      // 날짜 고정 (mock)
+      const RealDate = global.Date;
+      jest.spyOn(global, 'Date').mockImplementation(() => new RealDate('2026-06-29') as any);
+      // 규칙
+      ruleRepo.findOne.mockResolvedValue({ id: 1, cycle: 1, daysOfWeek: [1], needPeoples: 3})
+
+      // 담당인원
+      ruleUserRepo.find.mockResolvedValue([
+        { id: 1, ruleId: 1, userId: 1 }, 
+        { id: 2, ruldId: 1, userId: 2 },
+        { id: 3, ruldId: 1, userId: 3 },
+        { id: 4, ruldId: 1, userId: 4 },
+        { id: 5, ruldId: 1, userId: 5 },
+        { id: 6, ruldId: 1, userId: 6 },
+        { id: 7, ruldId: 1, userId: 7 },
+        { id: 8, ruldId: 1, userId: 8 },
+        { id: 9, ruldId: 1, userId: 9 },
+      ]);
+      // 일정
+      scheduleRepo.find.mockResolvedValue([])
+      // 일정 저장
+      scheduleRepo.save
+      .mockResolvedValueOnce({id: 1, ruleId: 1, cleaningDate: '2026-06-29'})
+      .mockResolvedValueOnce({id: 2, ruleId: 1, cleaningDate: '2026-07-06'})
+      .mockResolvedValueOnce({id: 3, ruleId: 1, cleaningDate: '2026-07-13'});
+      
+      // 기간 입력
+      const result = await service.generateSchedules(1)
+      
+      // 담당 인원(9명) / 필요 인원 수(3명) = 3개의 일정 생성
+      expect(result.count).toBe(3);
+      
+      // 날짜 원복
+      jest.restoreAllMocks();
+    })
   })
 });
