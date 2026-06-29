@@ -1,6 +1,7 @@
 import { createErrorDomain } from './base.error';
 
 const { codes, messages } = createErrorDomain('CLEANING', {
+  NOT_ENOUGH_USERS: '담당인원이 필요 인원 수 보다 적습니다.',
   ASSIGNMENT_NOT_FOUND: '배정 정보를 찾을 수 없습니다.',
   DUPLICATE_RULE: '해당 반의 동일 구역에 이미 청소 규칙이 존재합니다.',
   DUPLICATE_SCHEDULE_DATE: '해당 날짜에 이미 일정이 존재합니다.',
