@@ -16,7 +16,7 @@ import {
   CleaningTrade,
   CleaningTradeStatus,
 } from '../entity/cleaning-trade.entity';
-import { BusinessError, CleaningErrorCode } from 'src/common/errors';
+import { BusinessError, CleaningErrorCode } from '../../common/errors';
 
 describe('CleaningScheduleService', () => {
   let service: CleaningScheduleService;
@@ -124,6 +124,15 @@ describe('CleaningScheduleService', () => {
       const result = await service.generateSchedules(1);
 
       expect(result).toEqual({count: 0, scheduleIds: []});
+    })
+
+    it('담당인원이 필요 인원 수 보다 적은 경우 비즈니스 에러 처리', async () => {
+      ruleRepo.findOne.mockResolvedValue({ id: 1, daysOfWeek: [1], needPeoples: 3})
+      ruleUserRepo.find.mockResolvedValue([{ id: 1, ruleId: 1, userId: 1 }, { id: 2, ruldId: 1, userId: 2 }]);
+
+      await expect(service.generateSchedules(1)).rejects.toMatchObject({
+        code: 'CLEANING:NOT_ENOUGH_USERS',
+      });
     })
   })
 });
