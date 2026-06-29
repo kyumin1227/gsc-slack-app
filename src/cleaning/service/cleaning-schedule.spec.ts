@@ -64,6 +64,18 @@ describe('CleaningScheduleService', () => {
       save: jest.fn(),
       createQueryBuilder: jest.fn(),
     };
+    
+    const mockQb = {
+      innerJoin: jest.fn().mockReturnThis(),
+      select: jest.fn().mockReturnThis(),
+      addSelect: jest.fn().mockReturnThis(),
+      where: jest.fn().mockReturnThis(),
+      andWhere: jest.fn().mockReturnThis(),
+      groupBy: jest.fn().mockReturnThis(),
+      getRawMany: jest.fn().mockResolvedValue([]),
+    };
+    assignmentRepo.createQueryBuilder.mockReturnValue(mockQb);
+
     ruleRepo = {
       findOne: jest.fn(),
     };
@@ -136,6 +148,34 @@ describe('CleaningScheduleService', () => {
       await expect(service.generateSchedules(1)).rejects.toMatchObject({
         code: 'CLEANING:NOT_ENOUGH_USERS',
       });
+    })
+
+    it('동일 규칙에 생성할 일정이 중복되는 경우 겹치는 부분을 제외하고 생성', async () => {
+      // 규칙
+      ruleRepo.findOne.mockResolvedValue({ id: 1, cycle: 1, daysOfWeek: [1], needPeoples: 3})
+      
+      // 담당인원
+      ruleUserRepo.find.mockResolvedValue([
+        { id: 1, ruleId: 1, userId: 1 }, 
+        { id: 2, ruldId: 1, userId: 2 },
+        { id: 3, ruldId: 1, userId: 3 }
+      ]);
+      
+      // 기존에 생성된 일정
+      scheduleRepo.find.mockResolvedValue([
+        {id: 1, ruleId: 1, cleaningDate: '2026-06-29'},
+        {id: 2, ruleId: 1, cleaningDate: '2026-07-06'}
+      ])
+      
+      // 일정 저장
+      scheduleRepo.save.mockResolvedValue({
+        id: 10, ruleId: 1, cleaningDate: '2026-07-13'
+      })
+      // 기간 입력
+      const result = await service.generateSchedules(1, '2026-06-29', '2026-07-13')
+      
+      // 중복 일정 2개를 제외하고 1개 일정이 생성됨.
+      expect(result.count).toBe(1);
     })
   })
 });
