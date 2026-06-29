@@ -116,5 +116,14 @@ describe('CleaningScheduleService', () => {
 
       expect(result).toEqual({count: 0, scheduleIds: []});
     })
+
+    it('담당인원 미설정 시 빈 배열 반환', async () => {
+      ruleRepo.findOne.mockResolvedValue({ id: 1, daysOfWeek: [1], needPeoples: 3 });
+      ruleUserRepo.find.mockResolvedValue([]);
+
+      const result = await service.generateSchedules(1);
+
+      expect(result).toEqual({count: 0, scheduleIds: []});
+    })
   })
 });
