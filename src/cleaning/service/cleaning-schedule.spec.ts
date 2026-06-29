@@ -107,4 +107,14 @@ describe('CleaningScheduleService', () => {
   it('should be defined', () => {
     expect(service).toBeDefined();
   });
+
+  describe('generateSchedules', () => {
+    it('배정 중 규칙이 삭제 된 경우 빈 배열 반환', async () => {
+      ruleRepo.findOne.mockResolvedValue(null);
+
+      const result = await service.generateSchedules(1);
+
+      expect(result).toEqual({count: 0, scheduleIds: []});
+    })
+  })
 });
