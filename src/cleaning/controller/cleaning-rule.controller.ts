@@ -16,7 +16,8 @@ import { formatClassLabel } from '../../common/class-label.util';
 import { StudentClassStatus } from '../../student-class/student-class.entity';
 import { UserRole } from '../../user/user.entity';
 import { CleaningAssignmentStatus } from '../entity/cleaning-assignment.entity';
-
+import { BusinessError, CleaningErrorCode } from '../../common/errors'
+import { ErrorView } from '../../common/error.view'
 @Controller()
 export class CleaningRuleController {
   constructor(
@@ -494,13 +495,6 @@ export class CleaningRuleController {
       await ack({
         response_action: 'errors',
         errors: { end_date_block: '종료일은 오늘 이후여야 합니다.' },
-      });
-      return;
-    }
-    if (startDate && endDate && startDate > endDate) {
-      await ack({
-        response_action: 'errors',
-        errors: { end_date_block: '종료일은 시작일 이후여야 합니다.' },
       });
       return;
     }
