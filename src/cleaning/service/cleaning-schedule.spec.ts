@@ -271,4 +271,13 @@ describe('CleaningScheduleService', () => {
       expect(result.count).toBe(1);
     });
   });
+  describe('findSchedulesByRule', () => {
+    it('일정이 없으면 빈 배열 반환', async () => {
+      scheduleRepo.find.mockResolvedValue([]);
+
+      const result = await service.findSchedulesByRule(1);
+
+      expect(result).toEqual([]);
+    });
+  });
 });
