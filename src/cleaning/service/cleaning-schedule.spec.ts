@@ -64,7 +64,7 @@ describe('CleaningScheduleService', () => {
       save: jest.fn(),
       createQueryBuilder: jest.fn(),
     };
-    
+
     const mockQb = {
       innerJoin: jest.fn().mockReturnThis(),
       select: jest.fn().mockReturnThis(),
@@ -126,68 +126,94 @@ describe('CleaningScheduleService', () => {
 
       const result = await service.generateSchedules(1);
 
-      expect(result).toEqual({count: 0, scheduleIds: []});
-    })
+      expect(result).toEqual({ count: 0, scheduleIds: [] });
+    });
 
     it('담당인원 미설정 시 빈 배열 반환', async () => {
-      ruleRepo.findOne.mockResolvedValue({ id: 1, daysOfWeek: [1], needPeoples: 3 });
+      ruleRepo.findOne.mockResolvedValue({
+        id: 1,
+        daysOfWeek: [1],
+        needPeoples: 3,
+      });
       ruleUserRepo.find.mockResolvedValue([]);
 
       const result = await service.generateSchedules(1);
 
-      expect(result).toEqual({count: 0, scheduleIds: []});
-    })
+      expect(result).toEqual({ count: 0, scheduleIds: [] });
+    });
 
     it('담당인원이 필요 인원 수 보다 적은 경우 비즈니스 에러 처리', async () => {
-      ruleRepo.findOne.mockResolvedValue({ id: 1, daysOfWeek: [1], needPeoples: 3})
+      ruleRepo.findOne.mockResolvedValue({
+        id: 1,
+        daysOfWeek: [1],
+        needPeoples: 3,
+      });
       ruleUserRepo.find.mockResolvedValue([
-        { id: 1, ruleId: 1, userId: 1 }, 
-        { id: 2, ruleId: 1, userId: 2 }
+        { id: 1, ruleId: 1, userId: 1 },
+        { id: 2, ruleId: 1, userId: 2 },
       ]);
 
       await expect(service.generateSchedules(1)).rejects.toMatchObject({
         code: 'CLEANING:NOT_ENOUGH_USERS',
       });
-    })
+    });
 
     it('동일 규칙에 생성할 일정이 중복되는 경우 겹치는 부분을 제외하고 생성', async () => {
       // 규칙
-      ruleRepo.findOne.mockResolvedValue({ id: 1, cycle: 1, daysOfWeek: [1], needPeoples: 3})
-      
+      ruleRepo.findOne.mockResolvedValue({
+        id: 1,
+        cycle: 1,
+        daysOfWeek: [1],
+        needPeoples: 3,
+      });
+
       // 담당인원
       ruleUserRepo.find.mockResolvedValue([
-        { id: 1, ruleId: 1, userId: 1 }, 
+        { id: 1, ruleId: 1, userId: 1 },
         { id: 2, ruldId: 1, userId: 2 },
-        { id: 3, ruldId: 1, userId: 3 }
+        { id: 3, ruldId: 1, userId: 3 },
       ]);
-      
+
       // 기존에 생성된 일정
       scheduleRepo.find.mockResolvedValue([
-        {id: 1, ruleId: 1, cleaningDate: '2026-06-29'},
-        {id: 2, ruleId: 1, cleaningDate: '2026-07-06'}
-      ])
-      
+        { id: 1, ruleId: 1, cleaningDate: '2026-06-29' },
+        { id: 2, ruleId: 1, cleaningDate: '2026-07-06' },
+      ]);
+
       // 일정 저장
       scheduleRepo.save.mockResolvedValue({
-        id: 10, ruleId: 1, cleaningDate: '2026-07-13'
-      })
+        id: 10,
+        ruleId: 1,
+        cleaningDate: '2026-07-13',
+      });
       // 기간 입력
-      const result = await service.generateSchedules(1, '2026-06-29', '2026-07-13')
-      
+      const result = await service.generateSchedules(
+        1,
+        '2026-06-29',
+        '2026-07-13',
+      );
+
       // 중복 일정 2개를 제외하고 1개 일정이 생성됨.
       expect(result.count).toBe(1);
-    })
+    });
 
     it('기간 미입력시 담당 인원 / 필요 인원 수 만큼의 일정을 생성', async () => {
       // 날짜 고정 (mock)
       const RealDate = global.Date;
-      jest.spyOn(global, 'Date').mockImplementation(() => new RealDate('2026-06-29') as any);
+      jest
+        .spyOn(global, 'Date')
+        .mockImplementation(() => new RealDate('2026-06-29') as any);
       // 규칙
-      ruleRepo.findOne.mockResolvedValue({ id: 1, cycle: 1, daysOfWeek: [1], needPeoples: 3})
+      ruleRepo.findOne.mockResolvedValue({
+        id: 1,
+        cycle: 1,
+        daysOfWeek: [1],
+        needPeoples: 3,
+      });
 
       // 담당인원
       ruleUserRepo.find.mockResolvedValue([
-        { id: 1, ruleId: 1, userId: 1 }, 
+        { id: 1, ruleId: 1, userId: 1 },
         { id: 2, ruldId: 1, userId: 2 },
         { id: 3, ruldId: 1, userId: 3 },
         { id: 4, ruldId: 1, userId: 4 },
@@ -198,24 +224,32 @@ describe('CleaningScheduleService', () => {
         { id: 9, ruldId: 1, userId: 9 },
       ]);
       // 일정
-      scheduleRepo.find.mockResolvedValue([])
+      scheduleRepo.find.mockResolvedValue([]);
       // 일정 저장
       scheduleRepo.save
-      .mockResolvedValueOnce({id: 1, ruleId: 1, cleaningDate: '2026-06-29'})
-      .mockResolvedValueOnce({id: 2, ruleId: 1, cleaningDate: '2026-07-06'})
-      .mockResolvedValueOnce({id: 3, ruleId: 1, cleaningDate: '2026-07-13'});
-      
+        .mockResolvedValueOnce({ id: 1, ruleId: 1, cleaningDate: '2026-06-29' })
+        .mockResolvedValueOnce({ id: 2, ruleId: 1, cleaningDate: '2026-07-06' })
+        .mockResolvedValueOnce({
+          id: 3,
+          ruleId: 1,
+          cleaningDate: '2026-07-13',
+        });
+
       // 기간 입력
-      const result = await service.generateSchedules(1)
-      
+      const result = await service.generateSchedules(1);
+
       // 담당 인원(9명) / 필요 인원 수(3명) = 3개의 일정 생성
       expect(result.count).toBe(3);
-      
+
       // 날짜 원복
       jest.restoreAllMocks();
-    })
+    });
     it('기간 미입력시 기존 일정 이후로 1사이클 배정', async () => {
-      ruleRepo.findOne.mockResolvedValue({ id: 1, daysOfWeek: [1], needPeoples: 3 });
+      ruleRepo.findOne.mockResolvedValue({
+        id: 1,
+        daysOfWeek: [1],
+        needPeoples: 3,
+      });
       ruleUserRepo.find.mockResolvedValue([
         { id: 1, ruleId: 1, userId: 1 },
         { id: 2, ruleId: 1, userId: 2 },
@@ -223,15 +257,18 @@ describe('CleaningScheduleService', () => {
       ]);
       // lastSchedule = existing[0];
       scheduleRepo.find.mockResolvedValue([
-        { id: 1, ruleId: 1, cleaningDate: '2026-06-22'},
+        { id: 1, ruleId: 1, cleaningDate: '2026-06-22' },
       ]);
-      scheduleRepo.save
-        .mockResolvedValueOnce({ id: 2, ruleId: 1, cleaningDate: '2026-06-29'});
+      scheduleRepo.save.mockResolvedValueOnce({
+        id: 2,
+        ruleId: 1,
+        cleaningDate: '2026-06-29',
+      });
       scheduleRepo.create.mockImplementation((v) => v);
 
       const result = await service.generateSchedules(1);
 
       expect(result.count).toBe(1);
-    })
-  })
+    });
+  });
 });
