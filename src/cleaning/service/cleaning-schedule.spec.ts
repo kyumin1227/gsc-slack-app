@@ -214,5 +214,24 @@ describe('CleaningScheduleService', () => {
       // 날짜 원복
       jest.restoreAllMocks();
     })
+    it('기간 미입력시 기존 일정 이후로 1사이클 배정', async () => {
+      ruleRepo.findOne.mockResolvedValue({ id: 1, daysOfWeek: [1], needPeoples: 3 });
+      ruleUserRepo.find.mockResolvedValue([
+        { id: 1, ruleId: 1, userId: 1 },
+        { id: 2, ruleId: 1, userId: 2 },
+        { id: 3, ruleId: 1, userId: 3 },
+      ]);
+      // lastSchedule = existing[0];
+      scheduleRepo.find.mockResolvedValue([
+        { id: 1, ruleId: 1, cleaningDate: '2026-06-22'},
+      ]);
+      scheduleRepo.save
+        .mockResolvedValueOnce({ id: 2, ruleId: 1, cleaningDate: '2026-06-29'});
+      scheduleRepo.create.mockImplementation((v) => v);
+
+      const result = await service.generateSchedules(1);
+
+      expect(result.count).toBe(1);
+    })
   })
 });
