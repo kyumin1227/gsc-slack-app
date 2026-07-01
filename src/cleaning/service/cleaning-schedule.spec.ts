@@ -46,6 +46,15 @@ describe('CleaningScheduleService', () => {
   let tradeRepo: {
     createQueryBuilder: jest.Mock;
   };
+  let mockQb = {
+    innerJoin: jest.fn().mockReturnThis(),
+    select: jest.fn().mockReturnThis(),
+    addSelect: jest.fn().mockReturnThis(),
+    where: jest.fn().mockReturnThis(),
+    andWhere: jest.fn().mockReturnThis(),
+    groupBy: jest.fn().mockReturnThis(),
+    getRawMany: jest.fn().mockResolvedValue([]),
+  };
 
   beforeEach(async () => {
     scheduleRepo = {
@@ -65,7 +74,7 @@ describe('CleaningScheduleService', () => {
       createQueryBuilder: jest.fn(),
     };
 
-    const mockQb = {
+    mockQb = {
       innerJoin: jest.fn().mockReturnThis(),
       select: jest.fn().mockReturnThis(),
       addSelect: jest.fn().mockReturnThis(),
@@ -278,6 +287,59 @@ describe('CleaningScheduleService', () => {
       const result = await service.findSchedulesByRule(1);
 
       expect(result).toEqual([]);
+    });
+
+    it('일정이 있으면 담당자 포함 배열 반환', async () => {
+      scheduleRepo.find.mockResolvedValue([
+        {
+          id: 1,
+          ruleId: 1,
+          cleaningDate: '2026-06-29',
+          needPeoples: 2,
+          status: CleaningScheduleStatus.SCHEDULED,
+        },
+      ]);
+
+      mockQb.getRawMany.mockResolvedValue([
+        {
+          assignmentId: 1,
+          scheduleId: 1,
+          status: CleaningAssignmentStatus.ASSIGNED,
+          userName: '테스트',
+          userSlackId: 1,
+        },
+        {
+          assignmentId: 2,
+          scheduleId: 1,
+          status: CleaningAssignmentStatus.ASSIGNED,
+          userName: '테스트2',
+          userSlackId: 2,
+        },
+      ]);
+      const result = await service.findSchedulesByRule(1);
+
+      expect(result).toEqual([
+        {
+          id: 1,
+          cleaningDate: '2026-06-29',
+          needPeoples: 2,
+          status: CleaningScheduleStatus.SCHEDULED,
+          assignees: [
+            {
+              assignmentId: 1,
+              userSlackId: 1,
+              userName: '테스트',
+              status: CleaningAssignmentStatus.ASSIGNED,
+            },
+            {
+              assignmentId: 2,
+              userSlackId: 2,
+              userName: '테스트2',
+              status: CleaningAssignmentStatus.ASSIGNED,
+            },
+          ],
+        },
+      ]);
     });
   });
 });
