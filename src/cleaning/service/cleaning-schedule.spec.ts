@@ -342,4 +342,13 @@ describe('CleaningScheduleService', () => {
       ]);
     });
   });
+  describe('findOneScheduleWithAssignees', () => {
+    it('존재하지 않는 일정 조회 시 null 반환', async () => {
+      scheduleRepo.findOne.mockResolvedValue(null);
+
+      const result = await service.findOneScheduleWithAssignees(1);
+
+      expect(result).toBeNull();
+    });
+  });
 });
