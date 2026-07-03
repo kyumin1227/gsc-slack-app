@@ -350,5 +350,53 @@ describe('CleaningScheduleService', () => {
 
       expect(result).toBeNull();
     });
+
+    it('일정이 있으면 담당자 포함 객체 반환', async () => {
+      // 스케쥴 Mock
+      scheduleRepo.findOne.mockResolvedValue({
+        id: 1,
+        ruldId: 1,
+        cleaningDate: '2026-06-29',
+        needPeoples: 2,
+        status: CleaningScheduleStatus.SCHEDULED,
+      });
+
+      // 담당자 조회 쿼리 Mock
+      mockQb.getRawMany.mockResolvedValue([
+        {
+          assignmentId: 1,
+          scheduleId: 1,
+          status: CleaningAssignmentStatus.ASSIGNED,
+          userName: 'test',
+          userSlackId: 1,
+        },
+        {
+          assignmentId: 2,
+          scheduleId: 1,
+          status: CleaningAssignmentStatus.ASSIGNED,
+          userName: 'test2',
+          userSlackId: 2,
+        },
+      ]);
+
+      // 메서드 실행 결과 저장
+      const result = await service.findOneScheduleWithAssignees(1);
+
+      // 담당자 목록 반환
+      expect(result?.assignees).toEqual([
+        {
+          assignmentId: 1,
+          status: CleaningAssignmentStatus.ASSIGNED,
+          userName: 'test',
+          userSlackId: 1,
+        },
+        {
+          assignmentId: 2,
+          status: CleaningAssignmentStatus.ASSIGNED,
+          userName: 'test2',
+          userSlackId: 2,
+        },
+      ]);
+    });
   });
 });
