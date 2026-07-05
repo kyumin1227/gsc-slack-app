@@ -462,4 +462,17 @@ describe('CleaningScheduleService', () => {
       ]);
     });
   });
+  // 일정 수정 메서드 테스트
+  describe('updateSchedule', () => {
+    it('일정이 없으면 종료', async () => {
+      scheduleRepo.findOne.mockResolvedValue(null);
+
+      const result = await service.updateSchedule(1, {
+        needPeoples: 2,
+        status: CleaningScheduleStatus.SCHEDULED,
+      });
+
+      expect(result).toBeUndefined();
+    });
+  });
 });
