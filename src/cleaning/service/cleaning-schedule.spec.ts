@@ -427,6 +427,13 @@ describe('CleaningScheduleService', () => {
           userName: '테스트',
           userSlackId: 1,
         },
+        {
+          assignmentId: 2,
+          scheduleId: 1,
+          status: CleaningAssignmentStatus.ASSIGNED,
+          userName: '테스트2',
+          userSlackId: 2,
+        },
       ]);
 
       const result = await service.findSchedulesByIds([1]);
@@ -442,6 +449,12 @@ describe('CleaningScheduleService', () => {
               assignmentId: 1,
               userSlackId: 1,
               userName: '테스트',
+              status: CleaningAssignmentStatus.ASSIGNED,
+            },
+            {
+              assignmentId: 2,
+              userSlackId: 2,
+              userName: '테스트2',
               status: CleaningAssignmentStatus.ASSIGNED,
             },
           ],
