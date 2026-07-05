@@ -399,4 +399,54 @@ describe('CleaningScheduleService', () => {
       ]);
     });
   });
+
+  describe('findSchedulesByIds', () => {
+    it('ids가 빈 배열이면 조회 없이 빈 배열 반환', async () => {
+      const result = await service.findSchedulesByIds([]);
+
+      expect(result).toEqual([]);
+      expect(scheduleRepo.find).not.toHaveBeenCalled();
+    });
+
+    it('일정이 있으면 담당자 포함 배열 반환', async () => {
+      scheduleRepo.find.mockResolvedValue([
+        {
+          id: 1,
+          ruleId: 1,
+          cleaningDate: '2026-06-29',
+          needPeoples: 2,
+          status: CleaningScheduleStatus.SCHEDULED,
+        },
+      ]);
+
+      mockQb.getRawMany.mockResolvedValue([
+        {
+          assignmentId: 1,
+          scheduleId: 1,
+          status: CleaningAssignmentStatus.ASSIGNED,
+          userName: '테스트',
+          userSlackId: 1,
+        },
+      ]);
+
+      const result = await service.findSchedulesByIds([1]);
+
+      expect(result).toEqual([
+        {
+          id: 1,
+          cleaningDate: '2026-06-29',
+          needPeoples: 2,
+          status: CleaningScheduleStatus.SCHEDULED,
+          assignees: [
+            {
+              assignmentId: 1,
+              userSlackId: 1,
+              userName: '테스트',
+              status: CleaningAssignmentStatus.ASSIGNED,
+            },
+          ],
+        },
+      ]);
+    });
+  });
 });
