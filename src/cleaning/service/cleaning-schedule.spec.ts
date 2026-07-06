@@ -17,6 +17,7 @@ import {
   CleaningTradeStatus,
 } from '../entity/cleaning-trade.entity';
 import { BusinessError, CleaningErrorCode } from '../../common/errors';
+import { Not } from 'typeorm';
 
 describe('CleaningScheduleService', () => {
   let service: CleaningScheduleService;
@@ -473,6 +474,26 @@ describe('CleaningScheduleService', () => {
       });
 
       expect(result).toBeUndefined();
+    });
+
+    it('날짜 변경 시 같은 규칙 안에 동일 일정이 있으면 에러', async () => {
+      scheduleRepo.findOne
+        .mockResolvedValueOnce({
+          ruleId: 1,
+          cleaningDate: '2026-06-29',
+        })
+        .mockResolvedValueOnce({
+          ruleId: 1,
+          cleaningDate: '2026-07-06',
+        });
+
+      await expect(
+        service.updateSchedule(1, {
+          needPeoples: 2,
+          status: CleaningScheduleStatus.SCHEDULED,
+          cleaningDate: '2026-07-06',
+        }),
+      ).rejects.toMatchObject({ code: 'CLEANING:DUPLICATE_SCHEDULE_DATE' });
     });
   });
 });
