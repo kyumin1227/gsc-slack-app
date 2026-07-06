@@ -44,9 +44,6 @@ describe('CleaningScheduleService', () => {
     find: jest.Mock;
     delete: jest.Mock;
   };
-  let tradeRepo: {
-    createQueryBuilder: jest.Mock;
-  };
   let mockQb = {
     innerJoin: jest.fn().mockReturnThis(),
     select: jest.fn().mockReturnThis(),
@@ -55,6 +52,14 @@ describe('CleaningScheduleService', () => {
     andWhere: jest.fn().mockReturnThis(),
     groupBy: jest.fn().mockReturnThis(),
     getRawMany: jest.fn().mockResolvedValue([]),
+  };
+  let tradeRepo: { createQueryBuilder: jest.Mock };
+  let mockTradeQb = {
+    update: jest.fn().mockReturnThis(),
+    set: jest.fn().mockReturnThis(),
+    where: jest.fn().mockReturnThis(),
+    andWhere: jest.fn().mockReturnThis(),
+    execute: jest.fn().mockResolvedValue(undefined),
   };
 
   beforeEach(async () => {
@@ -93,9 +98,15 @@ describe('CleaningScheduleService', () => {
       find: jest.fn(),
       delete: jest.fn(),
     };
-    tradeRepo = {
-      createQueryBuilder: jest.fn(),
+    tradeRepo = { createQueryBuilder: jest.fn() };
+    mockTradeQb = {
+      update: jest.fn().mockReturnThis(),
+      set: jest.fn().mockReturnThis(),
+      where: jest.fn().mockReturnThis(),
+      andWhere: jest.fn().mockReturnThis(),
+      execute: jest.fn().mockResolvedValue(undefined),
     };
+    tradeRepo.createQueryBuilder.mockReturnValue(mockTradeQb);
 
     const module: TestingModule = await Test.createTestingModule({
       providers: [
@@ -494,6 +505,48 @@ describe('CleaningScheduleService', () => {
           cleaningDate: '2026-07-06',
         }),
       ).rejects.toMatchObject({ code: 'CLEANING:DUPLICATE_SCHEDULE_DATE' });
+    });
+
+    it('일정 취소 시 각 배정들을 CANCELED로 변경하고 cancelPendingTradesForAssignments호출', async () => {
+      // 스케줄
+      scheduleRepo.findOne.mockResolvedValue({
+        id: 1,
+        ruleId: 1,
+        cleaningDate: '2026-06-29',
+        needPeoples: 2,
+        status: CleaningScheduleStatus.SCHEDULED,
+      });
+
+      // 배정된 인원
+      assignmentRepo.find.mockResolvedValue([
+        {
+          id: 1,
+          scheduleId: 1,
+          userId: 1,
+          status: CleaningAssignmentStatus.ASSIGNED,
+        },
+        {
+          id: 2,
+          scheduleId: 1,
+          userId: 2,
+          status: CleaningAssignmentStatus.ASSIGNED,
+        },
+      ]);
+
+      // 일정 취소
+      await service.updateSchedule(1, {
+        needPeoples: 2,
+        status: CleaningScheduleStatus.CANCELED,
+      });
+
+      // 결과 검증
+      expect(assignmentRepo.update).toHaveBeenCalledWith([1, 2], {
+        status: CleaningAssignmentStatus.CANCELED,
+      });
+      expect(tradeRepo.createQueryBuilder).toHaveBeenCalled();
+      expect(mockTradeQb.andWhere).toHaveBeenCalledWith(expect.any(String), {
+        ids: [1, 2],
+      });
     });
   });
 });
