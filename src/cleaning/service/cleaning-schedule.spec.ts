@@ -572,5 +572,47 @@ describe('CleaningScheduleService', () => {
         { status: CleaningAssignmentStatus.ASSIGNED },
       );
     });
+
+    it('필요 인원 수 감소 시 뒤쪽 배정부터 초과분 CANCLE', async () => {
+      // 스케줄
+      scheduleRepo.findOne.mockResolvedValue({
+        id: 1,
+        ruleId: 1,
+        cleaningDate: '2026-06-29',
+        needPeoples: 2,
+        status: CleaningScheduleStatus.SCHEDULED,
+      });
+
+      // 담당 인원
+      assignmentRepo.find.mockResolvedValue([
+        {
+          id: 2,
+          scheduleId: 1,
+          userId: 2,
+          status: CleaningAssignmentStatus.ASSIGNED,
+        },
+        {
+          id: 1,
+          scheduleId: 1,
+          userId: 1,
+          status: CleaningAssignmentStatus.ASSIGNED,
+        },
+      ]);
+
+      // 인원 감소(updateSchedule)
+      await service.updateSchedule(2, {
+        needPeoples: 1,
+        status: CleaningScheduleStatus.SCHEDULED,
+      });
+
+      // 결과 검증
+      expect(assignmentRepo.update).toHaveBeenCalledWith([1], {
+        status: CleaningAssignmentStatus.CANCELED,
+      });
+      expect(tradeRepo.createQueryBuilder).toHaveBeenCalled();
+      expect(mockTradeQb.andWhere).toHaveBeenCalledWith(expect.any(String), {
+        ids: [1],
+      });
+    });
   });
 });
