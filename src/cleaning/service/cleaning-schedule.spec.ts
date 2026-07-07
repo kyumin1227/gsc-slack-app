@@ -19,6 +19,7 @@ import {
 import { BusinessError, CleaningErrorCode } from '../../common/errors';
 import { Not } from 'typeorm';
 import { content_v2_1 } from 'googleapis';
+import { ScheduleClassRepController } from 'src/schedule/controller/schedule-class-rep.controller';
 
 describe('CleaningScheduleService', () => {
   let service: CleaningScheduleService;
@@ -613,6 +614,59 @@ describe('CleaningScheduleService', () => {
       expect(mockTradeQb.andWhere).toHaveBeenCalledWith(expect.any(String), {
         ids: [1],
       });
+    });
+
+    it('인원 증가 시 미배정 담당자 추가 배정(+ CANCELED 배정 재활성화)', async () => {
+      // 스케줄
+      scheduleRepo.findOne.mockResolvedValue({
+        id: 1,
+        ruleId: 1,
+        cleaningDate: '2026-06-29',
+        needPeoples: 1,
+      });
+
+      // 담당 인원
+      assignmentRepo.find
+        .mockResolvedValueOnce([
+          {
+            id: 1,
+            scheduleId: 1,
+            userId: 1,
+            status: CleaningAssignmentStatus.ASSIGNED,
+          },
+        ])
+        .mockResolvedValueOnce([
+          {
+            id: 2,
+            scheduleId: 1,
+            userId: 2,
+            status: CleaningAssignmentStatus.CANCELED,
+          },
+        ]);
+
+      // 신규 대상
+      ruleUserRepo.find.mockResolvedValue([
+        { ruleId: 1, userId: 1 }, // 기존 대상
+        { ruleId: 1, userId: 2 }, // CANCELED된 인원
+        { ruleId: 1, userId: 3 }, // 배정 대상
+      ]);
+
+      // 일정 수정
+      await service.updateSchedule(1, {
+        needPeoples: 3,
+        status: CleaningScheduleStatus.SCHEDULED,
+      });
+
+      // 결과 검증
+      expect(assignmentRepo.update).toHaveBeenCalledWith(2, {
+        status: CleaningAssignmentStatus.ASSIGNED,
+      });
+      expect(assignmentRepo.create).toHaveBeenCalledWith({
+        scheduleId: 1,
+        userId: 3,
+        status: CleaningAssignmentStatus.ASSIGNED,
+      });
+      expect(assignmentRepo.save).toHaveBeenCalled();
     });
   });
 });
