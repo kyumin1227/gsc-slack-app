@@ -669,4 +669,24 @@ describe('CleaningScheduleService', () => {
       expect(assignmentRepo.save).toHaveBeenCalled();
     });
   });
+
+  // 배정 개별 수정
+  describe('updateAssignmentStatuses', () => {
+    it('배정 개별 수정', async () => {
+      // 메서드 실행
+      await service.updateAssignmentStatuses([
+        { id: 1, status: CleaningAssignmentStatus.ASSIGNED },
+        { id: 2, status: CleaningAssignmentStatus.CANCELED },
+      ]);
+
+      // 결과 검증
+      expect(assignmentRepo.update).toHaveBeenCalledTimes(2);
+      expect(assignmentRepo.update).toHaveBeenCalledWith(1, {
+        status: CleaningAssignmentStatus.ASSIGNED,
+      });
+      expect(assignmentRepo.update).toHaveBeenCalledWith(2, {
+        status: CleaningAssignmentStatus.CANCELED,
+      });
+    });
+  });
 });
