@@ -18,6 +18,7 @@ import {
 } from '../entity/cleaning-trade.entity';
 import { BusinessError, CleaningErrorCode } from '../../common/errors';
 import { Not } from 'typeorm';
+import { content_v2_1 } from 'googleapis';
 
 describe('CleaningScheduleService', () => {
   let service: CleaningScheduleService;
@@ -547,6 +548,29 @@ describe('CleaningScheduleService', () => {
       expect(mockTradeQb.andWhere).toHaveBeenCalledWith(expect.any(String), {
         ids: [1, 2],
       });
+    });
+
+    it('일정 취소 후 복원 시 CANCELED된 배정 ASSIGNED로 재활성화', async () => {
+      // 취소된 스케줄
+      scheduleRepo.findOne.mockResolvedValue({
+        id: 1,
+        ruleId: 1,
+        cleaningDate: '2026-06-29',
+        needPeoples: 2,
+        status: CleaningScheduleStatus.CANCELED,
+      });
+
+      // 스케줄 CANCELED -> SCHEDULED
+      await service.updateSchedule(1, {
+        needPeoples: 2,
+        status: CleaningScheduleStatus.SCHEDULED,
+      });
+
+      // 결과 검증
+      expect(assignmentRepo.update).toHaveBeenCalledWith(
+        { scheduleId: 1, status: CleaningAssignmentStatus.CANCELED },
+        { status: CleaningAssignmentStatus.ASSIGNED },
+      );
     });
   });
 });
