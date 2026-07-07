@@ -689,4 +689,23 @@ describe('CleaningScheduleService', () => {
       });
     });
   });
+
+  // 담당 인원 전원 배정
+  describe('assignAllToSchedule', () => {
+    it('취소된 일정에 전원 배정시 비즈니스 에러 처리', async () => {
+      // 스케줄
+      scheduleRepo.findOne.mockResolvedValue({
+        id: 1,
+        ruldId: 1,
+        cleaningDate: '2026-06-29',
+        needPeoples: 2,
+        status: CleaningScheduleStatus.CANCELED,
+      });
+
+      // 결과 검증
+      await expect(service.assignAllToSchedule(1)).rejects.toMatchObject({
+        code: 'CLEANING:ASSIGNMENT_NOT_FOUND',
+      });
+    });
+  });
 });
