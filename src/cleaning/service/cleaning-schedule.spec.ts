@@ -61,6 +61,9 @@ describe('CleaningScheduleService', () => {
     set: jest.fn().mockReturnThis(),
     where: jest.fn().mockReturnThis(),
     andWhere: jest.fn().mockReturnThis(),
+    delete: jest.fn().mockReturnThis(),
+    from: jest.fn().mockReturnThis(),
+    getCount: jest.fn(),
     execute: jest.fn().mockResolvedValue(undefined),
   };
 
@@ -106,7 +109,10 @@ describe('CleaningScheduleService', () => {
       set: jest.fn().mockReturnThis(),
       where: jest.fn().mockReturnThis(),
       andWhere: jest.fn().mockReturnThis(),
+      delete: jest.fn().mockReturnThis(),
+      from: jest.fn().mockReturnThis(),
       execute: jest.fn().mockResolvedValue(undefined),
+      getCount: jest.fn(),
     };
     tradeRepo.createQueryBuilder.mockReturnValue(mockTradeQb);
 
