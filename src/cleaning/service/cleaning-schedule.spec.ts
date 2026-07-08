@@ -707,5 +707,60 @@ describe('CleaningScheduleService', () => {
         code: 'CLEANING:ASSIGNMENT_NOT_FOUND',
       });
     });
+
+    it('담당 인원 전원 배정', async () => {
+      // 스케줄
+      scheduleRepo.findOne.mockResolvedValue({
+        id: 1,
+        ruldId: 1,
+        cleaningDate: '2026-06-29',
+        needPeoples: 1,
+        status: CleaningScheduleStatus.SCHEDULED,
+      });
+
+      // 해당 규칙 담당인원
+      ruleUserRepo.find.mockResolvedValue([
+        { id: 1, ruleId: 1, userId: 1 },
+        { id: 2, ruleId: 1, userId: 2 },
+        { id: 3, ruleId: 1, userId: 3 },
+      ]);
+
+      // 배정된 인원
+      assignmentRepo.find.mockResolvedValue([
+        {
+          id: 1,
+          scheduleId: 1,
+          userId: 1,
+          status: CleaningAssignmentStatus.CANCELED,
+        },
+      ]);
+
+      // 전원 배정 메서드
+      await service.assignAllToSchedule(1);
+
+      // 결과 검증
+      // 1번 스케줄 필요 인원 수 1 -> 3(전체 담당 인원 수)
+      expect(scheduleRepo.update).toHaveBeenCalledWith(1, {
+        needPeoples: 3,
+      });
+
+      // CANCELED상태인 인원은 ASSIGNED로 변경
+      expect(assignmentRepo.update).toHaveBeenCalledWith(1, {
+        status: CleaningAssignmentStatus.ASSIGNED,
+      });
+
+      // 전체 담당 인원 배정
+      expect(assignmentRepo.create).toHaveBeenCalledWith({
+        scheduleId: 1,
+        userId: 2,
+        status: CleaningAssignmentStatus.ASSIGNED,
+      });
+      expect(assignmentRepo.create).toHaveBeenCalledWith({
+        scheduleId: 1,
+        userId: 3,
+        status: CleaningAssignmentStatus.ASSIGNED,
+      });
+      expect(assignmentRepo.save).toHaveBeenCalledTimes(2);
+    });
   });
 });
