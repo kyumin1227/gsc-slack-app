@@ -784,5 +784,22 @@ describe('CleaningScheduleService', () => {
       expect(assignmentRepo.delete).not.toHaveBeenCalled();
       expect(scheduleRepo.delete).not.toHaveBeenCalled();
     });
+
+    it('교환 요청이 없으면 교환 -> 배정 -> 일정 순으로 삭제', async () => {
+      // 배정
+      assignmentRepo.find.mockResolvedValue([
+        { scheduleId: 1, id: 1 },
+        { scheduleId: 1, id: 2 },
+      ]);
+
+      // 일정 삭제
+      await service.deleteSchedule(1);
+
+      // 결과 검증
+      expect(mockTradeQb.delete).toHaveBeenCalled();
+      expect(mockTradeQb.execute).toHaveBeenCalled();
+      expect(assignmentRepo.delete).toHaveBeenCalledWith({ scheduleId: 1 });
+      expect(scheduleRepo.delete).toHaveBeenCalledWith(1);
+    });
   });
 });
