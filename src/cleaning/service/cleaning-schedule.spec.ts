@@ -769,4 +769,20 @@ describe('CleaningScheduleService', () => {
       expect(assignmentRepo.save).toHaveBeenCalledTimes(2);
     });
   });
+  describe('deleteSchedule', () => {
+    it('대기 중인 교환 요청이 있으면 삭제 불가', async () => {
+      // 배정
+      assignmentRepo.find.mockResolvedValue([{ scheduleId: 1, id: 1 }]);
+      // 교환 요청
+      mockTradeQb.getCount.mockResolvedValue(1);
+
+      // 삭제 시도
+      await expect(service.deleteSchedule(1)).rejects.toMatchObject({
+        code: 'CLEANING:SCHEDULE_HAS_ACTIVE_TRADES',
+      });
+      // 삭제 메서드 호출 확인
+      expect(assignmentRepo.delete).not.toHaveBeenCalled();
+      expect(scheduleRepo.delete).not.toHaveBeenCalled();
+    });
+  });
 });
