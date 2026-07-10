@@ -17,7 +17,7 @@ import {
   CleaningTradeStatus,
 } from '../entity/cleaning-trade.entity';
 import { BusinessError, CleaningErrorCode } from '../../common/errors';
-import { Not } from 'typeorm';
+import { Not, LessThan, In } from 'typeorm';
 import { content_v2_1 } from 'googleapis';
 import { ScheduleClassRepController } from 'src/schedule/controller/schedule-class-rep.controller';
 
@@ -837,6 +837,31 @@ describe('CleaningScheduleService', () => {
         status: CleaningAssignmentStatus.ASSIGNED,
       });
       expect(assignmentRepo.save).toHaveBeenCalled();
+    });
+  });
+  describe('completePastSchedules', () => {
+    it('지난 일정은 매일 00시에 완료 처리', async () => {
+      // 날짜 지정
+      const today = global.Date;
+      jest
+        .spyOn(global, 'Date')
+        .mockImplementation(() => new today('2026-06-29') as any);
+
+      // 스케줄
+      scheduleRepo.find.mockResolvedValue([{ id: 1 }, { id: 2 }]);
+
+      await service.completePastSchedules();
+
+      // 결과 검증
+      expect(scheduleRepo.update).toHaveBeenCalledWith([1, 2], {
+        status: CleaningScheduleStatus.COMPLETED,
+      });
+      expect(assignmentRepo.update).toHaveBeenCalledWith(
+        { scheduleId: In([1, 2]), status: CleaningAssignmentStatus.ASSIGNED },
+        { status: CleaningAssignmentStatus.COMPLETED },
+      );
+
+      jest.restoreAllMocks();
     });
   });
 });
