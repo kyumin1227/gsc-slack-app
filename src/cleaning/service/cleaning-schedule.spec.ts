@@ -802,4 +802,41 @@ describe('CleaningScheduleService', () => {
       expect(scheduleRepo.delete).toHaveBeenCalledWith(1);
     });
   });
+
+  describe('handleUserDeactivation', () => {
+    it('비활성화 유저 발생시 담당자에서 삭제, 기존 배정 취소 및 대체 배정', async () => {
+      // 비활성화 유저(1번)가 속한 규칙
+      ruleUserRepo.find
+        .mockResolvedValueOnce([{ ruleId: 1, userId: 1 }]) // 본인이 속한 규칙 조회
+        .mockResolvedValueOnce([{ ruleId: 1, userId: 2 }]); // 규칙에 남은 담당자 조회
+
+      // 1번 유저의 미래 배정(10번) / 남은 담당자(2번)의 배정 횟수(0회)
+      mockQb.getRawMany
+        .mockResolvedValueOnce([{ id: 10, scheduleId: 100 }]) // 취소할 미래 배정
+        .mockResolvedValueOnce([{ userId: 2, cnt: '0' }]); // 남은 담당자 배정 횟수
+
+      assignmentRepo.find
+        .mockResolvedValueOnce([]) // 100번 일정에 이미 배정된 인원 없음
+        .mockResolvedValueOnce([]); // 100번 일정에 CANCELED 기록 없음
+
+      await service.handleUserDeactivation(1);
+
+      // 담당자에서 삭제
+      expect(ruleUserRepo.delete).toHaveBeenCalledWith({ userId: 1 });
+
+      // 기존 배정 취소
+      expect(assignmentRepo.update).toHaveBeenCalledWith([10], {
+        status: CleaningAssignmentStatus.CANCELED,
+      });
+      expect(tradeRepo.createQueryBuilder).toHaveBeenCalled();
+
+      // 남은 담당자(2번)로 대체 배정
+      expect(assignmentRepo.create).toHaveBeenCalledWith({
+        scheduleId: 100,
+        userId: 2,
+        status: CleaningAssignmentStatus.ASSIGNED,
+      });
+      expect(assignmentRepo.save).toHaveBeenCalled();
+    });
+  });
 });
