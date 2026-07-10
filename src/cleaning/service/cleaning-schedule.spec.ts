@@ -14,12 +14,8 @@ import {
 } from '../entity/cleaning-assignment.entity';
 import {
   CleaningTrade,
-  CleaningTradeStatus,
 } from '../entity/cleaning-trade.entity';
-import { BusinessError, CleaningErrorCode } from '../../common/errors';
-import { Not, LessThan, In } from 'typeorm';
-import { content_v2_1 } from 'googleapis';
-import { ScheduleClassRepController } from 'src/schedule/controller/schedule-class-rep.controller';
+import { In } from 'typeorm';
 
 describe('CleaningScheduleService', () => {
   let service: CleaningScheduleService;
