@@ -6,9 +6,7 @@ import {
   CleaningAssignmentStatus,
 } from '../entity/cleaning-assignment.entity';
 import { CleaningTrade, CleaningTradeStatus } from '../entity/cleaning-trade.entity';
-import { CleaningSchedule, CleaningScheduleStatus } from '../entity/cleaning-schedule.entity';
-import { CleaningRule } from '../entity/cleaning-rule.entity';
-import { CleaningRuleUser } from '../entity/cleaning-rule-user.entity';
+import { CleaningScheduleStatus } from '../entity/cleaning-schedule.entity';
 import { BusinessError, CleaningErrorCode } from '../../common/errors';
 
 export interface AssignmentDetail {
@@ -30,12 +28,6 @@ export class CleaningTradeService {
     private readonly assignmentRepo: Repository<CleaningAssignment>,
     @InjectRepository(CleaningTrade)
     private readonly tradeRepo: Repository<CleaningTrade>,
-    @InjectRepository(CleaningSchedule)
-    private readonly scheduleRepo: Repository<CleaningSchedule>,
-    @InjectRepository(CleaningRule)
-    private readonly ruleRepo: Repository<CleaningRule>,
-    @InjectRepository(CleaningRuleUser)
-    private readonly ruleUserRepo: Repository<CleaningRuleUser>,
   ) {}
 
   // 내 예정 배정만 조회하고, 같은 일정의 다른 담당자 이름도 함께 보여준다.
