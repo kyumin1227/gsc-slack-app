@@ -98,4 +98,46 @@ describe('CleaningTradeService', () => {
   it('should be defined', () => {
     expect(service).toBeDefined();
   });
+
+  describe('getMyAssignments', () => {
+    it('배정이 없으면 빈 배열 반환', async () => {
+      const result = await service.getMyAssignments(1);
+
+      expect(result).toEqual([]);
+    });
+
+    it('내 예정 배정을 함께하는 인원 이름과 함께 반환', async () => {
+      // 첫 호출: 내 배정 목록, 이후 호출: 같은 일정의 다른 담당자 이름
+      assignMockQb.getRawMany
+        .mockResolvedValueOnce([
+          {
+            id: 1,
+            scheduleId: 10,
+            userId: 1,
+            userName: '테스트',
+            userCode: '20240001',
+            userSlackId: 'U1',
+            cleaningDate: '2026-07-13',
+            resourceName: '강의실',
+          },
+        ])
+        .mockResolvedValueOnce([{ name: '테스트2' }]);
+
+      const result = await service.getMyAssignments(1);
+
+      expect(result).toEqual([
+        {
+          id: 1,
+          scheduleId: 10,
+          userId: 1,
+          userName: '테스트',
+          userCode: '20240001',
+          userSlackId: 'U1',
+          cleaningDate: '2026-07-13',
+          resourceName: '강의실',
+          coAssignees: ['테스트2'],
+        },
+      ]);
+    });
+  });
 });
