@@ -195,8 +195,8 @@ describe('CleaningScheduleService', () => {
       // 담당인원
       ruleUserRepo.find.mockResolvedValue([
         { id: 1, ruleId: 1, userId: 1 },
-        { id: 2, ruldId: 1, userId: 2 },
-        { id: 3, ruldId: 1, userId: 3 },
+        { id: 2, ruleId: 1, userId: 2 },
+        { id: 3, ruleId: 1, userId: 3 },
       ]);
 
       // 기존에 생성된 일정
@@ -239,14 +239,14 @@ describe('CleaningScheduleService', () => {
       // 담당인원
       ruleUserRepo.find.mockResolvedValue([
         { id: 1, ruleId: 1, userId: 1 },
-        { id: 2, ruldId: 1, userId: 2 },
-        { id: 3, ruldId: 1, userId: 3 },
-        { id: 4, ruldId: 1, userId: 4 },
-        { id: 5, ruldId: 1, userId: 5 },
-        { id: 6, ruldId: 1, userId: 6 },
-        { id: 7, ruldId: 1, userId: 7 },
-        { id: 8, ruldId: 1, userId: 8 },
-        { id: 9, ruldId: 1, userId: 9 },
+        { id: 2, ruleId: 1, userId: 2 },
+        { id: 3, ruleId: 1, userId: 3 },
+        { id: 4, ruleId: 1, userId: 4 },
+        { id: 5, ruleId: 1, userId: 5 },
+        { id: 6, ruleId: 1, userId: 6 },
+        { id: 7, ruleId: 1, userId: 7 },
+        { id: 8, ruleId: 1, userId: 8 },
+        { id: 9, ruleId: 1, userId: 9 },
       ]);
       // 일정
       scheduleRepo.find.mockResolvedValue([]);
@@ -371,7 +371,7 @@ describe('CleaningScheduleService', () => {
       // 스케쥴 Mock
       scheduleRepo.findOne.mockResolvedValue({
         id: 1,
-        ruldId: 1,
+        ruleId: 1,
         cleaningDate: '2026-06-29',
         needPeoples: 2,
         status: CleaningScheduleStatus.SCHEDULED,
@@ -698,7 +698,7 @@ describe('CleaningScheduleService', () => {
       // 스케줄
       scheduleRepo.findOne.mockResolvedValue({
         id: 1,
-        ruldId: 1,
+        ruleId: 1,
         cleaningDate: '2026-06-29',
         needPeoples: 2,
         status: CleaningScheduleStatus.CANCELED,
@@ -714,7 +714,7 @@ describe('CleaningScheduleService', () => {
       // 스케줄
       scheduleRepo.findOne.mockResolvedValue({
         id: 1,
-        ruldId: 1,
+        ruleId: 1,
         cleaningDate: '2026-06-29',
         needPeoples: 1,
         status: CleaningScheduleStatus.SCHEDULED,
