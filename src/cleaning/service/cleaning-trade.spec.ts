@@ -226,7 +226,8 @@ describe('CleaningTradeService', () => {
       // 교환 후보 배정 목록
       assignMockQb.getRawMany
         .mockResolvedValueOnce([{ userId: 1 }, { userId: 2 }]) // myScheduleUsers
-        .mockResolvedValueOnce([ // rows
+        .mockResolvedValueOnce([
+          // rows
           {
             id: 4,
             scheduleId: 2,
@@ -279,6 +280,34 @@ describe('CleaningTradeService', () => {
           resourceName: '511호',
         },
       ]);
+    });
+  });
+
+  describe('requestTrade', () => {
+    it('동일 대상 중복 요청시 비즈니스 에러 처리', async () => {
+      tradeRepo.findOne.mockResolvedValueOnce({
+        requesterAssignmentId: 1,
+        targetAssignmentId: 4,
+        status: CleaningTradeStatus.PENDING,
+      });
+
+      // 결과 검증
+      await expect(service.requestTrade(1, 4)).rejects.toMatchObject({
+        code: 'CLEANING:TRADE_ALREADY_PENDING',
+      });
+
+      // 매개변수를 해당 조건으로 전달받았는지 확인
+      expect(tradeRepo.findOne).toHaveBeenCalledWith({
+        where: {
+          requesterAssignmentId: 1,
+          targetAssignmentId: 4,
+          status: CleaningTradeStatus.PENDING,
+        },
+      });
+
+      // 비즈니스 에러처리 후엔 create, save 작동 X
+      expect(tradeRepo.create).not.toHaveBeenCalled();
+      expect(tradeRepo.save).not.toHaveBeenCalled();
     });
   });
 });
