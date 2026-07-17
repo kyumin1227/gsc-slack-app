@@ -345,4 +345,20 @@ describe('CleaningTradeService', () => {
       expect(result).toEqual(savedTrade);
     });
   });
+
+  describe('respondTrade', () => {
+    it('수락 시 교환 요청을 찾을 수 없거나 PENDING상태가 아니면 비즈니스 에러 처리', async () => {
+      tradeRepo.findOne.mockResolvedValueOnce(null).mockResolvedValueOnce({
+        status: CleaningTradeStatus.CANCELED,
+      });
+
+      await expect(service.respondTrade(1, 1, true)).rejects.toMatchObject({ // tradeId, tergetUserId, accept
+        code: 'CLEANING:TRADE_NOT_FOUND',
+      });
+
+      await expect(service.respondTrade(2, 1, true)).rejects.toMatchObject({
+        code: 'CLEANING:TRADE_NOT_PENDING',
+      });
+    });
+  });
 });
