@@ -360,5 +360,36 @@ describe('CleaningTradeService', () => {
         code: 'CLEANING:TRADE_NOT_PENDING',
       });
     });
+
+    it('대상 배정을 찾지 못했거나 대상자와 수락한 인원이 다른 경우 비즈니스 에러 처리', async () => {
+      // 교환 요청
+      tradeRepo.findOne.mockResolvedValue({
+        targetAssignmentId: 4,
+        status: CleaningTradeStatus.PENDING,
+      });
+
+      // 배정
+      assignmentRepo.findOne.mockResolvedValueOnce(null).mockResolvedValue({
+        id: 4,
+        userId: 2,
+      });
+
+      // tradeId, targetUserId, accept
+      // 배정을 못찾은 경우 (null)
+      await expect(service.respondTrade(999, 999, true)).rejects.toMatchObject({
+        code: 'CLEANING:TRADE_FORBIDDEN',
+      });
+      // id: 4인 배정의 유저id는 2. 수락을 시도한 인원의 id는 1이므로 비즈니스 에러 처리
+      await expect(service.respondTrade(5, 1, true)).rejects.toMatchObject({
+        code: 'CLEANING:TRADE_FORBIDDEN',
+      });
+
+      // 거절 시 상태값만 변경 ( PENDING -> REJECTED )
+      await service.respondTrade(1, 2, false);
+
+      expect(tradeRepo.update).toHaveBeenCalledWith(1, {
+        status: CleaningTradeStatus.REJECTED,
+      });
+    });
   });
 });
