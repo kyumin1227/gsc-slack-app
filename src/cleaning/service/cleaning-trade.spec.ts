@@ -208,4 +208,77 @@ describe('CleaningTradeService', () => {
       ]);
     });
   });
+
+  describe('getTradeTargets', () => {
+    it('내 배정이 없으면 빈 배열 반환', async () => {
+      assignmentRepo.findOne.mockResolvedValue(null);
+
+      const result = await service.getTradeTargets(1, 1);
+
+      expect(result).toEqual([]);
+    });
+
+    it('교환 요청 대상이 중복되거나 같은 일정에 있는 대상은 목록에서 제외', async () => {
+      // 내 배정
+      assignmentRepo.findOne.mockResolvedValue({ id: 1, scheduleId: 1 });
+
+      // 내 일정에 배정된 유저 목록
+      // 교환 후보 배정 목록
+      assignMockQb.getRawMany
+        .mockResolvedValueOnce([{ userId: 1 }, { userId: 2 }]) // myScheduleUsers
+        .mockResolvedValueOnce([ // rows
+          {
+            id: 4,
+            scheduleId: 2,
+            userId: 4,
+            userName: '정상후보',
+            userCode: '1',
+            userSlackId: 'S4',
+            cleaningDate: '2026-07-20',
+            resourceName: '511호',
+          },
+          {
+            id: 6,
+            scheduleId: 3,
+            userId: 5,
+            userName: '교환대기중',
+            userCode: '2',
+            userSlackId: 'S5',
+            cleaningDate: '2026-07-27',
+            resourceName: '511호',
+          },
+          {
+            id: 7,
+            scheduleId: 4,
+            userId: 2,
+            userName: '같은일정',
+            userCode: '3',
+            userSlackId: 'S2',
+            cleaningDate: '2026-08-03',
+            resourceName: '511호',
+          },
+        ]);
+
+      // PENDING 교환에 걸려있는 배정: 5번, 6번
+      tradeMockQb.getRawMany.mockResolvedValueOnce([
+        { t_requesterAssignmentId: 5, t_targetAssignmentId: 6 },
+      ]);
+
+      const result = await service.getTradeTargets(1, 1);
+
+      // 6번(교환 대기 중), 7번(내 일정에 이미 있는 유저)은 제외되고 4번만 남는다
+      expect(result).toEqual([
+        {
+          id: 4,
+          scheduleId: 2,
+          userId: 4,
+          userName: '정상후보',
+          userCode: '1',
+          userSlackId: 'S4',
+          cleaningDate: '2026-07-20',
+          resourceName: '511호',
+        },
+      ]);
+    });
+  });
 });
