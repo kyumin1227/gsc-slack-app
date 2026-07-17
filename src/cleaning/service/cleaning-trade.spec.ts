@@ -309,5 +309,40 @@ describe('CleaningTradeService', () => {
       expect(tradeRepo.create).not.toHaveBeenCalled();
       expect(tradeRepo.save).not.toHaveBeenCalled();
     });
+
+    it('중복 요청이 없으면 교환 요청을 생성하고 저장한 뒤 반환', async () => {
+      // 중복 체크
+      tradeRepo.findOne.mockResolvedValue(undefined);
+
+      // 생성할거
+      const createdTrade = {
+        requesterAssignmentId: 1,
+        targetAssignmentId: 4,
+        status: CleaningTradeStatus.PENDING,
+      };
+
+      // 저장할거
+      const savedTrade = {
+        id: 1,
+        createdTrade,
+      };
+
+      // 메서드 호출 시 반환시킬거
+      tradeRepo.create.mockReturnValueOnce(createdTrade);
+      tradeRepo.save.mockResolvedValueOnce(savedTrade);
+
+      const result = await service.requestTrade(1, 4);
+
+      // 결과 검증
+      expect(tradeRepo.create).toHaveBeenCalledWith({
+        requesterAssignmentId: 1,
+        targetAssignmentId: 4,
+        status: CleaningTradeStatus.PENDING,
+      });
+
+      expect(tradeRepo.save).toHaveBeenLastCalledWith(createdTrade);
+
+      expect(result).toEqual(savedTrade);
+    });
   });
 });
