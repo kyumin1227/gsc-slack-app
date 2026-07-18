@@ -391,5 +391,32 @@ describe('CleaningTradeService', () => {
         status: CleaningTradeStatus.REJECTED,
       });
     });
+
+    it('정상적인 요청 수락 시 교환 상태값 PENDING -> ACCEPTED', async () => {
+      // 교환 요청
+      tradeRepo.findOne.mockResolvedValue({
+        requesterAssignmentId: 1,
+        targetAssignmentId: 4,
+        status: CleaningTradeStatus.PENDING,
+      });
+
+      // 요청 배정 -> 대상 배정
+      assignmentRepo.findOne.mockResolvedValueOnce({
+        id: 4,
+        userId: 2,
+      });
+      // swapAssignments
+      const swapAssignmentsSpy = jest
+        .spyOn(service, 'swapAssignments')
+        .mockResolvedValueOnce();
+
+      await service.respondTrade(1, 2, true);
+
+      expect(swapAssignmentsSpy).toHaveBeenCalledWith(1, 4); // requester, target id
+
+      expect(tradeRepo.update).toHaveBeenCalledWith(1, {
+        status: CleaningTradeStatus.ACCEPTED,
+      });
+    });
   });
 });
