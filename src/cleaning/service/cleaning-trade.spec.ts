@@ -352,7 +352,8 @@ describe('CleaningTradeService', () => {
         status: CleaningTradeStatus.CANCELED,
       });
 
-      await expect(service.respondTrade(1, 1, true)).rejects.toMatchObject({ // tradeId, tergetUserId, accept
+      await expect(service.respondTrade(1, 1, true)).rejects.toMatchObject({
+        // tradeId, tergetUserId, accept
         code: 'CLEANING:TRADE_NOT_FOUND',
       });
 
@@ -416,6 +417,35 @@ describe('CleaningTradeService', () => {
 
       expect(tradeRepo.update).toHaveBeenCalledWith(1, {
         status: CleaningTradeStatus.ACCEPTED,
+      });
+    });
+  });
+
+  describe('swapAssignments', () => {
+    it('배정을 찾을 수 없거나 일정id가 동일하면 비즈니스 에러 처리', async () => {
+      assignmentRepo.findOne
+      
+        .mockResolvedValueOnce(null)
+        .mockResolvedValueOnce(null)
+        .mockResolvedValueOnce({
+          id: 1,
+          scheduleId: 1,
+          userId: 1,
+        })
+        .mockResolvedValueOnce({
+          id: 3,
+          scheduleId: 1,
+          userId: 3,
+        });
+
+      // 배정이 존재하지 않는 경우
+      await expect(service.swapAssignments(9, 17)).rejects.toMatchObject({
+        code: 'CLEANING:ASSIGNMENT_NOT_FOUND',
+      });
+
+      // 동일 일정id에 대한 교환 요청을 수락한 경우
+      await expect(service.swapAssignments(1, 3)).rejects.toMatchObject({
+        code: 'CLEANING:TRADE_SAME_SCHEDULE',
       });
     });
   });
