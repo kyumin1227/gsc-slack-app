@@ -555,4 +555,46 @@ describe('CleaningTradeService', () => {
       });
     });
   });
+
+  describe('getAssignmentsByRule', () => {
+    it('특정 규칙의 예정 배정만 반환한다.', async () => {
+      // 예정 배정 조회 테스트를 위해 시간 고정
+      jest.useFakeTimers();
+      jest.setSystemTime(new Date(2026, 6, 12));
+
+      assignMockQb.getRawMany.mockResolvedValueOnce([{
+        id: 1,
+        scheduleId: 1,
+        userId: 1,
+        userName: '테스트',
+        userCode: '1234',
+        userSlackId: 'U1',
+        cleaningDate: '2026-07-13',
+        resourceName: '511호',
+      }]);
+
+      const result = await service.getAssignmentsByRule(1);
+
+      // 오늘 이후의 일정을 조회하는지 검증
+      expect(assignMockQb.andWhere).toHaveBeenCalledWith(
+        's.cleaningDate >= :today',
+        { today: '2026-07-12' },
+      );
+
+      // 조건에 맞는 배정 반환
+      await expect(result).toEqual([{
+        id: 1,
+        scheduleId: 1,
+        userId: 1,
+        userName: '테스트',
+        userCode: '1234',
+        userSlackId: 'U1',
+        cleaningDate: '2026-07-13',
+        resourceName: '511호',
+      }]);
+
+      // 시간 정상화
+      jest.useRealTimers();
+    });
+  });
 });
