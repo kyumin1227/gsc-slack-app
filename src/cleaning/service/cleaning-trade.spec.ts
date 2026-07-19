@@ -424,7 +424,6 @@ describe('CleaningTradeService', () => {
   describe('swapAssignments', () => {
     it('배정을 찾을 수 없거나 일정id가 동일하면 비즈니스 에러 처리', async () => {
       assignmentRepo.findOne
-      
         .mockResolvedValueOnce(null)
         .mockResolvedValueOnce(null)
         .mockResolvedValueOnce({
@@ -446,6 +445,33 @@ describe('CleaningTradeService', () => {
       // 동일 일정id에 대한 교환 요청을 수락한 경우
       await expect(service.swapAssignments(1, 3)).rejects.toMatchObject({
         code: 'CLEANING:TRADE_SAME_SCHEDULE',
+      });
+    });
+
+    it('스왑 후 유저가 중복되면 비즈니스 에러 처리', async () => {
+      assignmentRepo.findOne
+        // a1, a2
+        .mockResolvedValueOnce({
+          id: 1,
+          scheduleId: 1,
+          userId: 1,
+        })
+        .mockResolvedValueOnce({
+          id: 4,
+          scheduleId: 2,
+          userId: 2,
+        })
+        // conflict1
+        .mockResolvedValueOnce({
+          id: 5,
+          scheduleId: 2,
+          userId: 1,
+        })
+        .mockResolvedValueOnce(null);
+
+      // 스왑 후 중복되면 비즈니스 에러 처리
+      await expect(service.swapAssignments(1, 4)).rejects.toMatchObject({
+        code: 'CLEANING:TRADE_DUPLICATE_ASSIGNEE',
       });
     });
   });
