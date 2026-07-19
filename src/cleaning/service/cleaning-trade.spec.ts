@@ -2,14 +2,12 @@ import { Test, TestingModule } from '@nestjs/testing';
 import { getRepositoryToken } from '@nestjs/typeorm';
 import {
   CleaningAssignment,
-  CleaningAssignmentStatus,
 } from '../entity/cleaning-assignment.entity';
 import {
   CleaningTrade,
   CleaningTradeStatus,
 } from '../entity/cleaning-trade.entity';
 import { CleaningTradeService } from './cleaning-trade.service';
-import { BadRequestError } from '@anthropic-ai/sdk';
 
 describe('CleaningTradeService', () => {
   let service: CleaningTradeService;
