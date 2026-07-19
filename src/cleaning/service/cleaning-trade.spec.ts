@@ -519,4 +519,14 @@ describe('CleaningTradeService', () => {
       expect(assignmentRepo.update).toHaveBeenCalledWith(4, { userId: 1 });
     });
   });
+
+  describe('getAssignmentDetail', () => {
+    it('배정을 찾을 수 없는 경우 null 반환', async () => {
+      assignMockQb.getRawOne.mockResolvedValueOnce(null);
+
+      const result = await service.getAssignmentDetail(1);
+
+      expect(result).toBeNull();
+    });
+  });
 });
