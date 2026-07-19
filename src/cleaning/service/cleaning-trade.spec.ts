@@ -725,5 +725,31 @@ describe('CleaningTradeService', () => {
         });
       },
     );
+
+    it('정상 취소 처리 PENDING -> CANCELED', async () => {
+      // 요청한 사람의 배정id
+      tradeRepo.findOne.mockResolvedValueOnce({
+        requesterAssignmentId: 1,
+        status: CleaningTradeStatus.PENDING,
+      });
+
+      // 요청한 사람
+      assignmentRepo.findOne.mockResolvedValueOnce({
+        userId: 1,
+      });
+
+      // tradeId 5번을 userId 1번이 취소
+      await service.cancelTrade(5, 1);
+
+      // 배정id 1번으로 조회했는지 확인
+      expect(assignmentRepo.findOne).toHaveBeenCalledWith({
+        where: { id: 1 },
+      });
+
+      // tradeId 1번의 상태값을 CANCELED로 변경했는지 확인
+      expect(tradeRepo.update).toHaveBeenCalledWith(5, {
+        status: CleaningTradeStatus.CANCELED,
+      });
+    });
   });
 });
