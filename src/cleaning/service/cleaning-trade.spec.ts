@@ -9,6 +9,7 @@ import {
   CleaningTradeStatus,
 } from '../entity/cleaning-trade.entity';
 import { CleaningTradeService } from './cleaning-trade.service';
+import { BadRequestError } from '@anthropic-ai/sdk';
 
 describe('CleaningTradeService', () => {
   let service: CleaningTradeService;
@@ -689,5 +690,40 @@ describe('CleaningTradeService', () => {
         target,
       });
     });
+  });
+
+  describe('cancelTrade', () => {
+    it.each([
+      ['교환 요청을 못찾으면', null, undefined, 1, 'CLEANING:TRADE_NOT_FOUND'],
+      [
+        '상태값이 PENDING이 아니면',
+        { status: CleaningTradeStatus.CANCELED },
+        undefined,
+        1,
+        'CLEANING:TRADE_NOT_PENDING',
+      ],
+      [
+        '제3자가 취소하려고 하면',
+        { requesterAssignmentId: 1, status: CleaningTradeStatus.PENDING },
+        { userId: 2 },
+        1,
+        'CLEANING:TRADE_FORBIDDEN',
+      ],
+    ])(
+      '%s 비즈니스 에러 처리',
+      async (_label, trade, requester, cancelUserId, BusinessError) => {
+        tradeRepo.findOne.mockResolvedValueOnce(trade);
+
+        if (requester !== undefined) {
+          assignmentRepo.findOne.mockResolvedValueOnce(requester);
+        }
+
+        await expect(
+          service.cancelTrade(1, cancelUserId),
+        ).rejects.toMatchObject({
+          code: BusinessError,
+        });
+      },
+    );
   });
 });
