@@ -639,5 +639,35 @@ describe('CleaningTradeService', () => {
         where: { id: 1 },
       });
     });
+
+    it.each([
+      ['요청한 놈', null, target],
+      ['요청받은 놈', requester, null],
+    ])(
+      '%s 배정 상세를 찾을 수 없으면 null 반환',
+      async (_label, requesterDetail, targetDetail) => {
+        tradeRepo.findOne.mockResolvedValueOnce({
+          id: 1,
+          requesterAssignmentId: 1,
+          targetAssignmentId: 4,
+        });
+
+        // 실제 서비스 메서드가 미리 준비해둔 값을 반환하도록 설정
+        const getAssignmentDetailSpy = jest
+          .spyOn(service, 'getAssignmentDetail')
+          .mockResolvedValueOnce(requesterDetail)
+          .mockResolvedValueOnce(targetDetail);
+
+        // 메서드 실행
+        const result = await service.getTradeWithDetails(1);
+
+        // 메서드 실행 결과 값이 null인지 확인
+        expect(result).toBeNull();
+
+        // 호출 횟수(n번째), 해당 호출에 전달된 인자인지 확인
+        expect(getAssignmentDetailSpy).toHaveBeenNthCalledWith(1, 1);
+        expect(getAssignmentDetailSpy).toHaveBeenNthCalledWith(2, 4);
+      },
+    );
   });
 });
