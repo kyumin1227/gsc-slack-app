@@ -528,5 +528,31 @@ describe('CleaningTradeService', () => {
 
       expect(result).toBeNull();
     });
+
+    it('알림/모달에서 사용할 배정 상세 정보 반환', async () => {
+      assignMockQb.getRawOne.mockResolvedValueOnce({
+        id: 1,
+        scheduleId: 1,
+        userId: 1,
+        userName: '테스트',
+        userCode: '1234',
+        userSlackId: 'U1',
+        cleaningDate: '2026-07-13',
+        resourceName: '511호',
+      });
+
+      const result = await service.getAssignmentDetail(1);
+
+      expect(result).toEqual({
+        id: 1,
+        scheduleId: 1,
+        userId: 1,
+        userName: '테스트',
+        userCode: '1234',
+        userSlackId: 'U1',
+        cleaningDate: '2026-07-13',
+        resourceName: '511호',
+      });
+    });
   });
 });
