@@ -35,6 +35,7 @@ describe('CleaningTradeService', () => {
     create: jest.Mock;
   };
   let tradeMockQb = {
+    update: jest.fn().mockReturnThis(),
     innerJoin: jest.fn().mockReturnThis(),
     where: jest.fn().mockReturnThis(),
     andWhere: jest.fn().mockReturnThis(),
@@ -68,6 +69,7 @@ describe('CleaningTradeService', () => {
       create: jest.fn(),
     };
     tradeMockQb = {
+      update: jest.fn().mockReturnThis(),
       innerJoin: jest.fn().mockReturnThis(),
       where: jest.fn().mockReturnThis(),
       andWhere: jest.fn().mockReturnThis(),
@@ -473,6 +475,48 @@ describe('CleaningTradeService', () => {
       await expect(service.swapAssignments(1, 4)).rejects.toMatchObject({
         code: 'CLEANING:TRADE_DUPLICATE_ASSIGNEE',
       });
+    });
+
+    it('정상 동작시 userId를 교환하고 관련 다른 요청은 PENDING에서 CANCELED로 변경', async () => {
+      assignmentRepo.findOne
+        // a1, a2
+        .mockResolvedValueOnce({
+          id: 1,
+          scheduleId: 1,
+          userId: 1,
+        })
+        .mockResolvedValueOnce({
+          id: 4,
+          scheduleId: 2,
+          userId: 2,
+        })
+        // conflict
+        .mockResolvedValueOnce(null)
+        .mockResolvedValueOnce(null);
+
+      await service.swapAssignments(1, 4);
+
+      // 두 배정(1, 4)과 관련된 다른 PENDING교환 CANCELED 처리
+      expect(tradeMockQb.update).toHaveBeenCalledWith(CleaningTrade);
+
+      expect(tradeMockQb.set).toHaveBeenCalledWith({
+        status: CleaningTradeStatus.CANCELED,
+      });
+
+      expect(tradeMockQb.where).toHaveBeenCalledWith('status = :status', {
+        status: CleaningTradeStatus.PENDING,
+      });
+
+      expect(tradeMockQb.andWhere).toHaveBeenCalledWith(
+        '(requesterAssignmentId IN (:...ids) OR targetAssignmentId IN (:...ids))',
+        { ids: [1, 4] },
+      );
+
+      expect(tradeMockQb.execute).toHaveBeenCalledTimes(1);
+
+      // assginment는 유지하고 userId만 교환
+      expect(assignmentRepo.update).toHaveBeenCalledWith(1, { userId: 2 });
+      expect(assignmentRepo.update).toHaveBeenCalledWith(4, { userId: 1 });
     });
   });
 });
