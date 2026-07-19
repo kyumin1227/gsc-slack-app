@@ -562,16 +562,18 @@ describe('CleaningTradeService', () => {
       jest.useFakeTimers();
       jest.setSystemTime(new Date(2026, 6, 12));
 
-      assignMockQb.getRawMany.mockResolvedValueOnce([{
-        id: 1,
-        scheduleId: 1,
-        userId: 1,
-        userName: '테스트',
-        userCode: '1234',
-        userSlackId: 'U1',
-        cleaningDate: '2026-07-13',
-        resourceName: '511호',
-      }]);
+      assignMockQb.getRawMany.mockResolvedValueOnce([
+        {
+          id: 1,
+          scheduleId: 1,
+          userId: 1,
+          userName: '테스트',
+          userCode: '1234',
+          userSlackId: 'U1',
+          cleaningDate: '2026-07-13',
+          resourceName: '511호',
+        },
+      ]);
 
       const result = await service.getAssignmentsByRule(1);
 
@@ -582,19 +584,60 @@ describe('CleaningTradeService', () => {
       );
 
       // 조건에 맞는 배정 반환
-      await expect(result).toEqual([{
-        id: 1,
-        scheduleId: 1,
-        userId: 1,
-        userName: '테스트',
-        userCode: '1234',
-        userSlackId: 'U1',
-        cleaningDate: '2026-07-13',
-        resourceName: '511호',
-      }]);
+      await expect(result).toEqual([
+        {
+          id: 1,
+          scheduleId: 1,
+          userId: 1,
+          userName: '테스트',
+          userCode: '1234',
+          userSlackId: 'U1',
+          cleaningDate: '2026-07-13',
+          resourceName: '511호',
+        },
+      ]);
 
       // 시간 정상화
       jest.useRealTimers();
+    });
+  });
+
+  describe('getTradeWithDetails', () => {
+    const requester = {
+      id: 1,
+      scheduleId: 10,
+      userId: 1,
+      userName: '요청한놈',
+      userCode: '1234',
+      userSlackId: 'U1',
+      cleaningDate: '2026-07-13',
+      resourceName: '511호',
+    };
+
+    const target = {
+      id: 4,
+      scheduleId: 2,
+      userId: 2,
+      userName: '요청받은 놈',
+      userCode: '5678',
+      userSlackId: 'U2',
+      cleaningDate: '2026-07-20',
+      resourceName: '511호',
+    };
+
+    it('교환 요청을 찾을 수 없으면 null 반환', async () => {
+      tradeRepo.findOne.mockResolvedValueOnce(null);
+
+      // 메서드 호출
+      const result = await service.getTradeWithDetails(1);
+
+      // null 반환
+      expect(result).toBeNull();
+
+      // tradeId 1로 조회했는지 확인
+      expect(tradeRepo.findOne).toHaveBeenCalledWith({
+        where: { id: 1 },
+      });
     });
   });
 });
