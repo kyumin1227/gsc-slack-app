@@ -669,5 +669,25 @@ describe('CleaningTradeService', () => {
         expect(getAssignmentDetailSpy).toHaveBeenNthCalledWith(2, 4);
       },
     );
+
+    it('요청자와 대상 배정 상세가 모두 있으면 두 정보를 객체로 반환한다.', async () => {
+      tradeRepo.findOne.mockResolvedValueOnce({
+        requesterAssignmentId: 1,
+        targetAssignmentId: 4,
+      });
+
+      jest
+        .spyOn(service, 'getAssignmentDetail')
+        .mockResolvedValueOnce(requester)
+        .mockResolvedValueOnce(target);
+
+      const result = await service.getTradeWithDetails(1);
+
+      // 두 상세 정보를 반환했는지 확인
+      expect(result).toEqual({
+        requester,
+        target,
+      });
+    });
   });
 });
