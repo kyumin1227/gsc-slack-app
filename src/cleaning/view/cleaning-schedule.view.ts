@@ -59,15 +59,10 @@ export class CleaningScheduleView {
     ruleLabel: string,
     ruleId: number,
     filter: 'upcoming' | 'past',
+    page: number,
+    totalPages: number,
   ): View {
-    const today = new Date().toISOString().split('T')[0];
     const isPast = filter === 'past';
-
-    const filtered = isPast
-      ? [...schedules]
-          .filter((s) => s.cleaningDate < today)
-          .sort((a, b) => b.cleaningDate.localeCompare(a.cleaningDate))
-      : schedules.filter((s) => s.cleaningDate >= today);
 
     const blocks: View['blocks'] = [
       {
@@ -76,7 +71,7 @@ export class CleaningScheduleView {
       },
     ];
 
-    if (filtered.length === 0) {
+    if (schedules.length === 0) {
       blocks.push({
         type: 'section',
         text: {
@@ -85,7 +80,7 @@ export class CleaningScheduleView {
         },
       });
     } else {
-      for (const s of filtered) {
+      for (const s of schedules) {
         const assignedAssignees = s.assignees.filter(
           (a) => a.status === CleaningAssignmentStatus.ASSIGNED,
         );
@@ -149,10 +144,49 @@ export class CleaningScheduleView {
       }
     }
 
+    if (totalPages > 1) {
+      blocks.push(
+        {
+          type: 'actions',
+          elements: [
+            ...(page > 0
+              ? [
+                  {
+                    type: 'button' as const,
+                    text: { type: 'plain_text' as const, text: '이전' },
+                    action_id: 'cleaning:schedule:previous-page',
+                    value: String(page - 1),
+                  },
+                ]
+              : []),
+            ...(page < totalPages - 1
+              ? [
+                  {
+                    type: 'button' as const,
+                    text: { type: 'plain_text' as const, text: '다음' },
+                    action_id: 'cleaning:schedule:next-page',
+                    value: String(page + 1),
+                  },
+                ]
+              : []),
+          ],
+        },
+        {
+          type: 'context',
+          elements: [
+            {
+              type: 'mrkdwn',
+              text: page + 1 + ' / ' + totalPages + ' 페이지',
+            },
+          ],
+        },
+      );
+    }
+
     return {
       type: 'modal',
       callback_id: 'cleaning:modal:schedule-detail',
-      private_metadata: JSON.stringify({ ruleId, filter }),
+      private_metadata: JSON.stringify({ ruleId, filter, page }),
       title: { type: 'plain_text', text: isPast ? '지난 일정' : '예정 일정' },
       close: { type: 'plain_text', text: '닫기' },
       blocks,
@@ -225,6 +259,7 @@ export class CleaningScheduleView {
     schedule: ScheduleWithAssignees,
     ruleId: number,
     filter: 'upcoming' | 'past',
+    page: number,
   ): View {
     const statusOptions = [
       {
@@ -244,6 +279,7 @@ export class CleaningScheduleView {
         scheduleId: schedule.id,
         ruleId,
         filter,
+        page,
       }),
       title: { type: 'plain_text', text: '일정 수정' },
       submit: { type: 'plain_text', text: '저장' },
@@ -312,6 +348,7 @@ export class CleaningScheduleView {
     ruleId: number,
     filter: 'upcoming' | 'past',
     cleaningDate: string,
+    page: number,
     errorMessage?: string,
   ): View {
     const blocks: View['blocks'] = [
@@ -332,7 +369,7 @@ export class CleaningScheduleView {
     return {
       type: 'modal',
       callback_id: 'cleaning:modal:schedule-delete',
-      private_metadata: JSON.stringify({ scheduleId, ruleId, filter }),
+      private_metadata: JSON.stringify({ scheduleId, ruleId, filter, page }),
       title: { type: 'plain_text', text: '일정 삭제' },
       submit: { type: 'plain_text', text: '삭제' },
       close: { type: 'plain_text', text: '취소' },

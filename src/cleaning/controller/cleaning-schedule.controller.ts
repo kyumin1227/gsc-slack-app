@@ -7,7 +7,10 @@ import type {
   BlockAction,
 } from '@slack/bolt';
 import { CleaningRuleService } from '../service/cleaning-rule.service';
-import { CleaningScheduleService } from '../service/cleaning-schedule.service';
+import {
+  CleaningScheduleService,
+  ScheduleWithAssignees,
+} from '../service/cleaning-schedule.service';
 import { CleaningScheduleView } from '../view/cleaning-schedule.view';
 import { PermissionService } from '../../user/service/permission.service';
 import { formatClassLabel } from '../../common/class-label.util';
@@ -16,6 +19,8 @@ import { UserRole } from '../../user/user.entity';
 import { BusinessError, CleaningErrorCode } from '../../common/errors';
 import { CleaningAssignmentStatus } from '../entity/cleaning-assignment.entity';
 import { CleaningScheduleStatus } from '../entity/cleaning-schedule.entity';
+
+const SCHEDULES_PER_PAGE = 4;
 
 @Controller()
 export class CleaningScheduleController {
@@ -61,6 +66,66 @@ export class CleaningScheduleController {
     return this.openScheduleDetail(args, 'past');
   }
 
+  @Action('cleaning:schedule:previous-page')
+  async openPreviousSchedulePage(
+    args: SlackActionMiddlewareArgs<BlockAction> & AllMiddlewareArgs,
+  ) {
+    return this.changeSchedulePage(args);
+  }
+
+  @Action('cleaning:schedule:next-page')
+  async openNextSchedulePage(
+    args: SlackActionMiddlewareArgs<BlockAction> & AllMiddlewareArgs,
+  ) {
+    return this.changeSchedulePage(args);
+  }
+
+  private async changeSchedulePage({
+    ack,
+    client,
+    body,
+  }: SlackActionMiddlewareArgs<BlockAction> & AllMiddlewareArgs) {
+    await ack();
+
+    const user = await this.permissionService.requireAdminOrClassRep(
+      body.user.id,
+    );
+    const action = body.actions[0] as { value: string };
+    const page = parseInt(action.value, 10);
+    const { ruleId, filter } = JSON.parse(
+      body.view?.private_metadata ?? '{}',
+    ) as { ruleId: number; filter: 'upcoming' | 'past' };
+
+    const rule = await this.cleaningRuleService.findOneWithDetails(ruleId);
+    if (!rule || !body.view?.id) return;
+    if (
+      user.role === UserRole.CLASS_REP &&
+      rule.studentClassId !== user.studentClassId
+    )
+      return;
+
+    const schedules =
+      await this.cleaningScheduleService.findSchedulesByRule(ruleId);
+    const schedulePage = paginateSchedules(schedules, filter, page);
+    const label = formatClassLabel({
+      admissionYear: rule.studentClass.admissionYear,
+      section: rule.studentClass.section,
+      graduated: rule.studentClass.status === StudentClassStatus.GRADUATED,
+    });
+
+    await client.views.update({
+      view_id: body.view.id,
+      view: CleaningScheduleView.scheduleDetailModal(
+        schedulePage.schedules,
+        label,
+        ruleId,
+        filter,
+        schedulePage.page,
+        schedulePage.totalPages,
+      ),
+    });
+  }
+
   // 예정/지난 일정 상세 목록 렌더링을 공통 처리한다.
   private async openScheduleDetail(
     {
@@ -89,6 +154,7 @@ export class CleaningScheduleController {
 
     const schedules =
       await this.cleaningScheduleService.findSchedulesByRule(ruleId);
+    const schedulePage = paginateSchedules(schedules, filter, 0);
     const label = formatClassLabel({
       admissionYear: rule.studentClass.admissionYear,
       section: rule.studentClass.section,
@@ -98,10 +164,12 @@ export class CleaningScheduleController {
     await client.views.push({
       trigger_id: body.trigger_id,
       view: CleaningScheduleView.scheduleDetailModal(
-        schedules,
+        schedulePage.schedules,
         label,
         ruleId,
         filter,
+        schedulePage.page,
+        schedulePage.totalPages,
       ),
     });
   }
@@ -117,9 +185,15 @@ export class CleaningScheduleController {
     await this.permissionService.requireAdminOrClassRep(body.user.id);
     const action = body.actions[0] as { value: string };
     const scheduleId = parseInt(action.value, 10);
-    const { ruleId, filter } = JSON.parse(
-      body.view?.private_metadata ?? '{}',
-    ) as { ruleId: number; filter: 'upcoming' | 'past' };
+    const {
+      ruleId,
+      filter,
+      page = 0,
+    } = JSON.parse(body.view?.private_metadata ?? '{}') as {
+      ruleId: number;
+      filter: 'upcoming' | 'past';
+      page?: number;
+    };
 
     const schedule =
       await this.cleaningScheduleService.findOneScheduleWithAssignees(
@@ -129,7 +203,12 @@ export class CleaningScheduleController {
 
     await client.views.push({
       trigger_id: body.trigger_id,
-      view: CleaningScheduleView.scheduleEditModal(schedule, ruleId, filter),
+      view: CleaningScheduleView.scheduleEditModal(
+        schedule,
+        ruleId,
+        filter,
+        page,
+      ),
     });
   }
 
@@ -144,9 +223,15 @@ export class CleaningScheduleController {
     await this.permissionService.requireAdminOrClassRep(body.user.id);
     const action = body.actions[0] as { value: string };
     const scheduleId = parseInt(action.value, 10);
-    const { ruleId, filter } = JSON.parse(
-      body.view?.private_metadata ?? '{}',
-    ) as { ruleId: number; filter: 'upcoming' | 'past' };
+    const {
+      ruleId,
+      filter,
+      page = 0,
+    } = JSON.parse(body.view?.private_metadata ?? '{}') as {
+      ruleId: number;
+      filter: 'upcoming' | 'past';
+      page?: number;
+    };
 
     const schedule =
       await this.cleaningScheduleService.findOneScheduleWithAssignees(
@@ -161,6 +246,7 @@ export class CleaningScheduleController {
         ruleId,
         filter,
         schedule.cleaningDate,
+        page,
       ),
     });
   }
@@ -173,9 +259,17 @@ export class CleaningScheduleController {
     body,
     client,
   }: SlackViewMiddlewareArgs & AllMiddlewareArgs) {
-    const { scheduleId, ruleId, filter } = JSON.parse(
-      view.private_metadata,
-    ) as { scheduleId: number; ruleId: number; filter: 'upcoming' | 'past' };
+    const {
+      scheduleId,
+      ruleId,
+      filter,
+      page = 0,
+    } = JSON.parse(view.private_metadata) as {
+      scheduleId: number;
+      ruleId: number;
+      filter: 'upcoming' | 'past';
+      page?: number;
+    };
 
     const [scheduleBefore, rule] = await Promise.all([
       this.cleaningScheduleService.findOneScheduleWithAssignees(scheduleId),
@@ -198,6 +292,7 @@ export class CleaningScheduleController {
             ruleId,
             filter,
             scheduleBefore?.cleaningDate ?? '',
+            page,
             e.message,
           ),
         } as any);
@@ -226,6 +321,7 @@ export class CleaningScheduleController {
     if (rule && body.view?.previous_view_id) {
       const schedules =
         await this.cleaningScheduleService.findSchedulesByRule(ruleId);
+      const schedulePage = paginateSchedules(schedules, filter, page);
       const label = formatClassLabel({
         admissionYear: rule.studentClass.admissionYear,
         section: rule.studentClass.section,
@@ -234,10 +330,12 @@ export class CleaningScheduleController {
       await client.views.update({
         view_id: body.view.previous_view_id,
         view: CleaningScheduleView.scheduleDetailModal(
-          schedules,
+          schedulePage.schedules,
           label,
           ruleId,
           filter,
+          schedulePage.page,
+          schedulePage.totalPages,
         ),
       });
     }
@@ -255,9 +353,15 @@ export class CleaningScheduleController {
     await this.permissionService.requireAdminOrClassRep(body.user.id);
     const action = body.actions[0] as { value: string };
     const scheduleId = parseInt(action.value, 10);
-    const { ruleId, filter } = JSON.parse(
-      body.view?.private_metadata ?? '{}',
-    ) as { ruleId: number; filter: 'upcoming' | 'past' };
+    const {
+      ruleId,
+      filter,
+      page = 0,
+    } = JSON.parse(body.view?.private_metadata ?? '{}') as {
+      ruleId: number;
+      filter: 'upcoming' | 'past';
+      page?: number;
+    };
 
     const [scheduleBefore, rule] = await Promise.all([
       this.cleaningScheduleService.findOneScheduleWithAssignees(scheduleId),
@@ -298,6 +402,7 @@ export class CleaningScheduleController {
     if (rule && body.view?.id) {
       const schedules =
         await this.cleaningScheduleService.findSchedulesByRule(ruleId);
+      const schedulePage = paginateSchedules(schedules, filter, page);
       const label = formatClassLabel({
         admissionYear: rule.studentClass.admissionYear,
         section: rule.studentClass.section,
@@ -306,10 +411,12 @@ export class CleaningScheduleController {
       await client.views.update({
         view_id: body.view.id,
         view: CleaningScheduleView.scheduleDetailModal(
-          schedules,
+          schedulePage.schedules,
           label,
           ruleId,
           filter,
+          schedulePage.page,
+          schedulePage.totalPages,
         ),
       });
     }
@@ -353,7 +460,12 @@ export class CleaningScheduleController {
       .flatMap(([blockId, field]) => {
         const value = field.status_select.selected_option?.value;
         if (!value) return [];
-        return [{ id: parseInt(blockId.replace('assignment_', ''), 10), status: value as CleaningAssignmentStatus }];
+        return [
+          {
+            id: parseInt(blockId.replace('assignment_', ''), 10),
+            status: value as CleaningAssignmentStatus,
+          },
+        ];
       });
 
     await this.cleaningScheduleService.updateAssignmentStatuses(updates);
@@ -371,9 +483,17 @@ export class CleaningScheduleController {
     view,
     logger,
   }: SlackViewMiddlewareArgs & AllMiddlewareArgs) {
-    const { scheduleId, ruleId, filter } = JSON.parse(
-      view.private_metadata,
-    ) as { scheduleId: number; ruleId: number; filter: 'upcoming' | 'past' };
+    const {
+      scheduleId,
+      ruleId,
+      filter,
+      page = 0,
+    } = JSON.parse(view.private_metadata) as {
+      scheduleId: number;
+      ruleId: number;
+      filter: 'upcoming' | 'past';
+      page?: number;
+    };
     const values = view.state.values;
 
     const cleaningDate =
@@ -455,6 +575,7 @@ export class CleaningScheduleController {
 
     const schedules =
       await this.cleaningScheduleService.findSchedulesByRule(ruleId);
+    const schedulePage = paginateSchedules(schedules, filter, page);
 
     if (rule && view.previous_view_id) {
       const label = formatClassLabel({
@@ -465,10 +586,12 @@ export class CleaningScheduleController {
       await client.views.update({
         view_id: view.previous_view_id,
         view: CleaningScheduleView.scheduleDetailModal(
-          schedules,
+          schedulePage.schedules,
           label,
           ruleId,
           filter,
+          schedulePage.page,
+          schedulePage.totalPages,
         ),
       });
     }
@@ -481,11 +604,36 @@ export class CleaningScheduleController {
   }
 }
 
+function paginateSchedules(
+  schedules: ScheduleWithAssignees[],
+  filter: 'upcoming' | 'past',
+  page: number,
+) {
+  const today = new Date().toISOString().split('T')[0];
+  const filtered =
+    filter === 'past'
+      ? schedules
+          .filter((schedule) => schedule.cleaningDate < today)
+          .sort((a, b) => b.cleaningDate.localeCompare(a.cleaningDate))
+      : schedules.filter((schedule) => schedule.cleaningDate >= today);
+  const totalPages = Math.max(
+    1,
+    Math.ceil(filtered.length / SCHEDULES_PER_PAGE),
+  );
+  const currentPage = Math.min(Math.max(page, 0), totalPages - 1);
+  const start = currentPage * SCHEDULES_PER_PAGE;
+
+  return {
+    schedules: filtered.slice(start, start + SCHEDULES_PER_PAGE),
+    page: currentPage,
+    totalPages,
+  };
+}
+
 function dayLabel(dateStr: string): string {
   const [y, m, d] = dateStr.split('-').map(Number);
   return (
-    ['일', '월', '화', '수', '목', '금', '토'][
-      new Date(y, m - 1, d).getDay()
-    ] + '요일'
+    ['일', '월', '화', '수', '목', '금', '토'][new Date(y, m - 1, d).getDay()] +
+    '요일'
   );
 }
