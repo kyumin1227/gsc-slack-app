@@ -51,6 +51,10 @@ export class CleaningScheduleService {
     startDateStr?: string,
     endDateStr?: string,
   ): Promise<{ count: number; scheduleIds: number[] }> {
+    if (!!startDateStr !== !!endDateStr) {
+      return { count: 0, scheduleIds: [] };
+    }
+
     const rule = await this.ruleRepo.findOne({ where: { id: ruleId } });
     if (!rule) return { count: 0, scheduleIds: [] };
 
@@ -91,10 +95,10 @@ export class CleaningScheduleService {
 
     let cleaningDates: string[];
 
-    if (startDateStr || endDateStr) {
+    if (startDateStr && endDateStr) {
       // 관리자가 기간을 지정하면 해당 기간 안의 청소 요일만 골라 생성한다.
-      const start = startDateStr ? parseLocalDate(startDateStr) : localToday();
-      const end = endDateStr ? parseLocalDate(endDateStr) : null;
+      const start = parseLocalDate(startDateStr);
+      const end = parseLocalDate(endDateStr);
       cleaningDates = getDatesInRange(start, end, rule.daysOfWeek);
     } else {
       // 마지막 일정 이후부터 전원 1사이클 생성
@@ -596,14 +600,13 @@ function toDateStr(date: Date | string): string {
 
 function getDatesInRange(
   start: Date,
-  end: Date | null,
+  end: Date,
   daysOfWeek: number[],
 ): string[] {
   const daySet = new Set(daysOfWeek);
   const dates: string[] = [];
   const cur = new Date(start);
-  const limit = end ?? new Date(start.getFullYear() + 1, start.getMonth(), start.getDate());
-  while (cur <= limit) {
+  while (cur <= end) {
     if (daySet.has(cur.getDay())) dates.push(toDateStr(cur));
     cur.setDate(cur.getDate() + 1);
   }
