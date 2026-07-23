@@ -577,8 +577,7 @@ export class CleaningRuleController {
 function dayLabel(dateStr: string): string {
   const [y, m, d] = dateStr.split('-').map(Number);
   return (
-    ['일', '월', '화', '수', '목', '금', '토'][
-      new Date(y, m - 1, d).getDay()
-    ] + '요일'
+    ['일', '월', '화', '수', '목', '금', '토'][new Date(y, m - 1, d).getDay()] +
+    '요일'
   );
 }
