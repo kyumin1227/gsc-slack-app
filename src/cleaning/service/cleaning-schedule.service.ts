@@ -56,7 +56,12 @@ export class CleaningScheduleService {
 
     const ruleUsers = await this.ruleUserRepo.find({ where: { ruleId } });
     if (ruleUsers.length === 0) return { count: 0, scheduleIds: [] };
-
+  
+    // 담당인원이 필요 인원 수 보다 적은 경우 비즈니스 에러 처리
+    if (ruleUsers.length < rule.needPeoples) {
+      throw new BusinessError(CleaningErrorCode.NOT_ENOUGH_USERS);
+    };
+    
     const existing = await this.scheduleRepo.find({
       where: { ruleId },
       order: { cleaningDate: 'DESC' },

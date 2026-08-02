@@ -219,7 +219,8 @@ export class CleaningTradeController {
         e instanceof BusinessError &&
         (e.code === CleaningErrorCode.TRADE_FORBIDDEN ||
           e.code === CleaningErrorCode.TRADE_NOT_PENDING ||
-          e.code === CleaningErrorCode.TRADE_DUPLICATE_ASSIGNEE)
+          e.code === CleaningErrorCode.TRADE_DUPLICATE_ASSIGNEE ||
+          e.code === CleaningErrorCode.TRADE_ASSIGNMENT_NOT_ACTIVE)
       ) {
         await updateMessageOnError(client, body);
         return;
@@ -408,7 +409,8 @@ export class CleaningTradeController {
       if (
         e instanceof BusinessError &&
         (e.code === CleaningErrorCode.TRADE_SAME_SCHEDULE ||
-          e.code === CleaningErrorCode.TRADE_DUPLICATE_ASSIGNEE)
+          e.code === CleaningErrorCode.TRADE_DUPLICATE_ASSIGNEE ||
+          e.code === CleaningErrorCode.TRADE_ASSIGNMENT_NOT_ACTIVE)
       ) {
         await ack({
           response_action: 'errors',
