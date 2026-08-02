@@ -480,6 +480,21 @@ export class CleaningRuleController {
     const endDate =
       values.end_date_block?.end_date_input?.selected_date ?? undefined;
 
+    if (startDate && !endDate) {
+      await ack({
+        response_action: 'errors',
+        errors: { end_date_block: '시작일과 종료일을 모두 입력해주세요.' },
+      });
+      return;
+    }
+    if (!startDate && endDate) {
+      await ack({
+        response_action: 'errors',
+        errors: { start_date_block: '시작일과 종료일을 모두 입력해주세요.' },
+      });
+      return;
+    }
+
     const today = new Date();
     const todayStr = `${today.getFullYear()}-${String(today.getMonth() + 1).padStart(2, '0')}-${String(today.getDate()).padStart(2, '0')}`;
 
@@ -556,8 +571,7 @@ export class CleaningRuleController {
 function dayLabel(dateStr: string): string {
   const [y, m, d] = dateStr.split('-').map(Number);
   return (
-    ['일', '월', '화', '수', '목', '금', '토'][
-      new Date(y, m - 1, d).getDay()
-    ] + '요일'
+    ['일', '월', '화', '수', '목', '금', '토'][new Date(y, m - 1, d).getDay()] +
+    '요일'
   );
 }

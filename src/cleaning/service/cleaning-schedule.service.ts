@@ -12,7 +12,10 @@ import {
 } from '../entity/cleaning-assignment.entity';
 import { CleaningRule } from '../entity/cleaning-rule.entity';
 import { CleaningRuleUser } from '../entity/cleaning-rule-user.entity';
-import { CleaningTrade, CleaningTradeStatus } from '../entity/cleaning-trade.entity';
+import {
+  CleaningTrade,
+  CleaningTradeStatus,
+} from '../entity/cleaning-trade.entity';
 import { BusinessError, CleaningErrorCode } from '../../common/errors';
 
 export interface ScheduleWithAssignees {
@@ -51,6 +54,10 @@ export class CleaningScheduleService {
     startDateStr?: string,
     endDateStr?: string,
   ): Promise<{ count: number; scheduleIds: number[] }> {
+    if (!!startDateStr !== !!endDateStr) {
+      return { count: 0, scheduleIds: [] };
+    }
+
     const rule = await this.ruleRepo.findOne({ where: { id: ruleId } });
     if (!rule) return { count: 0, scheduleIds: [] };
 
@@ -67,7 +74,9 @@ export class CleaningScheduleService {
       order: { cleaningDate: 'DESC' },
     });
     // 같은 규칙/날짜 unique 제약을 피하기 위해 이미 생성된 날짜는 제외한다.
-    const existingDates = new Set(existing.map((s) => toDateStr(s.cleaningDate)));
+    const existingDates = new Set(
+      existing.map((s) => toDateStr(s.cleaningDate)),
+    );
 
     // 배정 횟수가 적은 사람부터 배정해 장기적으로 담당 횟수를 맞춘다.
     const assignmentCounts = await this.getAssignmentCounts(
@@ -84,7 +93,11 @@ export class CleaningScheduleService {
     let si = 0;
     while (si < usersByCnt.length) {
       let ei = si;
-      while (ei < usersByCnt.length && usersByCnt[ei].count === usersByCnt[si].count) ei++;
+      while (
+        ei < usersByCnt.length &&
+        usersByCnt[ei].count === usersByCnt[si].count
+      )
+        ei++;
       for (let k = ei - 1; k > si; k--) {
         const r = si + Math.floor(Math.random() * (k - si + 1));
         [usersByCnt[k], usersByCnt[r]] = [usersByCnt[r], usersByCnt[k]];
@@ -96,16 +109,19 @@ export class CleaningScheduleService {
 
     let cleaningDates: string[];
 
-    if (startDateStr || endDateStr) {
+    if (startDateStr && endDateStr) {
       // 관리자가 기간을 지정하면 해당 기간 안의 청소 요일만 골라 생성한다.
-      const start = startDateStr ? parseLocalDate(startDateStr) : localToday();
-      const end = endDateStr ? parseLocalDate(endDateStr) : null;
+      const start = parseLocalDate(startDateStr);
+      const end = parseLocalDate(endDateStr);
       cleaningDates = getDatesInRange(start, end, rule.daysOfWeek);
     } else {
       // 마지막 일정 이후부터 전원 1사이클 생성
       const lastSchedule = existing[0];
       const startFrom = lastSchedule
-        ? nextDayAfter(parseLocalDate(toDateStr(lastSchedule.cleaningDate)), rule.daysOfWeek)
+        ? nextDayAfter(
+            parseLocalDate(toDateStr(lastSchedule.cleaningDate)),
+            rule.daysOfWeek,
+          )
         : localToday();
       const totalSchedules = Math.ceil(sortedUserIds.length / rule.needPeoples);
       cleaningDates = getNDates(startFrom, rule.daysOfWeek, totalSchedules);
@@ -124,7 +140,10 @@ export class CleaningScheduleService {
       if (schedulesInCycle > 0 && schedulesInCycle % cycleSchedules === 0) {
         for (let k = sortedUserIds.length - 1; k > 0; k--) {
           const r = Math.floor(Math.random() * (k + 1));
-          [sortedUserIds[k], sortedUserIds[r]] = [sortedUserIds[r], sortedUserIds[k]];
+          [sortedUserIds[k], sortedUserIds[r]] = [
+            sortedUserIds[r],
+            sortedUserIds[k],
+          ];
         }
         userIndex = 0;
       }
@@ -169,9 +188,7 @@ export class CleaningScheduleService {
     return this.attachAssignees(schedules);
   }
 
-  async findSchedulesByIds(
-    ids: number[],
-  ): Promise<ScheduleWithAssignees[]> {
+  async findSchedulesByIds(ids: number[]): Promise<ScheduleWithAssignees[]> {
     if (ids.length === 0) return [];
     const schedules = await this.scheduleRepo.find({ where: { id: In(ids) } });
     return this.attachAssignees(schedules);
@@ -278,7 +295,9 @@ export class CleaningScheduleService {
           where: { scheduleId, status: CleaningAssignmentStatus.CANCELED },
         });
         const canceledByUser = new Map(canceled.map((a) => [a.userId, a.id]));
-        const candidates = ruleUsers.filter((ru) => !assignedUserIds.has(ru.userId));
+        const candidates = ruleUsers.filter(
+          (ru) => !assignedUserIds.has(ru.userId),
+        );
 
         let added = 0;
         for (const ru of candidates) {
@@ -306,7 +325,9 @@ export class CleaningScheduleService {
     updates: { id: number; status: CleaningAssignmentStatus }[],
   ): Promise<void> {
     await Promise.all(
-      updates.map(({ id, status }) => this.assignmentRepo.update(id, { status })),
+      updates.map(({ id, status }) =>
+        this.assignmentRepo.update(id, { status }),
+      ),
     );
   }
 
@@ -349,7 +370,9 @@ export class CleaningScheduleService {
       }
     }
 
-    await this.scheduleRepo.update(scheduleId, { needPeoples: ruleUsers.length });
+    await this.scheduleRepo.update(scheduleId, {
+      needPeoples: ruleUsers.length,
+    });
   }
 
   // 대기 중인 교환 요청이 있으면 삭제를 막아 배정 교환 흐름이 꼬이지 않게 한다.
@@ -401,7 +424,9 @@ export class CleaningScheduleService {
     const today = localTodayStr();
 
     for (const ruleId of ruleIds) {
-      const remainingUsers = await this.ruleUserRepo.find({ where: { ruleId } });
+      const remainingUsers = await this.ruleUserRepo.find({
+        where: { ruleId },
+      });
       if (remainingUsers.length === 0) continue;
 
       const remainingUserIds = remainingUsers.map((ru) => ru.userId);
@@ -411,9 +436,13 @@ export class CleaningScheduleService {
         .innerJoin('a.schedule', 's')
         .where('a.userId = :userId', { userId })
         .andWhere('s.ruleId = :ruleId', { ruleId })
-        .andWhere('s.status = :sStatus', { sStatus: CleaningScheduleStatus.SCHEDULED })
+        .andWhere('s.status = :sStatus', {
+          sStatus: CleaningScheduleStatus.SCHEDULED,
+        })
         .andWhere('s.cleaningDate >= :today', { today })
-        .andWhere('a.status = :aStatus', { aStatus: CleaningAssignmentStatus.ASSIGNED })
+        .andWhere('a.status = :aStatus', {
+          aStatus: CleaningAssignmentStatus.ASSIGNED,
+        })
         .select(['a.id AS id', 'a.scheduleId AS "scheduleId"'])
         .getRawMany<{ id: number; scheduleId: number }>();
 
@@ -431,18 +460,28 @@ export class CleaningScheduleService {
       for (const fa of futureAssignments) {
         // 같은 일정에 이미 배정된 사람을 제외하고 가장 적게 배정된 담당자를 대체자로 고른다.
         const alreadyAssigned = await this.assignmentRepo.find({
-          where: { scheduleId: fa.scheduleId, status: CleaningAssignmentStatus.ASSIGNED },
+          where: {
+            scheduleId: fa.scheduleId,
+            status: CleaningAssignmentStatus.ASSIGNED,
+          },
           select: ['userId'],
         });
         const assignedSet = new Set(alreadyAssigned.map((a) => a.userId));
 
         const canceledRecords = await this.assignmentRepo.find({
-          where: { scheduleId: fa.scheduleId, status: CleaningAssignmentStatus.CANCELED },
+          where: {
+            scheduleId: fa.scheduleId,
+            status: CleaningAssignmentStatus.CANCELED,
+          },
           select: ['id', 'userId'],
         });
-        const canceledByUser = new Map(canceledRecords.map((a) => [a.userId, a.id]));
+        const canceledByUser = new Map(
+          canceledRecords.map((a) => [a.userId, a.id]),
+        );
 
-        const candidates = remainingUserIds.filter((uid) => !assignedSet.has(uid));
+        const candidates = remainingUserIds.filter(
+          (uid) => !assignedSet.has(uid),
+        );
         if (candidates.length === 0) continue;
 
         const replacement = candidates.reduce((best, uid) =>
@@ -473,18 +512,25 @@ export class CleaningScheduleService {
   async completePastSchedules(): Promise<void> {
     const today = localTodayStr();
     const toComplete = await this.scheduleRepo.find({
-      where: { status: CleaningScheduleStatus.SCHEDULED, cleaningDate: LessThan(today) },
+      where: {
+        status: CleaningScheduleStatus.SCHEDULED,
+        cleaningDate: LessThan(today),
+      },
       select: ['id'],
     });
     if (toComplete.length > 0) {
       const ids = toComplete.map((s) => s.id);
-      await this.scheduleRepo.update(ids, { status: CleaningScheduleStatus.COMPLETED });
+      await this.scheduleRepo.update(ids, {
+        status: CleaningScheduleStatus.COMPLETED,
+      });
       await this.assignmentRepo.update(
         { scheduleId: In(ids), status: CleaningAssignmentStatus.ASSIGNED },
         { status: CleaningAssignmentStatus.COMPLETED },
       );
     }
-    this.logger.log(`completePastSchedules: ${toComplete.length} schedules completed`);
+    this.logger.log(
+      `completePastSchedules: ${toComplete.length} schedules completed`,
+    );
   }
 
   private async cancelPendingTradesForAssignments(
@@ -601,14 +647,13 @@ function toDateStr(date: Date | string): string {
 
 function getDatesInRange(
   start: Date,
-  end: Date | null,
+  end: Date,
   daysOfWeek: number[],
 ): string[] {
   const daySet = new Set(daysOfWeek);
   const dates: string[] = [];
   const cur = new Date(start);
-  const limit = end ?? new Date(start.getFullYear() + 1, start.getMonth(), start.getDate());
-  while (cur <= limit) {
+  while (cur <= end) {
     if (daySet.has(cur.getDay())) dates.push(toDateStr(cur));
     cur.setDate(cur.getDate() + 1);
   }
