@@ -2,6 +2,7 @@ import { Test, TestingModule } from '@nestjs/testing';
 import { getRepositoryToken } from '@nestjs/typeorm';
 import {
   CleaningAssignment,
+  CleaningAssignmentStatus,
 } from '../entity/cleaning-assignment.entity';
 import {
   CleaningTrade,
@@ -431,11 +432,13 @@ describe('CleaningTradeService', () => {
           id: 1,
           scheduleId: 1,
           userId: 1,
+          status: CleaningAssignmentStatus.ASSIGNED,
         })
         .mockResolvedValueOnce({
           id: 3,
           scheduleId: 1,
           userId: 3,
+          status: CleaningAssignmentStatus.ASSIGNED,
         });
 
       // 배정이 존재하지 않는 경우
@@ -449,6 +452,26 @@ describe('CleaningTradeService', () => {
       });
     });
 
+    it('완료되었거나 취소된 배정이 포함되면 비즈니스 에러 처리', async () => {
+      assignmentRepo.findOne
+        .mockResolvedValueOnce({
+          id: 1,
+          scheduleId: 1,
+          userId: 1,
+          status: CleaningAssignmentStatus.COMPLETED,
+        })
+        .mockResolvedValueOnce({
+          id: 4,
+          scheduleId: 2,
+          userId: 2,
+          status: CleaningAssignmentStatus.ASSIGNED,
+        });
+
+      await expect(service.swapAssignments(1, 4)).rejects.toMatchObject({
+        code: 'CLEANING:TRADE_ASSIGNMENT_NOT_ACTIVE',
+      });
+    });
+
     it('스왑 후 유저가 중복되면 비즈니스 에러 처리', async () => {
       assignmentRepo.findOne
         // a1, a2
@@ -456,11 +479,13 @@ describe('CleaningTradeService', () => {
           id: 1,
           scheduleId: 1,
           userId: 1,
+          status: CleaningAssignmentStatus.ASSIGNED,
         })
         .mockResolvedValueOnce({
           id: 4,
           scheduleId: 2,
           userId: 2,
+          status: CleaningAssignmentStatus.ASSIGNED,
         })
         // conflict1
         .mockResolvedValueOnce({
@@ -483,11 +508,13 @@ describe('CleaningTradeService', () => {
           id: 1,
           scheduleId: 1,
           userId: 1,
+          status: CleaningAssignmentStatus.ASSIGNED,
         })
         .mockResolvedValueOnce({
           id: 4,
           scheduleId: 2,
           userId: 2,
+          status: CleaningAssignmentStatus.ASSIGNED,
         })
         // conflict
         .mockResolvedValueOnce(null)

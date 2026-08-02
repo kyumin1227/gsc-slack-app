@@ -13,6 +13,8 @@ const { codes, messages } = createErrorDomain('CLEANING', {
     '교환 후 같은 날짜에 중복 배정이 발생합니다. 다른 배정을 선택해주세요.',
   TRADE_SAME_SCHEDULE:
     '같은 날짜의 배정끼리는 교환할 수 없습니다. 다른 배정을 선택해주세요.',
+  TRADE_ASSIGNMENT_NOT_ACTIVE:
+    '이미 완료되었거나 취소된 배정은 교환할 수 없습니다.',
   SCHEDULE_HAS_ACTIVE_TRADES:
     '교환 요청이 있는 배정이 포함된 일정은 삭제할 수 없습니다. 교환 요청을 먼저 처리해주세요.',
 });

@@ -260,6 +260,11 @@ export class CleaningTradeService {
       this.assignmentRepo.findOne({ where: { id: id2 } }),
     ]);
     if (!a1 || !a2) throw new BusinessError(CleaningErrorCode.ASSIGNMENT_NOT_FOUND);
+    if (
+      a1.status !== CleaningAssignmentStatus.ASSIGNED ||
+      a2.status !== CleaningAssignmentStatus.ASSIGNED
+    )
+      throw new BusinessError(CleaningErrorCode.TRADE_ASSIGNMENT_NOT_ACTIVE);
     if (a1.scheduleId === a2.scheduleId)
       throw new BusinessError(CleaningErrorCode.TRADE_SAME_SCHEDULE);
 
