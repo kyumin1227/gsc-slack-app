@@ -102,7 +102,7 @@ export class StudyRoomController {
 
     await client.views.push({
       trigger_id: body.trigger_id,
-      view: StudyRoomView.bookingModal(resource),
+      view: StudyRoomView.bookingModal(resource, undefined, [body.user.id]),
     });
   }
 
@@ -239,10 +239,17 @@ export class StudyRoomController {
     const resource = await this.resourceService.findById(roomId);
     if (!resource) return;
 
+    const currentAttendees =
+      values.attendees_block?.attendees_select?.selected_users ?? [];
+
     await client.views.update({
       view_id: view.id,
       hash: view.hash,
-      view: StudyRoomView.bookingModal(resource, calculatedEndTime),
+      view: StudyRoomView.bookingModal(
+        resource,
+        calculatedEndTime,
+        currentAttendees,
+      ),
     });
   }
 

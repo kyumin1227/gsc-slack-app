@@ -1,0 +1,9 @@
+# 로컬/dev 서버 공용 — prod는 prometheus.prod.yml 사용
+global:
+  scrape_interval: 15s
+
+scrape_configs:
+  - job_name: 'gsc-slack-app'
+    static_configs:
+      - targets: ['host.docker.internal:3000']
+    metrics_path: /metrics

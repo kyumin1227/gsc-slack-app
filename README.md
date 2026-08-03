@@ -1,98 +1,116 @@
-<p align="center">
-  <a href="http://nestjs.com/" target="blank"><img src="https://nestjs.com/img/logo-small.svg" width="120" alt="Nest Logo" /></a>
-</p>
+# Bannote Slack App
 
-[circleci-image]: https://img.shields.io/circleci/build/github/nestjs/nest/master?token=abc123def456
-[circleci-url]: https://circleci.com/gh/nestjs/nest
+Bannote is a NestJS Slack app for GSC schedules, Google Calendar integration,
+resource management, and study room bookings. It also exposes a remote MCP
+server so MCP-capable clients can use the same booking tools outside Slack.
 
-  <p align="center">A progressive <a href="http://nodejs.org" target="_blank">Node.js</a> framework for building efficient and scalable server-side applications.</p>
-    <p align="center">
-<a href="https://www.npmjs.com/~nestjscore" target="_blank"><img src="https://img.shields.io/npm/v/@nestjs/core.svg" alt="NPM Version" /></a>
-<a href="https://www.npmjs.com/~nestjscore" target="_blank"><img src="https://img.shields.io/npm/l/@nestjs/core.svg" alt="Package License" /></a>
-<a href="https://www.npmjs.com/~nestjscore" target="_blank"><img src="https://img.shields.io/npm/dm/@nestjs/common.svg" alt="NPM Downloads" /></a>
-<a href="https://circleci.com/gh/nestjs/nest" target="_blank"><img src="https://img.shields.io/circleci/build/github/nestjs/nest/master" alt="CircleCI" /></a>
-<a href="https://discord.gg/G7Qnnhy" target="_blank"><img src="https://img.shields.io/badge/discord-online-brightgreen.svg" alt="Discord"/></a>
-<a href="https://opencollective.com/nest#backer" target="_blank"><img src="https://opencollective.com/nest/backers/badge.svg" alt="Backers on Open Collective" /></a>
-<a href="https://opencollective.com/nest#sponsor" target="_blank"><img src="https://opencollective.com/nest/sponsors/badge.svg" alt="Sponsors on Open Collective" /></a>
-  <a href="https://paypal.me/kamilmysliwiec" target="_blank"><img src="https://img.shields.io/badge/Donate-PayPal-ff3f59.svg" alt="Donate us"/></a>
-    <a href="https://opencollective.com/nest#sponsor"  target="_blank"><img src="https://img.shields.io/badge/Support%20us-Open%20Collective-41B883.svg" alt="Support us"></a>
-  <a href="https://twitter.com/nestframework" target="_blank"><img src="https://img.shields.io/twitter/follow/nestframework.svg?style=social&label=Follow" alt="Follow us on Twitter"></a>
-</p>
-  <!--[![Backers on Open Collective](https://opencollective.com/nest/backers/badge.svg)](https://opencollective.com/nest#backer)
-  [![Sponsors on Open Collective](https://opencollective.com/nest/sponsors/badge.svg)](https://opencollective.com/nest#sponsor)-->
-
-## Description
-
-[Nest](https://github.com/nestjs/nest) framework TypeScript starter repository.
-
-## Project setup
+## Local Setup
 
 ```bash
-$ npm install
+npm install
+npm run build
+npm run test
 ```
 
-## Compile and run the project
+Run the app locally:
 
 ```bash
-# development
-$ npm run start
-
-# watch mode
-$ npm run start:dev
-
-# production mode
-$ npm run start:prod
+npm run start:dev
 ```
 
-## Run tests
+For local Postgres and Redis:
 
 ```bash
-# unit tests
-$ npm run test
-
-# e2e tests
-$ npm run test:e2e
-
-# test coverage
-$ npm run test:cov
+make db
 ```
+
+## Remote MCP
+
+The MCP endpoint is:
+
+```text
+https://<app-domain>/mcp
+```
+
+The server advertises OAuth metadata from:
+
+```text
+https://<app-domain>/.well-known/oauth-authorization-server
+https://<app-domain>/.well-known/oauth-protected-resource/mcp
+```
+
+MCP authentication uses dynamic client registration, authorization code +
+PKCE, and Google OAuth. The Google account email must match an existing
+Bannote user.
+
+### MCP Environment
+
+| Variable                  | Purpose                                                          |
+| ------------------------- | ---------------------------------------------------------------- |
+| `MCP_BASE_URL`            | Public base URL used in OAuth and protected resource metadata.   |
+| `MCP_GOOGLE_REDIRECT_URI` | Google OAuth callback URL for MCP auth.                          |
+| `MCP_ALLOWED_ORIGINS`     | Optional comma-separated browser origins allowed to call `/mcp`. |
+
+If `MCP_ALLOWED_ORIGINS` is empty, requests without an `Origin` header are
+accepted and browser requests must match `MCP_BASE_URL`.
+
+### MCP Tools
+
+| Tool                      | Type  | Purpose                                            |
+| ------------------------- | ----- | -------------------------------------------------- |
+| `get_current_time`        | read  | Get current Asia/Seoul time.                       |
+| `get_my_bookings`         | read  | List the authenticated user's study room bookings. |
+| `find_user`               | read  | Find active users by name, code, or email.         |
+| `get_study_rooms`         | read  | List study room IDs, names, and aliases.           |
+| `check_room_availability` | read  | Check room availability for a time range.          |
+| `book_room`               | write | Create a study room booking.                       |
+| `cancel_booking`          | write | Cancel an existing booking.                        |
+| `modify_booking`          | write | Modify an existing booking.                        |
+
+Tools include MCP annotations and structured output so clients can distinguish
+read-only lookups from booking mutations.
+
+### MCP Prompts And Resources
+
+Prompts:
+
+- `reserve_study_room`
+- `change_study_room_booking`
+- `cancel_study_room_booking`
+- `find_available_study_room`
+
+Resources:
+
+- `bannote://guide/study-room-booking`
+- `bannote://guide/tool-workflows`
+- `bannote://rooms`
+- `bannote://me/bookings`
+
+These provide workflow guidance and user-specific context without adding
+client-specific skills.
+
+## Verification
+
+Targeted checks for MCP changes:
+
+```bash
+npm run test -- src/mcp/mcp.service.spec.ts src/mcp/mcp.controller.spec.ts src/tools/tools.service.spec.ts
+npm run build
+```
+
+Health check:
+
+```bash
+curl -i https://<app-domain>/health
+```
+
+Unauthenticated MCP requests should return `401` with a `WWW-Authenticate`
+challenge that points to the MCP protected resource metadata.
 
 ## Deployment
 
-When you're ready to deploy your NestJS application to production, there are some key steps you can take to ensure it runs as efficiently as possible. Check out the [deployment documentation](https://docs.nestjs.com/deployment) for more information.
+Production infrastructure is defined in `terraform/`. The production app domain
+is configured through `app_domain`, and the ECS task sets:
 
-If you are looking for a cloud-based platform to deploy your NestJS application, check out [Mau](https://mau.nestjs.com), our official platform for deploying NestJS applications on AWS. Mau makes deployment straightforward and fast, requiring just a few simple steps:
-
-```bash
-$ npm install -g @nestjs/mau
-$ mau deploy
-```
-
-With Mau, you can deploy your application in just a few clicks, allowing you to focus on building features rather than managing infrastructure.
-
-## Resources
-
-Check out a few resources that may come in handy when working with NestJS:
-
-- Visit the [NestJS Documentation](https://docs.nestjs.com) to learn more about the framework.
-- For questions and support, please visit our [Discord channel](https://discord.gg/G7Qnnhy).
-- To dive deeper and get more hands-on experience, check out our official video [courses](https://courses.nestjs.com/).
-- Deploy your application to AWS with the help of [NestJS Mau](https://mau.nestjs.com) in just a few clicks.
-- Visualize your application graph and interact with the NestJS application in real-time using [NestJS Devtools](https://devtools.nestjs.com).
-- Need help with your project (part-time to full-time)? Check out our official [enterprise support](https://enterprise.nestjs.com).
-- To stay in the loop and get updates, follow us on [X](https://x.com/nestframework) and [LinkedIn](https://linkedin.com/company/nestjs).
-- Looking for a job, or have a job to offer? Check out our official [Jobs board](https://jobs.nestjs.com).
-
-## Support
-
-Nest is an MIT-licensed open source project. It can grow thanks to the sponsors and support by the amazing backers. If you'd like to join them, please [read more here](https://docs.nestjs.com/support).
-
-## Stay in touch
-
-- Author - [Kamil Myśliwiec](https://twitter.com/kammysliwiec)
-- Website - [https://nestjs.com](https://nestjs.com/)
-- Twitter - [@nestframework](https://twitter.com/nestframework)
-
-## License
-
-Nest is [MIT licensed](https://github.com/nestjs/nest/blob/master/LICENSE).
+- `MCP_BASE_URL=https://${app_domain}`
+- `MCP_GOOGLE_REDIRECT_URI=https://${app_domain}/mcp/auth/callback`

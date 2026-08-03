@@ -16,3 +16,12 @@ db_instance_class = "db.t4g.micro"
 # ElastiCache
 cache_node_type = "cache.t4g.micro"
 
+# Monitoring EC2
+grafana_domain           = "grafana.gsc-lab.io"
+monitoring_instance_type = "t3.small"
+monitoring_key_name      = "monitoring-key"
+monitoring_ami_id        = "ami-09016cd26e0149709"
+
+# Optional: comma-separated browser origins for remote MCP calls.
+# Requests without an Origin header and requests from app_domain are allowed by default.
+mcp_allowed_origins = ""

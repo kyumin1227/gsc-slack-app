@@ -41,7 +41,7 @@ jobs:
         if: steps.bump-type.outputs.type != 'none'
         uses: actions/setup-node@v4
         with:
-          node-version: "20"
+          node-version: '20'
 
       - name: Bump version and commit
         if: steps.bump-type.outputs.type != 'none'

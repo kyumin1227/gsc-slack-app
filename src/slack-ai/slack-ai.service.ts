@@ -4,10 +4,11 @@ import { CACHE_MANAGER } from '@nestjs/cache-manager';
 import type { Cache } from 'cache-manager';
 import { ToolsService } from '../tools/tools.service';
 import { UserService } from '../user/service/user.service';
+import { AppMetrics } from '../common/metrics/app.metrics';
 
 const MODEL = 'claude-haiku-4-5-20251001';
 const HISTORY_TTL_MS = 60 * 60 * 1000; // 1시간
-const MAX_HISTORY_MESSAGES = 20; // 최근 10턴
+const MAX_HISTORY_MESSAGES = 50; // 최근 25턴
 
 const buildSystemPrompt = (userName: string | null) => {
   const now = new Date().toLocaleString('ko-KR', {
@@ -21,15 +22,14 @@ const buildSystemPrompt = (userName: string | null) => {
     hour12: false,
   });
 
-  return `당신은 GSC 스터디룸 예약 관리 어시스턴트입니다.
+  return `당신은 GSC 스터디룸 예약 관리 어시스턴트 Bannote Bot 입니다.
 ${userName ? `현재 대화 중인 사용자의 이름은 "${userName}"입니다.` : ''}
 현재 날짜 및 시각: ${now}
-사용자의 요청에 맞는 툴을 호출하고, 결과를 친절하고 귀엽고 간결하게 한국어로 안내하세요.
+사용자의 요청에 맞는 툴을 호출하고, 툴 호출 결과를 바탕으로 친절하고 귀엽고 간결하게 안내하세요. 사용자가 사용하는 언어로 응답하세요.
 모든 날짜와 시간은 한국 표준시(KST, UTC+9) 기준으로 해석하고 표시하세요.
-날짜와 시간 표시 형식은 "2025년 5월 10일 오후 2시" 형식을 사용하세요.
 id, calendarId, eventId 등 내부 식별자는 절대 사용자에게 노출하지 마세요.
 예약을 찾을 수 없거나 수정·취소 권한이 없는 경우 "해당 예약에 대한 권한이 없습니다" 형식으로 안내하세요.
-예약 생성·수정·취소는 반드시 해당 툴을 실제로 호출해야 완료됩니다. 툴 호출 없이 완료되었다고 응답하지 마세요.`;
+예약 생성·수정·취소는 반드시 해당 툴을 실제로 호출해야 완료됩니다. 툴 호출 없이 완료되었다고 응답하지 말고, 생성·수정 후에는 툴 결과를 바탕으로 안내하세요.`;
 };
 
 @Injectable()
@@ -42,6 +42,7 @@ export class SlackAiService {
   constructor(
     private readonly toolsService: ToolsService,
     private readonly userService: UserService,
+    private readonly appMetrics: AppMetrics,
     @Inject(CACHE_MANAGER) private readonly cache: Cache,
   ) {}
 
@@ -102,8 +103,28 @@ export class SlackAiService {
     slackId: string,
     text: string,
     onProgress?: (msg: string) => Promise<void>,
-  ): Promise<string> {
-    const tools = this.toolsService.getDefinitions();
+    onChunk?: (text: string) => Promise<void>,
+  ): Promise<{ reply: string; rounds: number }> {
+    this.appMetrics.aiMessagesTotal.inc();
+    this.appMetrics.aiProcessingCurrent.inc();
+    const endTimer = this.appMetrics.aiMessageDurationSeconds.startTimer();
+    try {
+      return await this._handleMessage(slackId, text, onProgress, onChunk);
+    } finally {
+      endTimer();
+      this.appMetrics.aiProcessingCurrent.dec();
+    }
+  }
+
+  private async _handleMessage(
+    slackId: string,
+    text: string,
+    onProgress?: (msg: string) => Promise<void>,
+    onChunk?: (text: string) => Promise<void>,
+  ): Promise<{ reply: string; rounds: number }> {
+    const tools = this.toolsService
+      .getDefinitions()
+      .filter((t) => t.name !== 'get_current_time'); // 프롬프트에 시간이 있으므로 툴 제외
     const user = await this.userService.findBySlackId(slackId);
     const systemPrompt = buildSystemPrompt(user?.name ?? null);
 
@@ -115,7 +136,7 @@ export class SlackAiService {
 
     const MAX_ROUNDS = 10;
     for (let round = 0; round < MAX_ROUNDS; round++) {
-      const response = await this.anthropic.messages.create({
+      const stream = this.anthropic.messages.stream({
         model: MODEL,
         max_tokens: 2048,
         system: systemPrompt,
@@ -123,16 +144,36 @@ export class SlackAiService {
         messages,
       });
 
+      let streamedText = '';
+      for await (const event of stream) {
+        if (
+          event.type === 'content_block_delta' &&
+          event.delta.type === 'text_delta'
+        ) {
+          streamedText += event.delta.text;
+          if (onChunk) await onChunk(streamedText);
+        }
+      }
+
+      const response = await stream.finalMessage();
+
+      this.appMetrics.aiTokensTotal.inc(
+        { type: 'input' },
+        response.usage.input_tokens,
+      );
+      this.appMetrics.aiTokensTotal.inc(
+        { type: 'output' },
+        response.usage.output_tokens,
+      );
+
       if (response.stop_reason !== 'tool_use') {
         const replyText = this.extractText(response.content);
         await this.saveHistory(slackId, [
           ...messages,
           { role: 'assistant', content: replyText },
         ]);
-        this.logger.log(
-          `[handleMessage] 완료 (${round + 1}라운드) length=${replyText.length}`,
-        );
-        return replyText;
+        this.appMetrics.aiMessageRounds.observe(round + 1);
+        return { reply: replyText, rounds: round + 1 };
       }
 
       const toolResults: Anthropic.ToolResultBlockParam[] = [];
@@ -165,7 +206,11 @@ export class SlackAiService {
       );
     }
 
-    return '요청 처리 중 오류가 발생했습니다. 다시 시도해 주세요.';
+    return {
+      reply:
+        '요청이 너무 복잡해서 한 번에 처리하지 못했어요 😅 일부 작업이 진행됐을 수 있으니 현황을 확인 후 다시 시도해 주세요!',
+      rounds: MAX_ROUNDS,
+    };
   }
 
   private extractText(content: Anthropic.ContentBlock[]): string {

@@ -104,18 +104,11 @@ resource "aws_security_group" "alb" {
   }
 }
 
-# ECS 보안 그룹 — ALB에서 컨테이너 포트만 허용
+# ECS 보안 그룹 — inline ingress 없이 별도 rule로 관리 (inline + rule 혼용 시 충돌)
 resource "aws_security_group" "ecs" {
   name        = "${local.name_prefix}-ecs-sg"
   description = "ECS tasks security group"
   vpc_id      = aws_vpc.main.id
-
-  ingress {
-    from_port       = var.container_port
-    to_port         = var.container_port
-    protocol        = "tcp"
-    security_groups = [aws_security_group.alb.id]
-  }
 
   egress {
     from_port   = 0
@@ -127,6 +120,16 @@ resource "aws_security_group" "ecs" {
   tags = {
     Name = "${local.name_prefix}-ecs-sg"
   }
+}
+
+resource "aws_security_group_rule" "ecs_alb_ingress" {
+  type                     = "ingress"
+  description              = "App port from ALB"
+  from_port                = var.container_port
+  to_port                  = var.container_port
+  protocol                 = "tcp"
+  source_security_group_id = aws_security_group.alb.id
+  security_group_id        = aws_security_group.ecs.id
 }
 
 # RDS 보안 그룹 — ECS에서 5432 포트만 허용
@@ -163,4 +166,46 @@ resource "aws_security_group" "cache" {
   tags = {
     Name = "${local.name_prefix}-cache-sg"
   }
+}
+
+# monitoring SG ingress rules
+resource "aws_security_group_rule" "monitoring_ssh_ingress" {
+  type              = "ingress"
+  description       = "SSH"
+  from_port         = 22
+  to_port           = 22
+  protocol          = "tcp"
+  cidr_blocks       = ["0.0.0.0/0"]
+  security_group_id = aws_security_group.monitoring.id
+}
+
+resource "aws_security_group_rule" "monitoring_grafana_ingress" {
+  type                     = "ingress"
+  description              = "Grafana from ALB"
+  from_port                = 3001
+  to_port                  = 3001
+  protocol                 = "tcp"
+  source_security_group_id = aws_security_group.alb.id
+  security_group_id        = aws_security_group.monitoring.id
+}
+
+# 순환 참조 방지: monitoring ↔ ecs SG cross-reference는 별도 rule로 분리
+resource "aws_security_group_rule" "monitoring_loki_from_ecs" {
+  type                     = "ingress"
+  description              = "Loki from ECS"
+  from_port                = 3100
+  to_port                  = 3100
+  protocol                 = "tcp"
+  source_security_group_id = aws_security_group.ecs.id
+  security_group_id        = aws_security_group.monitoring.id
+}
+
+resource "aws_security_group_rule" "ecs_prometheus_from_monitoring" {
+  type                     = "ingress"
+  description              = "Prometheus scrape from monitoring EC2"
+  from_port                = var.container_port
+  to_port                  = var.container_port
+  protocol                 = "tcp"
+  source_security_group_id = aws_security_group.monitoring.id
+  security_group_id        = aws_security_group.ecs.id
 }

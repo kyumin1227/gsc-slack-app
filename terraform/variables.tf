@@ -95,3 +95,32 @@ variable "secrets_arn" {
   description = "Secrets Manager secret ARN containing app environment variables"
   type        = string
 }
+
+# Monitoring EC2
+variable "monitoring_ami_id" {
+  description = "AMI ID for monitoring EC2 instance (pin to avoid unintended replacement)"
+  type        = string
+}
+
+variable "monitoring_instance_type" {
+  description = "EC2 instance type for monitoring stack"
+  type        = string
+  default     = "t3.micro"
+}
+
+variable "monitoring_key_name" {
+  description = "EC2 key pair name for monitoring instance"
+  type        = string
+  default     = "monitoring-key"
+}
+
+variable "grafana_domain" {
+  description = "Grafana subdomain (e.g. grafana.gsc-lab.io)"
+  type        = string
+}
+
+variable "mcp_allowed_origins" {
+  description = "Comma-separated browser origins allowed to call the remote MCP endpoint"
+  type        = string
+  default     = ""
+}

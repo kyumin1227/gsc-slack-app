@@ -1,4 +1,5 @@
 import { Module, OnModuleInit } from '@nestjs/common';
+import { APP_INTERCEPTOR } from '@nestjs/core';
 import { AppController } from './app.controller';
 import { AppService } from './app.service';
 import { SlackModule } from 'nestjs-slack-bolt';
@@ -16,9 +17,15 @@ import { ScheduleModule } from './schedule/schedule.module';
 import { ChannelModule } from './channel/channel.module';
 import { ResourceModule } from './resource/resource.module';
 import { httpReceiver } from './slack-receiver';
-import { slackErrorMiddleware } from './common/slack-error.middleware';
+import { createSlackErrorMiddleware } from './common/slack-error.middleware';
+import { createSlackMetricsMiddleware } from './common/slack-metrics.middleware';
 import { CleaningModule } from './cleaning/cleaning.module';
 import { SlackAiModule } from './slack-ai/slack-ai.module';
+import { McpModule } from './mcp/mcp.module';
+import { AnnouncementModule } from './announcement/announcement.module';
+import { MetricsModule } from './common/metrics/metrics.module';
+import { MetricsInterceptor } from './common/interceptors/metrics.interceptor';
+import { AppMetrics } from './common/metrics/app.metrics';
 
 @Module({
   imports: [
@@ -73,14 +80,27 @@ import { SlackAiModule } from './slack-ai/slack-ai.module';
     ResourceModule,
     CleaningModule,
     SlackAiModule,
+    McpModule,
+    AnnouncementModule,
+    MetricsModule,
   ],
   controllers: [AppController],
-  providers: [AppService],
+  providers: [
+    AppService,
+    {
+      provide: APP_INTERCEPTOR,
+      useClass: MetricsInterceptor,
+    },
+  ],
 })
 export class AppModule implements OnModuleInit {
-  constructor(private readonly slackService: SlackService) {}
+  constructor(
+    private readonly slackService: SlackService,
+    private readonly appMetrics: AppMetrics,
+  ) {}
 
   onModuleInit() {
-    this.slackService.app.use(slackErrorMiddleware);
+    this.slackService.app.use(createSlackMetricsMiddleware(this.appMetrics));
+    this.slackService.app.use(createSlackErrorMiddleware(this.appMetrics));
   }
 }

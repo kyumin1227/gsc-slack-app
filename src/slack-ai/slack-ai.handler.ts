@@ -4,6 +4,7 @@ import type { AllMiddlewareArgs, SlackEventMiddlewareArgs } from '@slack/bolt';
 import type { KnownBlock } from '@slack/types';
 import { SlackAiService } from './slack-ai.service';
 import { UserService } from '../user/service/user.service';
+import { AppMetrics } from '../common/metrics/app.metrics';
 
 function toSlackMrkdwn(text: string): string {
   return text
@@ -24,6 +25,7 @@ export class SlackAiHandler {
   constructor(
     private readonly slackAiService: SlackAiService,
     private readonly userService: UserService,
+    private readonly appMetrics: AppMetrics,
   ) {}
 
   @Message(/.*/)
@@ -117,16 +119,37 @@ export class SlackAiHandler {
 
     await this.slackAiService.setProcessing(slackId);
     try {
-      const reply = await this.slackAiService.handleMessage(
+      let lastStreamedText = '';
+      let updateCount = 0;
+
+      const { reply, rounds } = await this.slackAiService.handleMessage(
         slackId,
         text,
         async (msg) => {
+          updateCount++;
+          const displayText = lastStreamedText
+            ? `${lastStreamedText}\n\n${msg}`
+            : msg;
           await client.chat.update({
             channel,
             ts: loadingMsg.ts as string,
-            text: msg,
+            text: displayText,
           });
         },
+        async (chunk) => {
+          updateCount++;
+          lastStreamedText = chunk;
+          await client.chat.update({
+            channel,
+            ts: loadingMsg.ts as string,
+            text: chunk + ' ▌',
+          });
+        },
+      );
+      updateCount++;
+      this.appMetrics.aiSlackUpdatesPerMessage.observe(updateCount);
+      this.logger.log(
+        `[handleDm] 완료 code=${user.code} rounds=${rounds} slackUpdates=${updateCount} length=${reply.length}`,
       );
       await client.chat.update({
         channel,
@@ -141,7 +164,7 @@ export class SlackAiHandler {
       });
     } catch (e) {
       this.logger.error(
-        `[handleDm] slackId=${slackId} error=${String(e)}`,
+        `[handleDm] code=${user.code} error=${String(e)}`,
         e instanceof Error ? e.stack : undefined,
       );
       await client.chat.update({

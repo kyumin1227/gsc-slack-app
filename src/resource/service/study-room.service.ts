@@ -59,6 +59,9 @@ export class StudyRoomService {
 
   // 스터디룸 예약 생성 (시간 충돌 확인 후 Google Calendar 이벤트 생성)
   async bookResource(dto: BookResourceDto): Promise<string> {
+    if (!dto.resourceId)
+      throw new BusinessError(ResourceErrorCode.STUDY_ROOM_NOT_FOUND);
+
     const resource = await this.resourceService.findById(dto.resourceId);
     if (!resource)
       throw new BusinessError(ResourceErrorCode.STUDY_ROOM_NOT_FOUND);
@@ -168,16 +171,17 @@ export class StudyRoomService {
   async getRoomAvailability(
     startTime: Date,
     endTime: Date,
-    roomName?: string,
+    roomId?: number,
   ): Promise<RoomAvailability[]> {
     const allRooms = await this.resourceService.findAllByType(
       ResourceType.STUDY_ROOM,
     );
-    const rooms = roomName
-      ? allRooms.filter(
-          (r) => r.name === roomName || (r.aliases ?? []).includes(roomName),
-        )
-      : allRooms;
+    let rooms = allRooms;
+    if (roomId !== undefined) {
+      rooms = allRooms.filter((r) => r.id === roomId);
+      if (rooms.length === 0)
+        throw new BusinessError(ResourceErrorCode.STUDY_ROOM_NOT_FOUND);
+    }
 
     return Promise.all(
       rooms.map(async (room) => {

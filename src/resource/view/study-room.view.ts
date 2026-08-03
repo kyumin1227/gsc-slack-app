@@ -107,7 +107,11 @@ export class StudyRoomView {
   }
 
   // 스터디룸 예약 입력 모달 (종료 시간 계산값 표시 지원)
-  static bookingModal(resource: Resource, calculatedEndTime?: string): View {
+  static bookingModal(
+    resource: Resource,
+    calculatedEndTime?: string,
+    initialAttendeeSlackIds: string[] = [],
+  ): View {
     return {
       type: 'modal',
       callback_id: 'study-room:modal:book',
@@ -183,6 +187,7 @@ export class StudyRoomView {
           actionId: 'attendees_select',
           label: '참석자',
           placeholder: '참석자를 선택하세요',
+          initialUsers: initialAttendeeSlackIds,
           optional: true,
         }),
       ],

@@ -20,9 +20,11 @@ export interface OAuthState {
 
 @Injectable()
 export class GoogleOAuthService {
-  getGoogleAuthUrl(state: string): string {
+  getGoogleAuthUrl(
+    state: string,
+    redirectUri: string = process.env.GOOGLE_REDIRECT_URI ?? '',
+  ): string {
     const clientId = process.env.GOOGLE_CLIENT_ID;
-    const redirectUri = process.env.GOOGLE_REDIRECT_URI;
     const scopes = [
       'email',
       'profile',
@@ -33,7 +35,10 @@ export class GoogleOAuthService {
     return `https://accounts.google.com/o/oauth2/v2/auth?client_id=${clientId}&redirect_uri=${redirectUri}&response_type=code&scope=${scope}&state=${state}&access_type=offline&prompt=consent`;
   }
 
-  async exchangeCodeForTokens(code: string): Promise<GoogleTokens> {
+  async exchangeCodeForTokens(
+    code: string,
+    redirectUri: string = process.env.GOOGLE_REDIRECT_URI ?? '',
+  ): Promise<GoogleTokens> {
     const response = await fetch('https://oauth2.googleapis.com/token', {
       method: 'POST',
       headers: { 'Content-Type': 'application/x-www-form-urlencoded' },
@@ -41,7 +46,7 @@ export class GoogleOAuthService {
         code,
         client_id: process.env.GOOGLE_CLIENT_ID ?? '',
         client_secret: process.env.GOOGLE_CLIENT_SECRET ?? '',
-        redirect_uri: process.env.GOOGLE_REDIRECT_URI ?? '',
+        redirect_uri: redirectUri,
         grant_type: 'authorization_code',
       }),
     });
