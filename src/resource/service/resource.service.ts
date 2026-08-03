@@ -1,6 +1,6 @@
 import { Injectable } from '@nestjs/common';
 import { InjectRepository } from '@nestjs/typeorm';
-import { Repository } from 'typeorm';
+import { In, Repository } from 'typeorm';
 import { Resource, ResourceStatus, ResourceType } from '../resource.entity';
 import { GoogleCalendarsService } from '../../google/calendar/calendars.service';
 import { GoogleAclService } from '../../google/calendar/acl.service';
@@ -49,6 +49,17 @@ export class ResourceService {
   async findAll(onlyActive = false): Promise<Resource[]> {
     return this.resourceRepository.find({
       where: onlyActive ? { status: ResourceStatus.ACTIVE } : {},
+      order: { name: 'ASC' },
+    });
+  }
+
+  // 청소 구역 조회 (classroom + study_room만)
+  async findSpaces(onlyActive = false): Promise<Resource[]> {
+    return this.resourceRepository.find({
+      where: {
+        type: In([ResourceType.CLASSROOM, ResourceType.STUDY_ROOM]),
+        ...(onlyActive ? { status: ResourceStatus.ACTIVE } : {}),
+      },
       order: { name: 'ASC' },
     });
   }
