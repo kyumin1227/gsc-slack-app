@@ -95,9 +95,7 @@ export class AddCleaningEntities1778064597031 implements MigrationInterface {
       `ALTER TABLE "cleaning_rules" DROP CONSTRAINT "FK_cleaning_rules_studentClass"`,
     );
     await queryRunner.query(`DROP TABLE "cleaning_trades"`);
-    await queryRunner.query(
-      `DROP TYPE "public"."cleaning_trades_status_enum"`,
-    );
+    await queryRunner.query(`DROP TYPE "public"."cleaning_trades_status_enum"`);
     await queryRunner.query(`DROP TABLE "cleaning_assignments"`);
     await queryRunner.query(
       `DROP TYPE "public"."cleaning_assignments_status_enum"`,

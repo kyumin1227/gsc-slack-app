@@ -16,8 +16,8 @@ import { formatClassLabel } from '../../common/class-label.util';
 import { StudentClassStatus } from '../../student-class/student-class.entity';
 import { UserRole } from '../../user/user.entity';
 import { CleaningAssignmentStatus } from '../entity/cleaning-assignment.entity';
-import { BusinessError, CleaningErrorCode } from '../../common/errors'
-import { ErrorView } from '../../common/error.view'
+import { BusinessError, CleaningErrorCode } from '../../common/errors';
+import { ErrorView } from '../../common/error.view';
 @Controller()
 export class CleaningRuleController {
   constructor(

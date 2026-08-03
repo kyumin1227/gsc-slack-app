@@ -44,7 +44,9 @@ export class CleaningRuleService {
     private readonly userAdminService: UserAdminService,
   ) {}
 
-  async findAllWithDetails(studentClassId?: number): Promise<RuleWithDetails[]> {
+  async findAllWithDetails(
+    studentClassId?: number,
+  ): Promise<RuleWithDetails[]> {
     const rules = await this.ruleRepo.find({
       where: studentClassId ? { studentClassId } : undefined,
       relations: ['studentClass'],
@@ -129,7 +131,10 @@ export class CleaningRuleService {
       });
     } else {
       await this.ruleResourceRepo.save(
-        this.ruleResourceRepo.create({ ruleId: id, resourceId: dto.resourceId }),
+        this.ruleResourceRepo.create({
+          ruleId: id,
+          resourceId: dto.resourceId,
+        }),
       );
     }
   }
@@ -170,7 +175,10 @@ export class CleaningRuleService {
     studentClassId?: number,
   ): Promise<{ label: string; value: string }[]> {
     const { users } = await this.userAdminService.findFiltered(
-      { status: UserStatus.ACTIVE, ...(studentClassId ? { studentClassId } : {}) },
+      {
+        status: UserStatus.ACTIVE,
+        ...(studentClassId ? { studentClassId } : {}),
+      },
       0,
       1000,
     );
@@ -179,8 +187,7 @@ export class CleaningRuleService {
         ? formatClassLabel({
             admissionYear: u.studentClass.admissionYear,
             section: u.studentClass.section,
-            graduated:
-              u.studentClass.status === StudentClassStatus.GRADUATED,
+            graduated: u.studentClass.status === StudentClassStatus.GRADUATED,
           })
         : null;
       const parts = [classLabel, u.code].filter(Boolean).join(' | ');

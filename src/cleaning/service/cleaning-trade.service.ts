@@ -5,7 +5,10 @@ import {
   CleaningAssignment,
   CleaningAssignmentStatus,
 } from '../entity/cleaning-assignment.entity';
-import { CleaningTrade, CleaningTradeStatus } from '../entity/cleaning-trade.entity';
+import {
+  CleaningTrade,
+  CleaningTradeStatus,
+} from '../entity/cleaning-trade.entity';
 import { CleaningScheduleStatus } from '../entity/cleaning-schedule.entity';
 import { BusinessError, CleaningErrorCode } from '../../common/errors';
 
@@ -51,9 +54,13 @@ export class CleaningTradeService {
         'res.name AS "resourceName"',
       ])
       .where('a.userId = :userId', { userId })
-      .andWhere('a.status = :status', { status: CleaningAssignmentStatus.ASSIGNED })
+      .andWhere('a.status = :status', {
+        status: CleaningAssignmentStatus.ASSIGNED,
+      })
       .andWhere('s.cleaningDate >= :today', { today })
-      .andWhere('s.status = :schedStatus', { schedStatus: CleaningScheduleStatus.SCHEDULED })
+      .andWhere('s.status = :schedStatus', {
+        schedStatus: CleaningScheduleStatus.SCHEDULED,
+      })
       .andWhere('r.deletedAt IS NULL')
       .orderBy('s.cleaningDate', 'ASC')
       .getRawMany<{
@@ -101,7 +108,11 @@ export class CleaningTradeService {
       .select('t.id')
       .getRawMany<{ t_id: number }>();
 
-    const result: { trade: { id: number }; myAssignment: AssignmentDetail; targetAssignment: AssignmentDetail }[] = [];
+    const result: {
+      trade: { id: number };
+      myAssignment: AssignmentDetail;
+      targetAssignment: AssignmentDetail;
+    }[] = [];
     for (const { t_id } of trades) {
       const detail = await this.getTradeWithDetails(t_id);
       if (detail)
@@ -131,18 +142,28 @@ export class CleaningTradeService {
       .createQueryBuilder('a')
       .select('a.userId', 'userId')
       .where('a.scheduleId = :schedId', { schedId: myAssignment.scheduleId })
-      .andWhere('a.status != :canceled', { canceled: CleaningAssignmentStatus.CANCELED })
+      .andWhere('a.status != :canceled', {
+        canceled: CleaningAssignmentStatus.CANCELED,
+      })
       .getRawMany<{ userId: number }>();
-    const myScheduleUserIds = new Set(myScheduleUsers.map((r) => Number(r.userId)));
+    const myScheduleUserIds = new Set(
+      myScheduleUsers.map((r) => Number(r.userId)),
+    );
 
     // 이미 처리 대기 중인 배정은 중복 교환 요청을 막기 위해 후보에서 제외한다.
     const pendingTrades = await this.tradeRepo
       .createQueryBuilder('t')
       .select(['t.requesterAssignmentId', 't.targetAssignmentId'])
       .where('t.status = :status', { status: CleaningTradeStatus.PENDING })
-      .getRawMany<{ t_requesterAssignmentId: number; t_targetAssignmentId: number }>();
+      .getRawMany<{
+        t_requesterAssignmentId: number;
+        t_targetAssignmentId: number;
+      }>();
     const pendingIds = new Set<number>();
-    for (const { t_requesterAssignmentId, t_targetAssignmentId } of pendingTrades) {
+    for (const {
+      t_requesterAssignmentId,
+      t_targetAssignmentId,
+    } of pendingTrades) {
       pendingIds.add(Number(t_requesterAssignmentId));
       pendingIds.add(Number(t_targetAssignmentId));
     }
@@ -164,10 +185,16 @@ export class CleaningTradeService {
         's.cleaningDate AS "cleaningDate"',
         'res.name AS "resourceName"',
       ])
-      .where('a.status = :status', { status: CleaningAssignmentStatus.ASSIGNED })
-      .andWhere('a.scheduleId != :mySchedule', { mySchedule: myAssignment.scheduleId })
+      .where('a.status = :status', {
+        status: CleaningAssignmentStatus.ASSIGNED,
+      })
+      .andWhere('a.scheduleId != :mySchedule', {
+        mySchedule: myAssignment.scheduleId,
+      })
       .andWhere('s.cleaningDate >= :today', { today })
-      .andWhere('s.status = :schedStatus', { schedStatus: CleaningScheduleStatus.SCHEDULED })
+      .andWhere('s.status = :schedStatus', {
+        schedStatus: CleaningScheduleStatus.SCHEDULED,
+      })
       .andWhere('r.deletedAt IS NULL')
       .orderBy('s.cleaningDate', 'ASC')
       .getRawMany<{
@@ -212,7 +239,8 @@ export class CleaningTradeService {
         status: CleaningTradeStatus.PENDING,
       },
     });
-    if (existing) throw new BusinessError(CleaningErrorCode.TRADE_ALREADY_PENDING);
+    if (existing)
+      throw new BusinessError(CleaningErrorCode.TRADE_ALREADY_PENDING);
 
     return this.tradeRepo.save(
       this.tradeRepo.create({
@@ -242,7 +270,9 @@ export class CleaningTradeService {
       throw new BusinessError(CleaningErrorCode.TRADE_FORBIDDEN);
 
     if (!accept) {
-      await this.tradeRepo.update(tradeId, { status: CleaningTradeStatus.REJECTED });
+      await this.tradeRepo.update(tradeId, {
+        status: CleaningTradeStatus.REJECTED,
+      });
       return;
     }
 
@@ -250,7 +280,9 @@ export class CleaningTradeService {
       trade.requesterAssignmentId,
       trade.targetAssignmentId,
     );
-    await this.tradeRepo.update(tradeId, { status: CleaningTradeStatus.ACCEPTED });
+    await this.tradeRepo.update(tradeId, {
+      status: CleaningTradeStatus.ACCEPTED,
+    });
   }
 
   // 두 배정의 담당자를 바꾸기 전에 같은 일정/중복 담당자 충돌을 먼저 막는다.
@@ -259,7 +291,8 @@ export class CleaningTradeService {
       this.assignmentRepo.findOne({ where: { id: id1 } }),
       this.assignmentRepo.findOne({ where: { id: id2 } }),
     ]);
-    if (!a1 || !a2) throw new BusinessError(CleaningErrorCode.ASSIGNMENT_NOT_FOUND);
+    if (!a1 || !a2)
+      throw new BusinessError(CleaningErrorCode.ASSIGNMENT_NOT_FOUND);
     if (
       a1.status !== CleaningAssignmentStatus.ASSIGNED ||
       a2.status !== CleaningAssignmentStatus.ASSIGNED
@@ -366,9 +399,13 @@ export class CleaningTradeService {
         'res.name AS "resourceName"',
       ])
       .where('s.ruleId = :ruleId', { ruleId })
-      .andWhere('a.status = :status', { status: CleaningAssignmentStatus.ASSIGNED })
+      .andWhere('a.status = :status', {
+        status: CleaningAssignmentStatus.ASSIGNED,
+      })
       .andWhere('s.cleaningDate >= :today', { today })
-      .andWhere('s.status = :schedStatus', { schedStatus: CleaningScheduleStatus.SCHEDULED })
+      .andWhere('s.status = :schedStatus', {
+        schedStatus: CleaningScheduleStatus.SCHEDULED,
+      })
       .orderBy('s.cleaningDate', 'ASC')
       .getRawMany<{
         id: number;
@@ -419,7 +456,9 @@ export class CleaningTradeService {
     if (!requester || requester.userId !== userId)
       throw new BusinessError(CleaningErrorCode.TRADE_FORBIDDEN);
 
-    await this.tradeRepo.update(tradeId, { status: CleaningTradeStatus.CANCELED });
+    await this.tradeRepo.update(tradeId, {
+      status: CleaningTradeStatus.CANCELED,
+    });
   }
 
   private async getCoAssigneeNames(
@@ -432,7 +471,9 @@ export class CleaningTradeService {
       .select('u.name', 'name')
       .where('a.scheduleId = :scheduleId', { scheduleId })
       .andWhere('a.userId != :excludeUserId', { excludeUserId })
-      .andWhere('a.status = :status', { status: CleaningAssignmentStatus.ASSIGNED })
+      .andWhere('a.status = :status', {
+        status: CleaningAssignmentStatus.ASSIGNED,
+      })
       .getRawMany<{ name: string }>();
     return rows.map((r) => r.name);
   }

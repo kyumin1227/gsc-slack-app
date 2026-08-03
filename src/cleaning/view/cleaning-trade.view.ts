@@ -65,7 +65,9 @@ export class CleaningTradeView {
       });
     } else {
       for (const { trade, myAssignment, targetAssignment } of requests) {
-        const [myY, myM, myD] = myAssignment.cleaningDate.split('-').map(Number);
+        const [myY, myM, myD] = myAssignment.cleaningDate
+          .split('-')
+          .map(Number);
         const [tgtY, tgtM, tgtD] = targetAssignment.cleaningDate
           .split('-')
           .map(Number);

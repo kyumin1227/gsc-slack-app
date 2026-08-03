@@ -12,9 +12,7 @@ import {
   CleaningAssignment,
   CleaningAssignmentStatus,
 } from '../entity/cleaning-assignment.entity';
-import {
-  CleaningTrade,
-} from '../entity/cleaning-trade.entity';
+import { CleaningTrade } from '../entity/cleaning-trade.entity';
 import { In } from 'typeorm';
 
 describe('CleaningScheduleService', () => {

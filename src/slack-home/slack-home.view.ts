@@ -169,7 +169,11 @@ export class HomeView {
           ? [
               {
                 type: 'header' as const,
-                text: { type: 'plain_text' as const, text: '🧹 청소 일정', emoji: true },
+                text: {
+                  type: 'plain_text' as const,
+                  text: '🧹 청소 일정',
+                  emoji: true,
+                },
               },
               {
                 type: 'context' as const,
@@ -190,7 +194,10 @@ export class HomeView {
                   },
                   {
                     type: 'button' as const,
-                    text: { type: 'plain_text' as const, text: '교환 요청 현황' },
+                    text: {
+                      type: 'plain_text' as const,
+                      text: '교환 요청 현황',
+                    },
                     action_id: 'cleaning:trade:open-requests',
                   },
                 ],

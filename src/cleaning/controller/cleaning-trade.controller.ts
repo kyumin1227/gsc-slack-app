@@ -170,9 +170,8 @@ export class CleaningTradeController {
 
     await ack();
 
-    const details = await this.cleaningTradeService.getTradeWithDetails(
-      tradeId,
-    );
+    const details =
+      await this.cleaningTradeService.getTradeWithDetails(tradeId);
     if (details) {
       await Promise.allSettled([
         client.chat.postMessage({
@@ -208,9 +207,8 @@ export class CleaningTradeController {
     const user = await this.userService.findBySlackId(body.user.id);
     if (!user) return;
 
-    const details = await this.cleaningTradeService.getTradeWithDetails(
-      tradeId,
-    );
+    const details =
+      await this.cleaningTradeService.getTradeWithDetails(tradeId);
 
     try {
       await this.cleaningTradeService.respondTrade(tradeId, user.id, true);
@@ -249,7 +247,12 @@ export class CleaningTradeController {
         client.chat.postMessage({
           channel: requester.userSlackId,
           text: '교환 요청이 수락되었습니다.',
-          blocks: CleaningTradeView.tradeResultBlocks(requester, target, true, 'requester'),
+          blocks: CleaningTradeView.tradeResultBlocks(
+            requester,
+            target,
+            true,
+            'requester',
+          ),
         }),
       ]);
     }
@@ -269,9 +272,8 @@ export class CleaningTradeController {
     const user = await this.userService.findBySlackId(body.user.id);
     if (!user) return;
 
-    const details = await this.cleaningTradeService.getTradeWithDetails(
-      tradeId,
-    );
+    const details =
+      await this.cleaningTradeService.getTradeWithDetails(tradeId);
 
     try {
       await this.cleaningTradeService.respondTrade(tradeId, user.id, false);
@@ -308,7 +310,13 @@ export class CleaningTradeController {
         client.chat.postMessage({
           channel: requester.userSlackId,
           text: '교환 요청이 거절되었습니다.',
-          blocks: CleaningTradeView.tradeResultBlocks(requester, target, false, 'requester', target.userSlackId),
+          blocks: CleaningTradeView.tradeResultBlocks(
+            requester,
+            target,
+            false,
+            'requester',
+            target.userSlackId,
+          ),
         }),
       ]);
     }

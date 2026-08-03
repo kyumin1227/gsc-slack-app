@@ -13,7 +13,11 @@ import { UserModule } from '../user/user.module';
 import { GoogleModule } from '../google/google.module';
 
 @Module({
-  imports: [TypeOrmModule.forFeature([Resource]), forwardRef(() => UserModule), GoogleModule],
+  imports: [
+    TypeOrmModule.forFeature([Resource]),
+    forwardRef(() => UserModule),
+    GoogleModule,
+  ],
   controllers: [
     ResourceController,
     StudyRoomController,

@@ -321,9 +321,13 @@ export class UserAdminController {
     });
 
     // 유저 비활성화 시 예정된 청소 배정도 남은 담당자 기준으로 재조정한다.
-    if (status === UserStatus.INACTIVE && userBefore?.status !== UserStatus.INACTIVE) {
+    if (
+      status === UserStatus.INACTIVE &&
+      userBefore?.status !== UserStatus.INACTIVE
+    ) {
       const user = await this.userService.findBySlackId(targetSlackId);
-      if (user) await this.cleaningScheduleService.handleUserDeactivation(user.id);
+      if (user)
+        await this.cleaningScheduleService.handleUserDeactivation(user.id);
     }
 
     await client.chat.postMessage({

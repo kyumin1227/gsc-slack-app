@@ -27,7 +27,11 @@ export class PermissionService {
   async requireAdminOrClassRep(slackId: string): Promise<User> {
     const user = await this.userService.findBySlackIdWithClass(slackId);
     const allowed = [UserRole.PROFESSOR, UserRole.TA, UserRole.CLASS_REP];
-    if (!user || user.status !== UserStatus.ACTIVE || !allowed.includes(user.role)) {
+    if (
+      !user ||
+      user.status !== UserStatus.ACTIVE ||
+      !allowed.includes(user.role)
+    ) {
       throw new BusinessError(UserErrorCode.ADMIN_OR_CLASS_REP_REQUIRED);
     }
     return user;

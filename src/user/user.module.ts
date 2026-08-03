@@ -14,7 +14,12 @@ import { CleaningModule } from '../cleaning/cleaning.module';
 
 // 유저 비활성화 시 청소 배정 정리를 호출하므로 CleaningModule과 순환 참조가 생긴다.
 @Module({
-  imports: [TypeOrmModule.forFeature([User]), StudentClassModule, GoogleModule, forwardRef(() => CleaningModule)],
+  imports: [
+    TypeOrmModule.forFeature([User]),
+    StudentClassModule,
+    GoogleModule,
+    forwardRef(() => CleaningModule),
+  ],
   controllers: [UserController, UserAdminController, UserClassRepController],
   providers: [
     UserService,
