@@ -14,6 +14,7 @@ import { UserRole, UserStatus } from '../user.entity';
 import { BusinessError, UserErrorCode } from '../../common/errors';
 import { StudentClassService } from '../../student-class/student-class.service';
 import { PermissionService } from '../service/permission.service';
+import { CleaningScheduleService } from '../../cleaning/service/cleaning-schedule.service';
 
 const PAGE_SIZE = 10;
 
@@ -25,6 +26,7 @@ export class UserAdminController {
     private readonly slackService: SlackService,
     private readonly studentClassService: StudentClassService,
     private readonly permissionService: PermissionService,
+    private readonly cleaningScheduleService: CleaningScheduleService,
   ) {}
 
   // 승인 대기 목록 모달 열기
@@ -308,6 +310,8 @@ export class UserAdminController {
 
     await ack();
 
+    const userBefore = await this.userService.findBySlackId(targetSlackId);
+
     await this.userAdminService.updateUserInfo(targetSlackId, {
       name,
       code,
@@ -315,6 +319,16 @@ export class UserAdminController {
       studentClassId,
       status,
     });
+
+    // 유저 비활성화 시 예정된 청소 배정도 남은 담당자 기준으로 재조정한다.
+    if (
+      status === UserStatus.INACTIVE &&
+      userBefore?.status !== UserStatus.INACTIVE
+    ) {
+      const user = await this.userService.findBySlackId(targetSlackId);
+      if (user)
+        await this.cleaningScheduleService.handleUserDeactivation(user.id);
+    }
 
     await client.chat.postMessage({
       channel: targetSlackId,

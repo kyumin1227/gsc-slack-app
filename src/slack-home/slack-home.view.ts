@@ -165,6 +165,46 @@ export class HomeView {
           ],
         },
         { type: 'divider' },
+        ...(!isClassRep
+          ? [
+              {
+                type: 'header' as const,
+                text: {
+                  type: 'plain_text' as const,
+                  text: '🧹 청소 일정',
+                  emoji: true,
+                },
+              },
+              {
+                type: 'context' as const,
+                elements: [
+                  {
+                    type: 'mrkdwn' as const,
+                    text: '배정표를 조회하고 청소 교환 요청을 보낼 수 있어요.',
+                  },
+                ],
+              },
+              {
+                type: 'actions' as const,
+                elements: [
+                  {
+                    type: 'button' as const,
+                    text: { type: 'plain_text' as const, text: '배정표' },
+                    action_id: 'cleaning:my:open',
+                  },
+                  {
+                    type: 'button' as const,
+                    text: {
+                      type: 'plain_text' as const,
+                      text: '교환 요청 현황',
+                    },
+                    action_id: 'cleaning:trade:open-requests',
+                  },
+                ],
+              },
+              { type: 'divider' as const },
+            ]
+          : []),
         ...(isClassRep
           ? [
               {
@@ -202,6 +242,150 @@ export class HomeView {
                     type: 'button' as const,
                     text: { type: 'plain_text' as const, text: '가입 승인' },
                     action_id: 'home:open-class-rep-approval',
+                  },
+                ],
+              },
+              { type: 'divider' as const },
+              {
+                type: 'header' as const,
+                text: {
+                  type: 'plain_text' as const,
+                  text: '📜 청소 규칙 관리',
+                  emoji: true,
+                },
+              },
+              {
+                type: 'context' as const,
+                elements: [
+                  {
+                    type: 'mrkdwn' as const,
+                    text: '청소 규칙(청소 구역, 주기, 요일 등)을 생성/관리 할 수 있어요.(청소를 배정하기 전 규칙을 먼저 생성해주세요.)',
+                  },
+                ],
+              },
+              {
+                type: 'actions' as const,
+                elements: [
+                  {
+                    type: 'button' as const,
+                    text: {
+                      type: 'plain_text' as const,
+                      text: '추가',
+                      emoji: true,
+                    },
+                    style: 'primary' as const,
+                    action_id: 'cleaning:rule:open-create',
+                  },
+                  {
+                    type: 'button' as const,
+                    text: {
+                      type: 'plain_text' as const,
+                      text: '수정',
+                      emoji: true,
+                    },
+                    action_id: 'cleaning:rule:open-edit-list',
+                  },
+                  {
+                    type: 'button' as const,
+                    text: {
+                      type: 'plain_text' as const,
+                      text: '삭제',
+                      emoji: true,
+                    },
+                    style: 'danger' as const,
+                    action_id: 'cleaning:rule:open-delete-list',
+                  },
+                ],
+              },
+              { type: 'divider' as const },
+              {
+                type: 'header' as const,
+                text: {
+                  type: 'plain_text' as const,
+                  text: '🗓 청소 배정 관리',
+                  emoji: true,
+                },
+              },
+              {
+                type: 'context' as const,
+                elements: [
+                  {
+                    type: 'mrkdwn' as const,
+                    text: '청소를 배정하고 관리, 교환 할 수 있어요.',
+                  },
+                ],
+              },
+              {
+                type: 'actions' as const,
+                elements: [
+                  {
+                    type: 'button' as const,
+                    text: {
+                      type: 'plain_text' as const,
+                      text: '배정 생성',
+                      emoji: true,
+                    },
+                    style: 'primary' as const,
+                    action_id: 'cleaning:rule:open-schedule-list',
+                  },
+                  {
+                    type: 'button' as const,
+                    text: {
+                      type: 'plain_text' as const,
+                      text: '일정 관리',
+                      emoji: true,
+                    },
+                    action_id: 'cleaning:schedule:open-manage',
+                  },
+                  {
+                    type: 'button' as const,
+                    text: {
+                      type: 'plain_text' as const,
+                      text: '배정 교환',
+                      emoji: true,
+                    },
+                    action_id: 'cleaning:swap:open',
+                  },
+                ],
+              },
+              { type: 'divider' as const },
+              {
+                type: 'header' as const,
+                text: {
+                  type: 'plain_text' as const,
+                  text: '🧹 청소 일정',
+                  emoji: true,
+                },
+              },
+              {
+                type: 'context' as const,
+                elements: [
+                  {
+                    type: 'mrkdwn' as const,
+                    text: '배정표를 조회하고 청소 교환 요청을 보낼 수 있어요.',
+                  },
+                ],
+              },
+              {
+                type: 'actions' as const,
+                elements: [
+                  {
+                    type: 'button' as const,
+                    text: {
+                      type: 'plain_text' as const,
+                      text: '배정표',
+                      emoji: true,
+                    },
+                    action_id: 'cleaning:my:open',
+                  },
+                  {
+                    type: 'button' as const,
+                    text: {
+                      type: 'plain_text' as const,
+                      text: '교환 요청 현황',
+                      emoji: true,
+                    },
+                    action_id: 'cleaning:trade:open-requests',
                   },
                 ],
               },
@@ -514,6 +698,76 @@ export class HomeView {
           ],
         },
         ...AnnouncementView.homeSection(),
+        { type: 'divider' },
+        {
+          type: 'header',
+          text: { type: 'plain_text', text: '📜 청소 규칙 관리', emoji: true },
+        },
+        {
+          type: 'context',
+          elements: [
+            {
+              type: 'mrkdwn',
+              text: '청소 규칙(청소 구역, 주기, 요일 등)을 생성/관리 할 수 있어요.(청소를 배정하기 전 규칙을 먼저 생성해주세요.)',
+            },
+          ],
+        },
+        {
+          type: 'actions',
+          elements: [
+            {
+              type: 'button',
+              text: { type: 'plain_text', text: '추가', emoji: true },
+              style: 'primary',
+              action_id: 'cleaning:rule:open-create',
+            },
+            {
+              type: 'button',
+              text: { type: 'plain_text', text: '수정', emoji: true },
+              action_id: 'cleaning:rule:open-edit-list',
+            },
+            {
+              type: 'button',
+              text: { type: 'plain_text', text: '삭제', emoji: true },
+              style: 'danger',
+              action_id: 'cleaning:rule:open-delete-list',
+            },
+          ],
+        },
+        {
+          type: 'header',
+          text: { type: 'plain_text', text: '🗓 청소 배정 관리', emoji: true },
+        },
+        {
+          type: 'context',
+          elements: [
+            {
+              type: 'mrkdwn',
+              text: '청소를 배정하고 관리, 교환 할 수 있어요.',
+            },
+          ],
+        },
+        {
+          type: 'actions',
+          elements: [
+            {
+              type: 'button',
+              text: { type: 'plain_text', text: '배정 생성', emoji: true },
+              style: 'primary',
+              action_id: 'cleaning:rule:open-schedule-list',
+            },
+            {
+              type: 'button',
+              text: { type: 'plain_text', text: '일정 관리', emoji: true },
+              action_id: 'cleaning:schedule:open-manage',
+            },
+            {
+              type: 'button',
+              text: { type: 'plain_text', text: '배정 교환', emoji: true },
+              action_id: 'cleaning:swap:open',
+            },
+          ],
+        },
         { type: 'divider' },
         {
           type: 'actions',
