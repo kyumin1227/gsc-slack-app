@@ -143,4 +143,10 @@ describe('CleaningNotificationService', () => {
     expect(postMessage.mock.calls[0][0].text).toContain('스터디룸');
     expect(postMessage.mock.calls[1][0].text).toContain('강의실');
   });
+
+  it('당일 대상자가 없으면 전송 함수를 호출하지 않는다', async () => {
+    await service.sendDailyReminders();
+
+    expect(postMessage).not.toHaveBeenCalled();
+  });
 });
