@@ -103,6 +103,7 @@ describe('CleaningNotificationService', () => {
   it.each([
     ['2026-09-06T14:59:59Z', '2026-09-06'],
     ['2026-09-06T15:00:00Z', '2026-09-07'],
+    ['2026-09-07T00:00:00Z', '2026-09-07'],
   ])('서버 시각 %s에서도 한국 날짜 %s로 조회한다', async (now, today) => {
     jest.setSystemTime(new Date(now));
 
