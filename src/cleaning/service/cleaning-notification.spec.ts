@@ -66,4 +66,37 @@ describe('CleaningNotificationService', () => {
       waitForCompletion: true,
     });
   });
+
+  it('9시 전에는 보내지 않고 매일 한국 시간 9시에 한 번씩 자동 실행한다', async () => {
+    jest.setSystemTime(new Date('2026-09-06T23:59:59Z')); // 한국 시간 08:59:59
+    query.getRawMany.mockResolvedValue([
+      { assignmentId: 1, userSlackId: 'U_FIRST', resourceName: '스터디룸' },
+    ]);
+    // 실제 NestJS Cron만 시작한다. DB와 Slack은 가짜 구현을 사용한다.
+    await module.init();
+
+    await jest.advanceTimersByTimeAsync(999); // 08:59:59.999
+    expect(query.getRawMany).not.toHaveBeenCalled();
+    expect(postMessage).not.toHaveBeenCalled();
+
+    await jest.advanceTimersByTimeAsync(1); // 09:00:00
+    expect(query.getRawMany).toHaveBeenCalledTimes(1);
+    expect(postMessage).toHaveBeenCalledTimes(1);
+    expect(postMessage.mock.calls[0][0].channel).toBe('U_FIRST');
+    expect(postMessage.mock.calls[0][0].text).toContain('2026-09-07');
+
+    await jest.advanceTimersByTimeAsync(60_000); // 09:01:00
+    expect(postMessage).toHaveBeenCalledTimes(1);
+
+    await jest.advanceTimersByTimeAsync(24 * 60 * 60 * 1000 - 60_000 - 1);
+    expect(postMessage).toHaveBeenCalledTimes(1); // 다음 날 08:59:59.999
+
+    await jest.advanceTimersByTimeAsync(1); // 다음 날 09:00:00
+    expect(query.getRawMany).toHaveBeenCalledTimes(2);
+    expect(postMessage).toHaveBeenCalledTimes(2);
+    expect(query.where).toHaveBeenLastCalledWith('s.cleaningDate = :today', {
+      today: '2026-09-08',
+    });
+    expect(postMessage.mock.calls[1][0].text).toContain('2026-09-08');
+  });
 });
