@@ -126,4 +126,21 @@ describe('CleaningNotificationService', () => {
     });
     expect(query.andWhere).toHaveBeenCalledWith('r.deletedAt IS NULL');
   });
+
+  it('조회된 현재 담당자 각각에게 날짜와 청소 구역을 안내한다', async () => {
+    query.getRawMany.mockResolvedValue([
+      { assignmentId: 1, userSlackId: 'U_FIRST', resourceName: '스터디룸' },
+      { assignmentId: 2, userSlackId: 'U_REPLACEMENT', resourceName: '강의실' },
+    ]);
+
+    await service.sendDailyReminders();
+
+    expect(postMessage.mock.calls.map(([message]) => message.channel)).toEqual([
+      'U_FIRST',
+      'U_REPLACEMENT',
+    ]);
+    expect(postMessage.mock.calls[0][0].text).toContain('2026-09-07');
+    expect(postMessage.mock.calls[0][0].text).toContain('스터디룸');
+    expect(postMessage.mock.calls[1][0].text).toContain('강의실');
+  });
 });
