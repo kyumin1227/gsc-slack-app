@@ -99,4 +99,33 @@ describe('CleaningNotificationService', () => {
     });
     expect(postMessage.mock.calls[1][0].text).toContain('2026-09-08');
   });
+
+  it.each([['2026-09-06T14:59:59Z', '2026-09-06']])(
+    '서버 시각 %s에서도 한국 날짜 %s로 조회한다',
+    async (now, today) => {
+      jest.setSystemTime(new Date(now));
+
+      await service.sendDailyReminders();
+
+      expect(query.where).toHaveBeenCalledWith('s.cleaningDate = :today', {
+        today,
+      });
+      expect(query.andWhere).toHaveBeenCalledWith(
+        's.status = :scheduleStatus',
+        {
+          scheduleStatus: '예정',
+        },
+      );
+      expect(query.andWhere).toHaveBeenCalledWith(
+        'a.status = :assignmentStatus',
+        {
+          assignmentStatus: '배정',
+        },
+      );
+      expect(query.andWhere).toHaveBeenCalledWith('u.status = :userStatus', {
+        userStatus: 'active',
+      });
+      expect(query.andWhere).toHaveBeenCalledWith('r.deletedAt IS NULL');
+    },
+  );
 });
