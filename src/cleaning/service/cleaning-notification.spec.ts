@@ -149,4 +149,21 @@ describe('CleaningNotificationService', () => {
 
     expect(postMessage).not.toHaveBeenCalled();
   });
+
+  it('한 명의 전송이 실패해도 다음 담당자를 처리하고 실패를 기록한다', async () => {
+    query.getRawMany.mockResolvedValue([
+      { assignmentId: 1, userSlackId: 'U_FIRST', resourceName: '스터디룸' },
+      { assignmentId: 2, userSlackId: 'U_SECOND', resourceName: null },
+    ]);
+    postMessage.mockRejectedValueOnce(new Error('channel_not_found'));
+
+    await service.sendDailyReminders();
+
+    expect(postMessage).toHaveBeenCalledTimes(2);
+    expect(postMessage.mock.calls[1][0].channel).toBe('U_SECOND');
+    expect(postMessage.mock.calls[1][0].text).toContain('미지정');
+    expect(warn).toHaveBeenCalledWith(
+      expect.stringContaining('assignment 1: channel_not_found'),
+    );
+  });
 });
