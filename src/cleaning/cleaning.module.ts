@@ -3,6 +3,7 @@ import { TypeOrmModule } from '@nestjs/typeorm';
 import { CleaningRuleController } from './controller/cleaning-rule.controller';
 import { CleaningScheduleController } from './controller/cleaning-schedule.controller';
 import { CleaningTradeController } from './controller/cleaning-trade.controller';
+import { CleaningNotificationService } from './service/cleaning-notification.service';
 import { CleaningRuleService } from './service/cleaning-rule.service';
 import { CleaningScheduleService } from './service/cleaning-schedule.service';
 import { CleaningTradeService } from './service/cleaning-trade.service';
@@ -37,6 +38,7 @@ import { ResourceModule } from '../resource/resource.module';
     CleaningTradeController,
   ],
   providers: [
+    CleaningNotificationService,
     CleaningRuleService,
     CleaningScheduleService,
     CleaningTradeService,
